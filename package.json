@@ -43,5 +43,13 @@
   },
   "scripts": {
     "test": "node test/run.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/regrevia/dsh-vantage.git"
+  },
+  "homepage": "https://github.com/regrevia/dsh-vantage#readme",
+  "bugs": {
+    "url": "https://github.com/regrevia/dsh-vantage/issues"
   }
 }
