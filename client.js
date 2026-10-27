@@ -574,7 +574,8 @@ window.__ModuleLoader__.load({
           name: 'conversation.view', // ui-copy-ignore
           id: VIEW_ID, // ui-copy-ignore
           order: 20, // ui-copy-ignore
-          label: () => copy().label // ui-copy-ignore
+          label: () => copy().label, // ui-copy-ignore
+          inject: (sessionId) => ({ sessionId }) // ui-copy-ignore
         }, View))
       }
     }

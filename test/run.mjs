@@ -8,6 +8,7 @@
  */
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import {
   LIMITS,
@@ -539,6 +540,52 @@ async function testRoutes() {
     assert.equal(excerptOf({ type: "assistant/thinking", data: { text: "secret reasoning" } }), "");
   });
 }
+
+// --- client registration ----------------------------------------------------
+
+function loadClient() {
+  const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
+  let definition;
+  const window = { __ModuleLoader__: { load: (value) => { definition = value } } };
+  new Function("window", "navigator", source)(window, { language: "zh-CN" });
+  const react = {
+    createElement: (type, props, ...children) => ({ type, props, children }),
+    useCallback: (fn) => fn,
+    useEffect: () => {},
+    useRef: (value) => ({ current: value }),
+    useState: (value) => [typeof value === "function" ? value() : value, () => {}]
+  };
+  return definition.factory((name) => {
+    if (name === "react") return react;
+    throw new Error(`unexpected require ${name}`);
+  });
+}
+
+function testClient() {
+  const plugin = loadClient();
+  assert.deepEqual(plugin.inject, ["slots"]);
+  let registration;
+  const ctx = {
+    locale: { getSnapshot: () => ({ active: "zh" }) },
+    slots: {
+      inject: (name, run) => run(),
+      register: (definition, Component) => {
+        registration = definition;
+        return Component;
+      }
+    }
+  };
+  plugin.apply(ctx);
+  assert.equal(registration.id, "vantage");
+  assert.equal(registration.label(), "概览");
+  assert.deepEqual(registration.inject("session-1"), { sessionId: "session-1" });
+
+  const en = { locale: { getSnapshot: () => ({ active: "en" }) }, slots: ctx.slots };
+  plugin.apply(en);
+  assert.equal(registration.label(), "Overview");
+}
+
+testClient();
 
 await testRoutes();
 
