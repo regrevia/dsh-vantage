@@ -61,11 +61,12 @@ they never drop a qualifier to look better.
 
 ## Wire
 
-The Host serves `GET` snapshots and `POST` control calls under `/api/dsh-vantage`:
-`snapshot`, `history`, `round`, `evidence`, `summaryRequest`, `summaryAuto`,
-`lease`. Envelopes, codes, and watermarks are documented in
+The Host serves four `GET` reads and three `POST` control calls under
+`/api/dsh-vantage`: `snapshot`, `history`, `round`, `evidence`; then
+`summaryRequest`, `summaryAuto`, and `lease`. Envelopes, codes, and watermarks are documented in
 [WIRE.md](./WIRE.md). Every route is owner-only: a caller that is not the session
-owner receives `403 forbidden`.
+owner receives `403 forbidden`; a request without the Harness auth cookie is
+rejected with `401` before the plugin runs. The split is the same one WIRE.md lists per route.
 
 ## Privacy
 
