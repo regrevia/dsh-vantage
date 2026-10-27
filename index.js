@@ -427,8 +427,8 @@ function install(ctx, runtime, warn) {
     return () => off?.();
   });
 
-  ctx.effect(() => {
-    const connection = safeService(ctx, "connection");
+  const mountRoutes = (owner) => {
+    const connection = safeService(owner, "connection");
     const register = connection?.fetch?.register;
     if (typeof register !== "function") {
       warn("no connection service; the panel has no data");
@@ -456,7 +456,12 @@ function install(ctx, runtime, warn) {
         }
       }
     };
-  });
+  };
+
+  // Wait for the connection service the way shipped plugins do, so ordering
+  // between plugins cannot leave the panel without routes.
+  if (typeof ctx.inject === "function") ctx.inject(["connection"], (owner) => mountRoutes(owner ?? ctx));
+  else ctx.effect(() => mountRoutes(ctx));
 
   try {
     ctx.logger?.info?.(`[vantage] ${PACKAGE.version} serving ${ROUTE_PREFIX}`);
