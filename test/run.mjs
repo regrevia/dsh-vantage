@@ -760,6 +760,16 @@ async function testRoutes() {
     assert.deepEqual(JSON.parse(serialized), body);
   });
 
+  test("snapshot: a long goal objective becomes a one-clause heading", () => {
+    const routes = createRoutes({ ...runtime, stateOf: () => ({ ...state, round: { ...state.round, title: "10 小时低资源开发：修复 Envoy 确定性缺陷（ASR 稳定身份、游标、预算），并补齐恢复路径" } }) });
+    const route = routes.find((item) => item.path === ROUTES.snapshot);
+    return route.fetch(new Request(`http://x${ROUTES.snapshot}?session=${SESSION}`)).then(async (response) => {
+      const body = await response.json();
+      assert.equal(body.round.title, "10 小时低资源开发");
+      assert.ok(body.round.title.length <= 42);
+    });
+  });
+
   test("snapshot: a matching revision answers unchanged and can be read again", async () => {
     const routes = createRoutes(runtime);
     const route = routes.find((item) => item.path === ROUTES.snapshot);
