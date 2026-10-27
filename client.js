@@ -4,7 +4,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const HOST_BASE = '/dsh-vantage' // ui-copy-ignore
+    const HOST_BASE = '/api/dsh-vantage' // ui-copy-ignore
     const VIEW_ID = 'vantage' // ui-copy-ignore
     const POLL_MS = 5000 // ui-copy-ignore
     const LEASE_MS = 15000 // ui-copy-ignore
@@ -109,8 +109,16 @@ window.__ModuleLoader__.load({
       }
     }
 
-    const LANG = /^zh/i.test(navigator.language || '') ? 'zh' : 'en'
-    const t = COPY[LANG]
+    /** Host locale decides the copy; Chinese is the default. */ // ui-copy-ignore
+    const langOf = (ctx) => {
+      try {
+        const active = ctx?.locale?.getSnapshot?.()?.active
+        if (active === 'zh' || active === 'en') return active
+      } catch {}
+      return /^en/i.test(navigator.language || '') ? 'en' : 'zh'
+    }
+    let LANG = /^en/i.test(navigator.language || '') ? 'en' : 'zh' // ui-copy-ignore
+    const copy = () => COPY[LANG]
 
     const STYLE = `
 .dsv-root {
@@ -265,8 +273,8 @@ window.__ModuleLoader__.load({
     }
 
     function Evidence(props) {
-      if (props.state === 'loading') return h('div', { className: 'dsv-sub' }, t.loading)
-      if (props.refs.length === 0) return h('div', { className: 'dsv-sub' }, t.evidenceEmpty)
+      if (props.state === 'loading') return h('div', { className: 'dsv-sub' }, copy().loading)
+      if (props.refs.length === 0) return h('div', { className: 'dsv-sub' }, copy().evidenceEmpty)
       return h('div', { className: 'dsv-evidence' }, props.refs.map((ref) => h('div', { key: `${ref.seq}`, className: 'dsv-evidence-item' }, [
         h('div', { key: 'l', className: 'dsv-evidence-label' }, ref.label === '' ? ref.type : ref.label),
         h('pre', { key: 'x', className: 'dsv-evidence-text' }, ref.excerpt)
@@ -278,11 +286,11 @@ window.__ModuleLoader__.load({
       const conditions = payload === null || payload === undefined ? [] : payload.conditions
       return h('div', { className: 'dsv-section' }, [
         h('div', { key: 'h', className: 'dsv-section-head' }, [
-          h('span', { key: 'l' }, t.verification),
-          h('span', { key: 's', className: 'dsv-count' }, t.verify[payload === null || payload === undefined ? 'unknown' : payload.state] ?? t.verify.unknown)
+          h('span', { key: 'l' }, copy().verification),
+          h('span', { key: 's', className: 'dsv-count' }, copy().verify[payload === null || payload === undefined ? 'unknown' : payload.state] ?? copy().verify.unknown)
         ]),
         conditions.length === 0
-          ? h('div', { key: 'e', className: 'dsv-sub' }, t.verify.none)
+          ? h('div', { key: 'e', className: 'dsv-sub' }, copy().verify.none)
           : h('div', { key: 'r', className: 'dsv-rows' }, conditions.map((condition) => h(Row, {
               key: condition.id,
               text: condition.text,
@@ -389,10 +397,10 @@ window.__ModuleLoader__.load({
           return
         }
         if (answer.failed === true || answer.body === null) {
-          setVerdict(t.skipped.running)
+          setVerdict(copy().skipped.running)
           return
         }
-        if (answer.body.kind === 'skipped') setVerdict(t.skipped[answer.body.reason] ?? '') // ui-copy-ignore
+        if (answer.body.kind === 'skipped') setVerdict(copy().skipped[answer.body.reason] ?? '') // ui-copy-ignore
         else load(true)
       }
 
@@ -439,24 +447,24 @@ window.__ModuleLoader__.load({
 
       if (blocked) {
         return h('div', { className: 'dsv-root' }, h('div', { className: 'dsv-panel' },
-          h('div', { className: 'dsv-empty' }, h('div', { className: 'dsv-empty-title' }, t.blocked))))
+          h('div', { className: 'dsv-empty' }, h('div', { className: 'dsv-empty-title' }, copy().blocked))))
       }
       if (loading && snapshot === null) {
         return h('div', { className: 'dsv-root' }, h('div', { className: 'dsv-panel' },
-          h('div', { className: 'dsv-empty' }, h('div', {}, t.loading))))
+          h('div', { className: 'dsv-empty' }, h('div', {}, copy().loading))))
       }
       if (failed && snapshot === null) {
         return h('div', { className: 'dsv-root' }, h('div', { className: 'dsv-panel' },
           h('div', { className: 'dsv-empty' }, [
-            h('div', { key: 't', className: 'dsv-empty-title' }, t.emptyTitle),
-            h('button', { key: 'r', type: 'button', className: 'dsv-link', onClick: () => load(true) }, t.retry)
+            h('div', { key: 't', className: 'dsv-empty-title' }, copy().emptyTitle),
+            h('button', { key: 'r', type: 'button', className: 'dsv-link', onClick: () => load(true) }, copy().retry)
           ])))
       }
       if (snapshot === null || snapshot.round === null) {
         return h('div', { className: 'dsv-root' }, h('div', { className: 'dsv-panel' },
           h('div', { className: 'dsv-empty' }, [
-            h('div', { key: 't', className: 'dsv-empty-title' }, t.emptyTitle),
-            h('div', { key: 'b' }, t.emptyBody)
+            h('div', { key: 't', className: 'dsv-empty-title' }, copy().emptyTitle),
+            h('div', { key: 'b' }, copy().emptyBody)
           ])))
       }
 
@@ -471,8 +479,8 @@ window.__ModuleLoader__.load({
           h('h2', { key: 't', className: 'dsv-title' }, round.title),
           h('div', { key: 's', className: 'dsv-status' }, round.statusLine),
           h('div', { key: 'm', className: 'dsv-meta' }, [
-            h('span', { key: 'r' }, t.roundState[round.roundState] ?? t.roundState.unknown),
-            h('span', { key: 'g' }, t.goalState[round.goalState] ?? t.goalState.unknown),
+            h('span', { key: 'r' }, copy().roundState[round.roundState] ?? copy().roundState.unknown),
+            h('span', { key: 'g' }, copy().goalState[round.goalState] ?? copy().goalState.unknown),
             timeOf(round.updatedAt, now) === '' ? null : h('span', { key: 'u' }, timeOf(round.updatedAt, now))
           ])
         ]),
@@ -486,7 +494,7 @@ window.__ModuleLoader__.load({
               className: 'dsv-toggle',
               'aria-expanded': openProgress,
               onClick: () => setOpenProgress((value) => !value)
-            }, [h('span', { key: 'a' }, openProgress ? '▾' : '▸'), h('span', { key: 'l' }, t.progress)])),
+            }, [h('span', { key: 'a' }, openProgress ? '▾' : '▸'), h('span', { key: 'l' }, copy().progress)])),
           h('div', { key: 'r', className: 'dsv-rows' }, briefItems.map((item) => {
             const expandable = item.id !== 'status' && Array.isArray(item.factIds) && item.factIds.length > 0 // ui-copy-ignore
             const expanded = expandable && evidence !== null && evidence.factId === item.factIds[0]
@@ -496,7 +504,7 @@ window.__ModuleLoader__.load({
               tone: item.tone === undefined ? 'neutral' : item.tone,
               action: expandable // ui-copy-ignore
                 ? {
-                    label: t.facts, // ui-copy-ignore
+                    label: copy().facts, // ui-copy-ignore
                     expanded,
                     onClick: () => showEvidence(roundId, item.factIds[0])
                   }
@@ -509,7 +517,7 @@ window.__ModuleLoader__.load({
         ]),
         h(VerificationBlock, { key: 'verify', verification: snapshot.verification }),
         outcomes.length === 0 ? null : h('div', { key: 'out', className: 'dsv-section' }, [
-          h('div', { key: 'h', className: 'dsv-section-head' }, t.outcomes),
+          h('div', { key: 'h', className: 'dsv-section-head' }, copy().outcomes),
           h('div', { key: 'r', className: 'dsv-rows' }, outcomes.map((item) => h(Row, {
             key: item.id,
             text: item.text,
@@ -518,9 +526,9 @@ window.__ModuleLoader__.load({
         ]),
         snapshot.history.count === 0 ? null : h('div', { key: 'hist', className: 'dsv-section' }, [
           h('div', { key: 'h', className: 'dsv-section-head' }, [
-            h('span', { key: 'l' }, t.history),
+            h('span', { key: 'l' }, copy().history),
             h('span', { key: 'c', className: 'dsv-count' }, String(snapshot.history.count)),
-            h('button', { key: 'm', type: 'button', className: 'dsv-link', onClick: expandHistory, 'aria-expanded': openHistory }, t.historyAll)
+            h('button', { key: 'm', type: 'button', className: 'dsv-link', onClick: expandHistory, 'aria-expanded': openHistory }, copy().historyAll)
           ]),
           h('div', { key: 'r', className: 'dsv-list' }, snapshot.history.items.map((item) => h('div', {
             key: item.roundId,
@@ -544,7 +552,7 @@ window.__ModuleLoader__.load({
             className: 'dsv-button',
             onClick: requestSummary, // ui-copy-ignore
             disabled: busy // ui-copy-ignore
-          }, busy ? t.requesting : t.request),
+          }, busy ? copy().requesting : copy().request),
           h('button', {
             key: 'auto', // ui-copy-ignore
             type: 'button', // ui-copy-ignore
@@ -552,7 +560,7 @@ window.__ModuleLoader__.load({
             'aria-pressed': snapshot.coverage.summaryAuto,
             onClick: toggleAuto, // ui-copy-ignore
             disabled: busy || snapshot.coverage.summaryBudgetExhausted
-          }, snapshot.coverage.summaryAuto ? t.following : t.follow),
+          }, snapshot.coverage.summaryAuto ? copy().following : copy().follow),
           verdict === '' ? null : h('span', { key: 'v', className: 'dsv-sub' }, verdict)
         ])
       ]))
@@ -561,11 +569,12 @@ window.__ModuleLoader__.load({
     return {
       inject: ['slots'], // ui-copy-ignore
       apply(ctx) {
+        LANG = langOf(ctx) // ui-copy-ignore
         ctx.slots.inject('conversation.view', () => ctx.slots.register({
           name: 'conversation.view', // ui-copy-ignore
           id: VIEW_ID, // ui-copy-ignore
           order: 20, // ui-copy-ignore
-          label: () => t.label // ui-copy-ignore
+          label: () => copy().label // ui-copy-ignore
         }, View))
       }
     }

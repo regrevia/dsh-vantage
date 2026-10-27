@@ -52,7 +52,7 @@ they never drop a qualifier to look better.
 
 ## Wire
 
-The Host serves `GET` snapshots and `POST` control calls under `/dsh-vantage`:
+The Host serves `GET` snapshots and `POST` control calls under `/api/dsh-vantage`:
 `snapshot`, `history`, `round`, `evidence`, `summaryRequest`, `summaryAuto`,
 `lease`. Envelopes, codes, and watermarks are documented in
 [WIRE.md](./WIRE.md). Every route is owner-only: a caller that is not the session

@@ -16,13 +16,13 @@ Route paths (client calls them with the leading slash stripped, exactly like the
 
 | method | path | purpose |
 | --- | --- | --- |
-| GET | `/dsh-vantage/snapshot?sessionId=S&knownRevision=R` | current brief, ≤ 16 KiB |
-| GET | `/dsh-vantage/history?sessionId=S&cursor=C&limit=N` | archived rounds, 10 per page |
-| GET | `/dsh-vantage/round?sessionId=S&roundId=ID&knownRevision=R` | one round in detail |
-| GET | `/dsh-vantage/evidence?sessionId=S&roundId=ID&factId=F` | one fact plus its raw refs |
-| POST | `/dsh-vantage/summary/request` | `{sessionId, expectedRevision}` |
-| POST | `/dsh-vantage/summary/auto` | `{sessionId, enabled}` |
-| POST | `/dsh-vantage/lease` | `{sessionId, leaseId, visible}` |
+| GET | `/api/dsh-vantage/snapshot?session=S&knownRevision=R` | current brief, ≤ 16 KiB |
+| GET | `/api/dsh-vantage/history?session=S&cursor=C&limit=N` | archived rounds, 10 per page |
+| GET | `/api/dsh-vantage/round?session=S&roundId=ID&knownRevision=R` | one round in detail |
+| GET | `/api/dsh-vantage/evidence?session=S&roundId=ID&factId=F` | one fact plus its raw refs |
+| POST | `/api/dsh-vantage/summary/request` | `{session, expectedRevision}` |
+| POST | `/api/dsh-vantage/summary/auto` | `{session, enabled}` |
+| POST | `/api/dsh-vantage/lease` | `{session, leaseId, visible}` |
 
 `knownRevision` is an opaque string. When it still matches the stored revision the snapshot answer is
 `{"kind":"unchanged","revision":R}` and the client keeps what it has.
@@ -34,7 +34,7 @@ Route paths (client calls them with the leading slash stripped, exactly like the
   "kind": "snapshot",
   "schemaVersion": 1,
   "revision": "12:1749",          // opaque, changes when anything rendered changes
-  "sessionId": "…",
+  "session": "…",
   "generatedAt": 1749000000000,
   "throughSeq": 812,                  // last event folded into this answer
   "mode": "facts" | "summary",
@@ -109,7 +109,7 @@ Rules the client may rely on:
 
 ```jsonc
 // GET history
-{ "kind": "history", "sessionId": "…", "items": [ { "roundId": "…", "title": "…", "statusLine": "…", "archivedAt": 0, "revision": "…" } ], "nextCursor": "…" | null }
+{ "kind": "history", "session": "…", "items": [ { "roundId": "…", "title": "…", "statusLine": "…", "archivedAt": 0, "revision": "…" } ], "nextCursor": "…" | null }
 
 // GET round (knownRevision matching this round → {"kind":"unchanged","revision":R})
 {
@@ -126,7 +126,7 @@ Rules the client may rely on:
 }
 
 // GET evidence
-{ "kind": "evidence", "sessionId": "…", "roundId": "…", "fact": { …fact… },
+{ "kind": "evidence", "session": "…", "roundId": "…", "fact": { …fact… },
   "refs": [ { "seq": 12, "type": "tool/result", "label": "工具结果", "excerpt": "npm test … exit 1" } ] }
 ```
 
