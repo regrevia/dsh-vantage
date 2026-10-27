@@ -21,36 +21,58 @@ window.__ModuleLoader__.load({
         blocked: '这个会话只能在自己的窗口里查看', // ui-copy-ignore
         loading: '正在读取', // ui-copy-ignore
         retry: '重试', // ui-copy-ignore
-        elapsed: '本轮历时',
-        updated: '摘要更新于',
+        elapsed: '本轮历时', // ui-copy-ignore
+        updated: '摘要更新于', // ui-copy-ignore
         factsUpdated: '依据更新于',
         summaryIdle: '摘要未更新',
         unverified: '尚未验证',
-        verification: '收尾核验',
-        history: '历史记录', // ui-copy-ignore
-        historyAll: '查看全部',
-        historyEmpty: '还没有更早的轮次',
-        facts: '查看依据', // ui-copy-ignore
-        evidenceEmpty: '没有可展开的依据',
-        verify: { // ui-copy-ignore
-          passed: '当前已知核验已通过', // ui-copy-ignore
-          failed: '当前验证未通过', // ui-copy-ignore
-          unknown: '核验状态暂不可知', // ui-copy-ignore
-          pending: '验证还没有开始', // ui-copy-ignore
-          none: '尚未明确' // ui-copy-ignore
+        justNow: '刚刚', // ui-copy-ignore
+        underMinute: '不到 1 分钟',
+        minuteUnit: '分钟前',
+        minutesUnit: '分钟',
+        hourUnit: '小时', // ui-copy-ignore
+        shortMinuteUnit: '分',
+        status: { // ui-copy-ignore
+          checking: '正在核对相关工作', // ui-copy-ignore
+          running: '正在处理', // ui-copy-ignore
+          waiting: '等待后台结果', // ui-copy-ignore
+          'needs-input': '需要你处理', // ui-copy-ignore
+          failing: '当前验证未通过', // ui-copy-ignore
+          'no-news': '暂无新进展', // ui-copy-ignore
+          disconnected: '连接已断开', // ui-copy-ignore
+          'summary-paused': '摘要已暂停', // ui-copy-ignore
+          'answered-unverified': '本轮已回复，仍有待验证', // ui-copy-ignore
+          verified: '本轮已回复，核验通过', // ui-copy-ignore
+          unknown: '本轮状态暂不可知' // ui-copy-ignore
         },
-        roundState: {
-          open: '本轮进行中', // ui-copy-ignore
-          replied: '本轮已回复', // ui-copy-ignore
+        verify: { // ui-copy-ignore
+          passed: '核验已通过', // ui-copy-ignore
+          failed: '验证未通过', // ui-copy-ignore
+          recheck: '需要重新核对', // ui-copy-ignore
+          pending: '验证还没有开始', // ui-copy-ignore
+          unknown: '核验状态暂不可知', // ui-copy-ignore
+          na: '没有可核验项' // ui-copy-ignore
+        },
+        roundState: { // ui-copy-ignore
+          'awaiting-reply': '等待回复', // ui-copy-ignore
           archived: '本轮已归档', // ui-copy-ignore
           unknown: '本轮状态暂不可知' // ui-copy-ignore
         },
-        goalState: {
+        goalState: { // ui-copy-ignore
           active: '目标进行中', // ui-copy-ignore
           complete: '目标已完成', // ui-copy-ignore
           none: '没有目标', // ui-copy-ignore
           unknown: '目标状态暂不可知' // ui-copy-ignore
         },
+        history: '历史记录', // ui-copy-ignore
+        historyAll: '查看全部', // ui-copy-ignore
+        historyEmpty: '还没有更早的轮次',
+        historyViewing: '正在查看历史', // ui-copy-ignore
+        historyBack: '返回当前', // ui-copy-ignore
+        historyFailed: '历史记录没能读取', // ui-copy-ignore
+        facts: '查看依据', // ui-copy-ignore
+        evidenceEmpty: '没有可展开的依据',
+        evidenceUnreadable: '这一项依据当前不可读', // ui-copy-ignore
         request: '重新核对', // ui-copy-ignore
         requesting: '正在核对',
         follow: '持续跟进', // ui-copy-ignore
@@ -60,7 +82,7 @@ window.__ModuleLoader__.load({
           fresh: '当前已是新的', // ui-copy-ignore
           running: '正在核对', // ui-copy-ignore
           disabled: '自动摘要已关闭', // ui-copy-ignore
-          'no-model': '没有可用的摘要模型'
+          'no-model': '没有可用的摘要模型' // ui-copy-ignore
         },
         unchanged: '没有变化'
       },
@@ -72,48 +94,68 @@ window.__ModuleLoader__.load({
         blocked: 'This session can only be viewed in its own window',
         loading: 'Reading', // ui-copy-ignore
         retry: 'Retry', // ui-copy-ignore
-        progress: 'Progress', // ui-copy-ignore
-        elapsed: 'Elapsed',
-        updated: 'Summary updated',
+        elapsed: 'Elapsed', // ui-copy-ignore
+        updated: 'Summary updated', // ui-copy-ignore
         factsUpdated: 'Evidence updated',
         summaryIdle: 'Summary not updated',
         unverified: 'Not verified',
-        verification: 'Checks',
-        outcomes: 'Results', // ui-copy-ignore
-        history: 'Earlier rounds', // ui-copy-ignore
-        historyAll: 'Show all',
-        historyEmpty: 'No earlier rounds',
-        facts: 'View evidence', // ui-copy-ignore
-        evidenceEmpty: 'Nothing to expand',
+        justNow: 'just now', // ui-copy-ignore
+        underMinute: 'under a minute',
+        minuteUnit: 'min ago',
+        minutesUnit: 'min',
+        hourUnit: 'h', // ui-copy-ignore
+        shortMinuteUnit: 'min',
+        status: { // ui-copy-ignore
+          checking: 'Checking related work', // ui-copy-ignore
+          running: 'Working', // ui-copy-ignore
+          waiting: 'Waiting for background results', // ui-copy-ignore
+          'needs-input': 'Needs you', // ui-copy-ignore
+          failing: 'Checks fail', // ui-copy-ignore
+          'no-news': 'No new progress', // ui-copy-ignore
+          disconnected: 'Connection lost', // ui-copy-ignore
+          'summary-paused': 'Summary paused', // ui-copy-ignore
+          'answered-unverified': 'Replied, not verified', // ui-copy-ignore
+          verified: 'Replied, checks pass', // ui-copy-ignore
+          unknown: 'Round state unavailable' // ui-copy-ignore
+        },
         verify: { // ui-copy-ignore
-          passed: 'Known checks pass', // ui-copy-ignore
+          passed: 'Checks pass', // ui-copy-ignore
           failed: 'Checks fail', // ui-copy-ignore
-          unknown: 'Check state unavailable',
-          pending: 'Checks not started',
-          none: 'Not stated' // ui-copy-ignore
+          recheck: 'Needs a re-check', // ui-copy-ignore
+          pending: 'Checks not started', // ui-copy-ignore
+          unknown: 'Check state unavailable', // ui-copy-ignore
+          na: 'Nothing to check' // ui-copy-ignore
         },
-        roundState: {
-          open: 'Round in progress', // ui-copy-ignore
-          replied: 'Replied', // ui-copy-ignore
+        roundState: { // ui-copy-ignore
+          'awaiting-reply': 'Waiting for reply', // ui-copy-ignore
           archived: 'Round archived', // ui-copy-ignore
-          unknown: 'Round state unavailable'
+          unknown: 'Round state unavailable' // ui-copy-ignore
         },
-        goalState: {
+        goalState: { // ui-copy-ignore
           active: 'Goal active', // ui-copy-ignore
           complete: 'Goal complete', // ui-copy-ignore
           none: 'No goal', // ui-copy-ignore
-          unknown: 'Goal state unavailable'
+          unknown: 'Goal state unavailable' // ui-copy-ignore
         },
+        history: 'Earlier rounds', // ui-copy-ignore
+        historyAll: 'Show all', // ui-copy-ignore
+        historyEmpty: 'No earlier rounds',
+        historyViewing: 'Viewing history', // ui-copy-ignore
+        historyBack: 'Back to now', // ui-copy-ignore
+        historyFailed: 'History did not load', // ui-copy-ignore
+        facts: 'View evidence', // ui-copy-ignore
+        evidenceEmpty: 'Nothing to expand',
+        evidenceUnreadable: 'This evidence is unreadable right now', // ui-copy-ignore
         request: 'Re-check', // ui-copy-ignore
         requesting: 'Checking',
         follow: 'Keep following', // ui-copy-ignore
         following: 'Following',
         skipped: { // ui-copy-ignore
-          budget: 'Summary budget used up',
+          budget: 'Summary budget used up', // ui-copy-ignore
           fresh: 'Already current', // ui-copy-ignore
           running: 'Already checking', // ui-copy-ignore
           disabled: 'Auto summary off', // ui-copy-ignore
-          'no-model': 'No summary model'
+          'no-model': 'No summary model' // ui-copy-ignore
         },
         unchanged: 'No change'
       }
@@ -122,13 +164,38 @@ window.__ModuleLoader__.load({
     /** Host locale decides the copy; Chinese is the default. */ // ui-copy-ignore
     const langOf = (ctx) => {
       try {
-        const active = ctx?.locale?.getSnapshot?.()?.active
+        const locale = ctx === null || ctx === undefined ? undefined : ctx.locale
+        const snapshot = locale === null || locale === undefined || typeof locale.getSnapshot !== 'function' ? undefined : locale.getSnapshot()
+        const active = snapshot === null || snapshot === undefined ? undefined : snapshot.active
         if (active === 'zh' || active === 'en') return active
-      } catch {}
-      return /^en/i.test(navigator.language || '') ? 'en' : 'zh'
+      } catch (error) {}
+      try {
+        return /^en/i.test(navigator.language || '') ? 'en' : 'zh'
+      } catch (error) {
+        return 'zh'
+      }
     }
-    let LANG = /^en/i.test(navigator.language || '') ? 'en' : 'zh' // ui-copy-ignore
+    let LANG = 'zh' // ui-copy-ignore
+    try {
+      LANG = /^en/i.test(navigator.language || '') ? 'en' : 'zh' // ui-copy-ignore
+    } catch (error) {}
     const copy = () => COPY[LANG]
+
+    // Language changed: every open overview re-reads COPY.
+    const localeListeners = new Set() // ui-copy-ignore
+    function subscribeLocale(listener) {
+      localeListeners.add(listener)
+      return () => {
+        localeListeners.delete(listener)
+      }
+    }
+    function notifyLocale() {
+      localeListeners.forEach((listener) => {
+        try {
+          listener()
+        } catch (error) {}
+      })
+    }
 
     const STYLE = `
 .dsv-root {
@@ -174,12 +241,6 @@ window.__ModuleLoader__.load({
 .dsv-section-head {
   display: flex; align-items: center; gap: 8px; min-height: 24px; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-secondary);
 }
-.dsv-section-head .dsv-count { font-variant-numeric: tabular-nums; }
-.dsv-toggle {
-  display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 0; margin: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; line-height: 20px; cursor: pointer; text-align: left;
-}
-.dsv-toggle:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
-.dsv-rows { display: flex; flex-direction: column; }
 .dsv-row {
   display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 10px; align-items: start; min-height: 48px; padding: 12px 0; border-top: 1px solid var(--dsw-alias-border-l1); box-sizing: border-box;
 }
@@ -207,11 +268,17 @@ window.__ModuleLoader__.load({
 }
 .dsv-list { display: flex; flex-direction: column; }
 .dsv-history-row {
-  display: flex; justify-content: space-between; gap: 12px; align-items: baseline; min-height: 48px; padding: 12px 0; border-top: 1px solid var(--dsw-alias-border-l1);
+  display: flex; justify-content: space-between; gap: 12px; align-items: baseline; width: 100%; min-height: 48px; padding: 12px 0; margin: 0; border: 0; border-top: 1px solid var(--dsw-alias-border-l1); background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
 }
 .dsv-history-row:first-child { border-top: 0; }
+.dsv-history-row:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+.dsv-history-row[aria-current="true"] .dsv-history-title { color: var(--dsw-alias-brand-primary); }
 .dsv-history-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dsv-history-time { flex: none; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-secondary); font-variant-numeric: tabular-nums; }
+.dsv-viewing {
+  display: flex; flex-direction: column; gap: 12px; padding: 16px 0 20px; border-top: 2px solid var(--dsw-alias-border-l1); border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+.dsv-viewing-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .dsv-foot {
   display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-top: 16px; border-top: 1px solid var(--dsw-alias-border-l1);
 }
@@ -241,21 +308,22 @@ window.__ModuleLoader__.load({
 
     function timeOf(at, now) {
       if (typeof at !== 'number' || at <= 0) return ''
+      const words = copy()
       const delta = now - at
       const minutes = Math.round(delta / 60000)
-      if (minutes >= 0 && minutes < 1) return LANG === 'zh' ? '刚刚' : 'just now' // ui-copy-ignore
-      if (minutes >= 0 && minutes < 60) return LANG === 'zh' ? `${minutes} 分钟前` : `${minutes} min ago`
+      if (minutes >= 0 && minutes < 1) return words.justNow
+      if (minutes >= 0 && minutes < 60) return `${minutes} ${words.minuteUnit}`
       const date = new Date(at)
-      const clock = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}` // ui-copy-ignore
-      return clock
+      return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
     }
 
     function durationOf(ms) {
-      if (typeof ms !== 'number' || ms < 60000) return LANG === 'zh' ? '不到 1 分钟' : 'under a minute'
+      const words = copy()
+      if (typeof ms !== 'number' || ms < 60000) return words.underMinute
       const minutes = Math.floor(ms / 60000)
-      if (minutes < 60) return LANG === 'zh' ? `${minutes} 分钟` : `${minutes} min`
+      if (minutes < 60) return `${minutes} ${words.minutesUnit}`
       const hours = Math.floor(minutes / 60)
-      return LANG === 'zh' ? `${hours} 小时 ${minutes % 60} 分` : `${hours} h ${minutes % 60} min`
+      return `${hours} ${words.hourUnit} ${minutes % 60} ${words.shortMinuteUnit}`
     }
 
     async function callHost(path, options) {
@@ -293,6 +361,77 @@ window.__ModuleLoader__.load({
       }
     }
 
+    // Colour follows the result, never the kind of fact that carries it.
+    function toneOfCondition(state) {
+      if (state === 'failed') return 'error'
+      if (state === 'recheck' || state === 'unknown') return 'warn'
+      if (state === 'pending') return 'neutral'
+      if (state === 'passed') return 'success'
+      return 'neutral'
+    }
+
+    function conditionMatches(text, condition) {
+      const topic = condition === null || condition === undefined ? '' : String(condition.text ?? '')
+      return topic !== '' && text.indexOf(topic) !== -1
+    }
+
+    // A line the server painted green is re-checked against the verification
+    // state of the condition it names, so a failed check can never read as passed.
+    function toneOfItem(item, conditions) {
+      const tone = item === null || item === undefined || item.tone === undefined ? 'neutral' : item.tone
+      if (tone !== 'success' || !Array.isArray(conditions)) return tone
+      const text = String(item.text ?? '')
+      for (const condition of conditions) {
+        if (!conditionMatches(text, condition)) continue
+        if (condition.state === 'failed') return 'error'
+        if (condition.state === 'recheck' || condition.state === 'unknown') return 'warn'
+      }
+      return tone
+    }
+
+    // Archived facts carry a kind, not a tone; the kind decides the colour only
+    // until a verification condition for the same topic says otherwise.
+    function toneOfFact(fact, conditions) {
+      if (fact === null || fact === undefined) return 'neutral'
+      const text = String(fact.statement ?? '')
+      if (Array.isArray(conditions)) {
+        for (const condition of conditions) {
+          if (!conditionMatches(text, condition)) continue
+          if (condition.state === 'failed') return 'error'
+          if (condition.state === 'recheck' || condition.state === 'unknown') return 'warn'
+        }
+      }
+      if (fact.kind === 'failure') return 'error' // ui-copy-ignore
+      if (fact.kind === 'blocker') return 'warn' // ui-copy-ignore
+      if (fact.validity === 'needsRecheck') return 'warn' // ui-copy-ignore
+      if (fact.kind === 'deliverable' || fact.kind === 'check') return 'success' // ui-copy-ignore
+      return 'neutral'
+    }
+
+    function toneOfStatus(round) {
+      if (round !== null && round !== undefined && round.verificationState === 'failed') return 'error'
+      const tone = round === null || round === undefined ? undefined : round.statusTone
+      if (tone === 'error' || tone === 'warn' || tone === 'success' || tone === 'info') return tone
+      return 'neutral'
+    }
+
+    // The runtime owns the decision; the client owns the words for every key it can send.
+    function statusTextOf(round) {
+      if (round === null || round === undefined) return copy().status.unknown
+      const status = copy().status
+      if (typeof round.statusKey === 'string' && status[round.statusKey] !== undefined) return status[round.statusKey]
+      const roundState = copy().roundState
+      if (typeof round.roundState === 'string' && roundState[round.roundState] !== undefined) return roundState[round.roundState]
+      return typeof round.statusLine === 'string' && round.statusLine !== '' ? round.statusLine : copy().status.unknown
+    }
+
+    function verifyTextOf(round) {
+      const verify = copy().verify
+      const state = round === null || round === undefined ? undefined : round.verificationState
+      if (state !== undefined && verify[state] !== undefined) return verify[state]
+      return verify.unknown
+    }
+
     function Row(props) {
       const tone = props.tone === undefined ? 'neutral' : props.tone
       return h('div', { className: 'dsv-row' }, [
@@ -321,11 +460,59 @@ window.__ModuleLoader__.load({
 
     function Evidence(props) {
       if (props.state === 'loading') return h('div', { className: 'dsv-sub' }, copy().loading)
-      if (props.refs.length === 0) return h('div', { className: 'dsv-sub' }, copy().evidenceEmpty)
+      if (props.state === 'unreadable') {
+        return h('div', { className: 'dsv-evidence' }, [
+          h('div', { key: 'm', className: 'dsv-sub' }, copy().evidenceUnreadable),
+          h('button', { key: 'r', type: 'button', className: 'dsv-link', onClick: props.onRetry }, copy().retry)
+        ])
+      }
+      if (!Array.isArray(props.refs) || props.refs.length === 0) return h('div', { className: 'dsv-sub' }, copy().evidenceEmpty)
       return h('div', { className: 'dsv-evidence' }, props.refs.map((ref) => h('div', { key: `${ref.seq}`, className: 'dsv-evidence-item' }, [
         h('div', { key: 'l', className: 'dsv-evidence-label' }, evidenceStampOf(props.now, ref)),
         h('pre', { key: 'x', className: 'dsv-evidence-text' }, ref.excerpt)
       ])))
+    }
+
+    // The archived round the reader opened from history, shown above the live one.
+    function ArchivedRound(props) {
+      const viewing = props.viewing
+      const now = props.now
+      const round = viewing.round
+      const head = h('div', { key: 'h', className: 'dsv-viewing-head' }, [
+        h('span', { key: 'm', className: 'dsv-sub' }, copy().historyViewing),
+        h('button', { key: 'b', type: 'button', className: 'dsv-link', onClick: props.onBack }, copy().historyBack)
+      ])
+      if (viewing.state === 'loading') {
+        return h('section', { className: 'dsv-viewing' }, [head, h('div', { key: 'l', className: 'dsv-sub' }, copy().loading)])
+      }
+      if (viewing.state !== 'ready' || round === null || round === undefined) {
+        return h('section', { className: 'dsv-viewing' }, [
+          head,
+          h('div', { key: 'f', className: 'dsv-sub' }, copy().historyFailed),
+          h('button', { key: 'r', type: 'button', className: 'dsv-link', onClick: props.onRetry }, copy().retry)
+        ])
+      }
+      const conditions = round.verification !== null && round.verification !== undefined && Array.isArray(round.verification.conditions)
+        ? round.verification.conditions
+        : []
+      const facts = Array.isArray(round.facts) ? round.facts : []
+      const at = typeof round.archivedAt === 'number' && round.archivedAt > 0 ? round.archivedAt : round.startedAt
+      return h('section', { className: 'dsv-viewing' }, [
+        head,
+        h('h2', { key: 't', className: 'dsv-title' }, round.title),
+        h('div', { key: 'm', className: 'dsv-meta' }, [
+          h('span', { key: 's' }, statusTextOf(round)),
+          h('span', { key: 'v' }, verifyTextOf(round)),
+          h('span', { key: 'a' }, timeOf(at, now))
+        ]),
+        facts.length === 0
+          ? h('div', { key: 'e', className: 'dsv-sub' }, copy().evidenceEmpty)
+          : h('div', { key: 'f', className: 'dsv-rows' }, facts.map((fact) => h(Row, {
+            key: fact.id === undefined ? fact.statement : fact.id,
+            tone: toneOfFact(fact, conditions),
+            text: fact.statement
+          })))
+      ])
     }
 
     function View(props) {
@@ -338,15 +525,44 @@ window.__ModuleLoader__.load({
       const [openItem, setOpenItem] = React.useState(null) // ui-copy-ignore
       const [openHistory, setOpenHistory] = React.useState(false)
       const [history, setHistory] = React.useState(null)
+      const [historyFailed, setHistoryFailed] = React.useState(false)
+      const [viewing, setViewing] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
       const [verdict, setVerdict] = React.useState('')
       const [evidence, setEvidence] = React.useState(null)
+      const [, setLocaleTick] = React.useState(0)
       const revisionRef = React.useRef(null)
+      const aliveRef = React.useRef(true)
+      const seqRef = React.useRef({})
+
+      // One monotonic counter per channel: a late answer to an older question
+      // must never overwrite a newer one, and nothing lands after unmount.
+      const claim = React.useCallback((channel) => {
+        if (aliveRef.current !== true) return null
+        const next = (seqRef.current[channel] === undefined ? 0 : seqRef.current[channel]) + 1
+        seqRef.current[channel] = next
+        return () => aliveRef.current === true && seqRef.current[channel] === next
+      }, [])
+
+      React.useEffect(() => {
+        return () => {
+          aliveRef.current = false
+        }
+      }, [])
+
+      React.useEffect(() => {
+        return subscribeLocale(() => {
+          setLocaleTick((tick) => tick + 1)
+        })
+      }, [])
 
       const load = React.useCallback(async (force) => {
+        const fresh = claim('snapshot')
+        if (fresh === null) return
         const query = new URLSearchParams({ session: sessionId })
         if (!force && revisionRef.current !== null) query.set('revision', revisionRef.current)
         const answer = await callHost(`/snapshot?${query.toString()}`) // ui-copy-ignore
+        if (fresh() !== true) return
         if (answer.blocked === true) {
           setBlocked(true)
           setLoading(false)
@@ -363,12 +579,14 @@ window.__ModuleLoader__.load({
         if (answer.body.kind === 'unchanged') return // ui-copy-ignore
         revisionRef.current = answer.body.revision
         setSnapshot(answer.body)
-      }, [sessionId])
+      }, [claim, sessionId])
 
       React.useEffect(() => {
         revisionRef.current = null
         setSnapshot(null)
         setHistory(null)
+        setHistoryFailed(false)
+        setViewing(null)
         setEvidence(null)
         setOpenHistory(false)
         load(true)
@@ -413,6 +631,8 @@ window.__ModuleLoader__.load({
       }, [load, sessionId])
 
       const requestSummary = async () => {
+        const fresh = claim('action')
+        if (fresh === null) return
         setBusy(true)
         setVerdict('')
         const answer = await callHost('/summary/request', { // ui-copy-ignore
@@ -420,6 +640,7 @@ window.__ModuleLoader__.load({
           headers: { 'content-type': 'application/json' }, // ui-copy-ignore
           body: JSON.stringify({ session: sessionId }) // ui-copy-ignore
         })
+        if (fresh() !== true) return
         setBusy(false)
         if (answer.blocked === true) {
           setBlocked(true)
@@ -434,6 +655,8 @@ window.__ModuleLoader__.load({
       }
 
       const toggleAuto = async () => {
+        const fresh = claim('action')
+        if (fresh === null) return
         const enabled = !(snapshot !== null && snapshot.coverage.summaryAuto)
         setBusy(true)
         const answer = await callHost('/summary/auto', { // ui-copy-ignore
@@ -441,24 +664,63 @@ window.__ModuleLoader__.load({
           headers: { 'content-type': 'application/json' }, // ui-copy-ignore
           body: JSON.stringify({ session: sessionId, enabled }) // ui-copy-ignore
         })
+        if (fresh() !== true) return
         setBusy(false)
         if (answer.failed === true) return
         load(true)
       }
 
-      const showEvidence = async (roundId, factId) => {
-        if (evidence !== null && evidence.factId === factId) {
+      const showEvidence = async (roundId, factId, force) => {
+        if (force !== true && evidence !== null && evidence.factId === factId) {
           setEvidence(null)
           return
         }
+        const fresh = claim('evidence')
+        if (fresh === null) return
         setEvidence({ factId, state: 'loading', refs: [] }) // ui-copy-ignore
         const query = new URLSearchParams({ session: sessionId, round: roundId, fact: factId })
         const answer = await callHost(`/evidence?${query.toString()}`) // ui-copy-ignore
-        if (answer.failed === true || answer.body === null) {
-          setEvidence({ factId, state: 'failed', refs: [] }) // ui-copy-ignore
+        if (fresh() !== true) return
+        if (answer.failed === true || answer.body === null || !Array.isArray(answer.body.refs)) {
+          setEvidence({ factId, state: 'unreadable', refs: [] }) // ui-copy-ignore
           return
         }
         setEvidence({ factId, state: 'ready', refs: answer.body.refs }) // ui-copy-ignore
+      }
+
+      const openRound = async (roundId) => {
+        const fresh = claim('round')
+        if (fresh === null) return
+        setViewing({ state: 'loading', roundId, round: null }) // ui-copy-ignore
+        const query = new URLSearchParams({ session: sessionId, round: roundId })
+        const answer = await callHost(`/round?${query.toString()}`) // ui-copy-ignore
+        if (fresh() !== true) return
+        if (answer.failed === true || answer.body === null || answer.body.round === null || answer.body.round === undefined) {
+          setViewing({ state: 'unreadable', roundId, round: null }) // ui-copy-ignore
+          return
+        }
+        setViewing({ state: 'ready', roundId, round: answer.body.round }) // ui-copy-ignore
+      }
+
+      const fetchHistory = async (cursor) => {
+        const fresh = claim('history')
+        if (fresh === null) return
+        const first = typeof cursor !== 'string' || cursor === ''
+        if (first) setHistoryFailed(false)
+        const query = new URLSearchParams({ session: sessionId, limit: '20' }) // ui-copy-ignore
+        if (!first) query.set('cursor', cursor)
+        const answer = await callHost(`/history?${query.toString()}`) // ui-copy-ignore
+        if (fresh() !== true) return
+        if (answer.failed === true || answer.body === null || !Array.isArray(answer.body.items)) {
+          setHistoryFailed(true)
+          return
+        }
+        const items = answer.body.items
+        const next = answer.body.nextCursor === undefined ? null : answer.body.nextCursor
+        setHistory((prev) => {
+          if (first || prev === null) return { items, nextCursor: next }
+          return { items: prev.items.concat(items), nextCursor: next }
+        })
       }
 
       const expandHistory = async () => {
@@ -468,10 +730,7 @@ window.__ModuleLoader__.load({
         }
         setOpenHistory(true)
         if (history !== null) return
-        const query = new URLSearchParams({ session: sessionId, limit: '20' }) // ui-copy-ignore
-        const answer = await callHost(`/history?${query.toString()}`) // ui-copy-ignore
-        if (answer.failed === true || answer.body === null) return
-        setHistory(answer.body.items)
+        await fetchHistory('')
       }
 
       if (blocked) {
@@ -508,14 +767,25 @@ window.__ModuleLoader__.load({
       const meta = snapshot.mode === 'summary' && updated !== ''
         ? `${copy().updated} ${updated}`
         : hasFacts && updated !== '' ? `${copy().factsUpdated} ${updated}` : copy().summaryIdle
-      const historyItems = history === null ? snapshot.history.items : history
+      const historyItems = history === null ? snapshot.history.items : history.items
+      const historyMore = history === null
+        ? snapshot.history.hasMore === true
+        : history.nextCursor !== null && history.nextCursor !== undefined
+      const archived = viewing === null ? null : h(ArchivedRound, {
+        key: 'archived',
+        viewing,
+        now,
+        onBack: () => setViewing(null),
+        onRetry: () => openRound(viewing.roundId)
+      })
 
       return h('div', { className: 'dsv-root' }, h('div', { className: 'dsv-panel' }, [
+        archived,
         h('div', { key: 'head', className: 'dsv-head' }, [
           h('div', { key: 'row', className: 'dsv-head-row' }, [
             h('div', { key: 's', className: 'dsv-head-state' }, [
-              h('span', { key: 'd', className: 'dsv-dot', 'data-tone': round.statusTone ?? 'neutral', 'aria-hidden': 'true' }),
-              h('span', { key: 't', className: 'dsv-status' }, round.statusLine)
+              h('span', { key: 'd', className: 'dsv-dot', 'data-tone': toneOfStatus(round), 'aria-hidden': 'true' }),
+              h('span', { key: 't', className: 'dsv-status' }, statusTextOf(round))
             ]),
             snapshot.history.count === 0 ? null : h('button', {
               key: 'h', type: 'button', className: 'dsv-link', onClick: expandHistory, 'aria-expanded': openHistory
@@ -532,7 +802,7 @@ window.__ModuleLoader__.load({
         h('div', { key: 'brief', className: 'dsv-brief' }, items.map((item) => {
           const detail = Array.isArray(item.detail) ? item.detail : []
           const facts = Array.isArray(item.factIds) ? item.factIds : []
-          const open = openItem === item.id
+          const open = openItem !== null && openItem === item.id
           const shown = open && evidence !== null && facts.length > 0 && evidence.factId === facts[0]
           return h('div', { key: item.id, className: 'dsv-brief-item' }, [
             h('button', {
@@ -542,7 +812,7 @@ window.__ModuleLoader__.load({
               'aria-expanded': open,
               onClick: () => setOpenItem(open ? null : item.id)
             }, [
-              h('span', { key: 'g', className: 'dsv-glyph', 'data-tone': item.tone ?? 'neutral', 'aria-hidden': 'true' }),
+              h('span', { key: 'g', className: 'dsv-glyph', 'data-tone': toneOfItem(item, conditions), 'aria-hidden': 'true' }),
               h('span', { key: 't', className: 'dsv-brief-text' }, item.text),
               item.limit === '' || item.limit === undefined ? null : h('span', { key: 'q', className: 'dsv-qual' }, item.limit),
               h('span', { key: 'c', className: 'dsv-chevron', 'aria-hidden': 'true' }, open ? '▾' : '▸')
@@ -553,27 +823,37 @@ window.__ModuleLoader__.load({
                 h('span', { key: 'v', className: 'dsv-detail-value' }, line.value)
               ])),
               unverified.length === 0 ? null : h('div', { key: 'v', className: 'dsv-sub' },
-                `${copy().unverified}：${unverified.map((condition) => condition.text).join(' · ')}`),
+                `${copy().unverified} · ${unverified.map((condition) => condition.text).join(' · ')}`),
               facts.length === 0 ? null : h('button', {
-                key: 'e',
-                type: 'button',
+                key: 'e', // ui-copy-ignore
+                type: 'button', // ui-copy-ignore
                 className: 'dsv-link',
-                onClick: () => showEvidence(roundId, facts[0]),
+                onClick: () => showEvidence(roundId, facts[0], false),
                 'aria-expanded': shown
               }, copy().facts),
-              shown ? h(Evidence, { key: 'ev', state: evidence.state, refs: evidence.refs, now }) : null
+              shown ? h(Evidence, { key: 'ev', state: evidence.state, refs: evidence.refs, now, onRetry: () => showEvidence(roundId, facts[0], true) }) : null
             ]) : null
           ])
         })),
         openHistory ? h('div', { key: 'hist', className: 'dsv-section' }, [
           h('div', { key: 'h', className: 'dsv-section-head' }, copy().history),
-          h('div', { key: 'r', className: 'dsv-list' }, historyItems.map((item) => h('div', {
-            key: item.roundId,
-            className: 'dsv-history-row'
-          }, [
-            h('span', { key: 't', className: 'dsv-history-title' }, item.title),
-            h('span', { key: 'u', className: 'dsv-history-time' }, timeOf(item.archivedAt, now))
-          ])))
+          historyItems.length === 0
+            ? h('div', { key: 'e', className: 'dsv-sub' }, copy().historyEmpty)
+            : h('div', { key: 'r', className: 'dsv-list' }, historyItems.map((item) => h('button', {
+              key: item.roundId,
+              type: 'button',
+              className: 'dsv-history-row',
+              'aria-current': viewing !== null && viewing.roundId === item.roundId ? 'true' : undefined,
+              onClick: () => openRound(item.roundId)
+            }, [
+              h('span', { key: 't', className: 'dsv-history-title' }, item.title),
+              h('span', { key: 'u', className: 'dsv-history-time' }, timeOf(item.archivedAt, now))
+            ]))),
+          historyFailed ? h('div', { key: 'f', className: 'dsv-sub' }, copy().historyFailed) : null,
+          historyMore ? h('button', {
+            key: 'all', type: 'button', className: 'dsv-link',
+            onClick: () => fetchHistory(history === null ? '' : history.nextCursor)
+          }, copy().historyAll) : null
         ]) : null,
         h('div', { key: 'foot', className: 'dsv-foot' }, [
           h('button', { key: 'req', type: 'button', className: 'dsv-link', onClick: requestSummary, disabled: busy },
@@ -591,6 +871,20 @@ window.__ModuleLoader__.load({
       inject: ['slots'], // ui-copy-ignore
       apply(ctx) {
         LANG = langOf(ctx) // ui-copy-ignore
+        const locale = ctx === null || ctx === undefined ? undefined : ctx.locale
+        if (locale !== null && locale !== undefined && typeof locale.subscribe === 'function') {
+          const onLocale = () => {
+            LANG = langOf(ctx) // ui-copy-ignore
+            notifyLocale()
+          }
+          if (typeof ctx.effect === 'function') {
+            ctx.effect(() => locale.subscribe(onLocale), 'vantage-locale') // ui-copy-ignore
+          } else {
+            try {
+              locale.subscribe(onLocale)
+            } catch (error) {}
+          }
+        }
         ctx.slots.inject('conversation.view', () => ctx.slots.register({
           name: 'conversation.view', // ui-copy-ignore
           id: VIEW_ID, // ui-copy-ignore

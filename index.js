@@ -27,7 +27,16 @@ import { LIMITS, OverviewError, ROUTES, ROUTE_PREFIX, clip } from "./lib/schema.
 import { PROJECTION_VERSION, apply as foldEvent, chooseStatus, evaluateVerification, initState, roundStateOf } from "./lib/rounds.js";
 import { HistoryStore } from "./lib/store.js";
 import { createRoutes } from "./lib/api.js";
-import { LeaseRegistry, LEASE_RENEW_MS, SummaryBudget, buildPacket, safeService, summarise } from "./lib/summary.js";
+import {
+  LeaseRegistry,
+  LEASE_RENEW_MS,
+  SummaryBudget,
+  buildPacket,
+  estimateTokens,
+  safeService,
+  summarise,
+  SUMMARY_SYSTEM_PROMPT
+} from "./lib/summary.js";
 
 /** Read once so `/health`-style reporting and log lines agree with package.json. */
 const PACKAGE = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
@@ -49,12 +58,12 @@ export const DEFAULT_CONFIG = Object.freeze({
     enabled: true, // ui-copy-ignore
     keepFollowing: false,
     checkIntervalMs: 300000,
-    firstEligibleAfterMs: 180000,
-    minIntervalMs: 900000,
+    firstEligibleAfterMs: 300000,
+    minIntervalMs: 1800000,
     maxInputTokens: 1000,
     maxOutputTokens: 250,
-    maxRequestsPerRollingHour: 4,
-    maxTokensPerRollingHour: 5000,
+    maxRequestsPerRollingHour: 2,
+    maxTokensPerRollingHour: 2500,
     maxConcurrentRequests: 1,
     requestDeadlineMs: 20000,
     retryAttempts: 0,
@@ -155,6 +164,11 @@ class Runtime {
       warn
     });
     this.budget = new SummaryBudget(config.summary, warn);
+    // The ledger is the runtime's: every reservation and every receipt is
+    // written through the store, so a restart cannot refund the hour.
+    this.budget.onChange = (snapshot) => {
+      void this.store.saveLedger(snapshot);
+    };
     this.leases = new LeaseRegistry(config.maxLeases);
     /** @type {Map<string, {state: object, key: string, at: number}>} */
     this.cache = new Map();
@@ -162,6 +176,9 @@ class Runtime {
     this.summaries = new Map();
     /** @type {Map<string, number>} sessionId -> when a summary last completed. */
     this.lastSummaryAt = new Map();
+    /** @type {Map<string, string>} sessionId -> the request still allowed to publish. */
+    this.requests = new Map();
+    this.requestSeq = 0;
     /** @type {Map<string, string>} sessionId -> last round handed to the store. */
     this.archived = new Map();
     this.connection = "online";
@@ -356,8 +373,16 @@ class Runtime {
         text: admits.reason === "budget" ? "摘要预算已用完" : "正在整理"
       };
     }
-    const packet = buildPacket(round, 24);
+    // The input cap covers the whole request, system prompt included, so the
+    // packet gets what is left after the instruction it is sent with.
+    const cap = Number.isFinite(this.config.summary.maxInputTokens) ? this.config.summary.maxInputTokens : 1000;
+    const roomForFacts = Math.max(64, cap - estimateTokens(SUMMARY_SYSTEM_PROMPT) - 8);
+    const packet = buildPacket(round, 24, roomForFacts);
     if (packet.text === "") return { kind: "skipped", reason: "fresh", text: "还没有可整理的进展" };
+    const requestId = `${session.id}:${this.now()}:${(this.requestSeq += 1)}`;
+    this.requests.set(session.id, requestId);
+    const reservedRound = round.roundId;
+    const reservedSeq = state.lastSeq;
     this.budget.reserve(session.id);
     let tokens = 0;
     try {
@@ -372,18 +397,32 @@ class Runtime {
       });
       if (result === null) return { kind: "skipped", reason: "no-model", text: "模型没有给出可用结果" };
       tokens = result.tokens;
+      // Publish validation: the answer is only true for the state it was asked
+      // about. New facts, a new round, a pause, or a newer request all discard
+      // it; the usage stays charged either way.
+      if (this.requests.get(session.id) !== requestId) {
+        return { kind: "skipped", reason: "cancelled", text: "这次整理已取消" };
+      }
+      if (input.manual !== true && !this.budget.autoEnabled(session.id)) {
+        return { kind: "skipped", reason: "disabled", text: "自动摘要已关闭" };
+      }
+      const now = this.stateOf(session);
+      if (now === undefined || now.round === null || now.round.roundId !== reservedRound || now.lastSeq !== reservedSeq) {
+        return { kind: "skipped", reason: "fresh", text: "整理期间有新的进展" };
+      }
       this.summaries.set(session.id, {
-        roundId: round.roundId,
-        throughSeq: state.lastSeq,
-        revision: `${round.roundId}:${state.lastSeq}`,
+        roundId: reservedRound,
+        throughSeq: reservedSeq,
+        revision: `${reservedRound}:${reservedSeq}`,
         generatedAt: this.now(),
         items: result.items
       });
-      this.budget.remember(session.id, round.roundId, state.lastSeq);
+      this.budget.remember(session.id, reservedRound, reservedSeq);
       this.lastSummaryAt.set(session.id, this.now());
       return { kind: "queued" };
     } finally {
       this.budget.settle(session.id, tokens);
+      if (this.requests.get(session.id) === requestId) this.requests.delete(session.id);
     }
   }
 
@@ -556,6 +595,11 @@ async function openStore(runtime, warn) {
   if (storageDomain === undefined) return;
   try {
     await runtime.store.open(storageDomain, STORE_SPEC);
+    const ledger = await runtime.store.loadLedger();
+    if (ledger !== undefined) runtime.budget.restore(ledger);
+    // Restoring happens before the first tick can admit anything, so a cold
+    // start never sees an empty ledger it could spend twice.
+    runtime.budget.changed();
   } catch (error) {
     warn(`history stays in memory: ${messageOf(error)}`);
   }

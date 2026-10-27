@@ -42,8 +42,11 @@ All options are optional. The defaults are deliberately quiet.
 | key | default | meaning |
 | --- | --- | --- |
 | `enabled` | `true` | fold events and serve snapshots at all |
-| `summary.maxRequestsPerRollingHour` | `4` | model summaries allowed per rolling hour |
-| `summary.maxTokensPerRollingHour` | `5000` | token ceiling for those summaries |
+| `summary.maxRequestsPerRollingHour` | `2` | model summaries allowed per rolling hour, manual and automatic together |
+| `summary.maxTokensPerRollingHour` | `2500` | token ceiling for those summaries; the next request is reserved before it is sent |
+| `summary.maxInputTokens` | `1000` | cap on the whole request, system prompt included |
+| `summary.maxOutputTokens` | `250` | cap on the answer |
+| `summary.minIntervalMs` | `1800000` | minimum gap between automatic summaries |
 | `summary.checkIntervalMs` | `300000` | how often the summariser may look at a quiet session |
 
 Without a model configured, the view degrades to a factual summary built from the
@@ -68,12 +71,16 @@ never takes part in scheduling or completion decisions.
 ## Development
 
 ```bash
-node test/run.mjs      # 33 tests: reducer, budget, storage, routes
+node test/run.mjs      # 51 tests: reducer, budget, storage, routes
 node scripts/lint.mjs  # tests, zh-lint, style-lint, ui-copy-lint
 ```
 
 The copy linter reads JS object literals as `key: value` status dumps, so a line
-it flags on purpose carries the `ui-copy-ignore` marker it documents.
+it flags on purpose carries the `ui-copy-ignore` marker it documents. The three
+linters are vendored under `scripts/vendor/`; `scripts/lint.mjs` resolves them
+from the repository, so a clean checkout needs no files outside itself.
+`zh-ellipsis` is waived in `.zh-lint.json` because the rule fires on JavaScript
+spread syntax, not on prose.
 
 Design constraints live in the source: the panel uses only the 14 host theme
 tokens, a single column, scoped `.dsv-` classes, and no remote fonts.

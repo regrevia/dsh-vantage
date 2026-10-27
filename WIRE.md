@@ -148,9 +148,36 @@ Rules the client may rely on:
 { "error": { "code": "lease/limit", "message": "…" } }           // too many live leases
 ```
 
+## Summary provenance contract
+
+The model is asked for one JSON object and nothing else:
+
+```json
+{ "items": [ { "factIds": ["f:12"], "title": "登录表单的错误提示已修正" } ] }
+```
+
+An item is published only when every cited id exists in the packet it was sent, at least one id is
+cited, no cited fact is `needsRecheck`, every number in the line appears in a cited fact, the line is
+at most 60 characters, and at most 3 items survive. The answer is parsed from the last `{` to the
+last `}`; prose, a code fence, or a different shape yields no line at all. A published line always
+carries `source: "model"`, `tone: "neutral"`, and an id of `b:<cited ids joined by +>`, and the
+client re-derives its colour from the facts it cites — a model line can never turn a failed check
+green.
+
+Nothing is published when the round or watermark moved while the call was in flight
+(`kind: "skipped", reason: "fresh"`), when automatic summaries were paused meanwhile (`"disabled"`),
+or when the caller superseded the request (`"cancelled"`). Usage is charged either way.
+
 ## Budget and scheduling facts the client shows but never computes
 
 - A manual request overtakes the time interval but not the rolling budget, the concurrency cap, or
   fingerprint de-duplication. The client shows the returned reason verbatim.
 - The client renews its lease every 15 s while visible and stops polling when hidden. When the lease
   is lost, automatic summaries stop; the page says so via `coverage.summaryAuto` / a notice.
+- The spend ledger is written to the storage domain after every settled request and restored on
+  start, so a restart cannot hand the hour's budget back. A request that was in flight during a
+  restart is charged at its full reservation; honest overage is recorded, and once the ceiling is
+  crossed no further request is admitted until the window moves.
+- History (20 rounds per session, 200 globally, 2 MiB of UTF-8) is stored through the official
+  `storageDomain.open()` declaration and evicted on disk oldest-first. Without that service the store
+  stays in memory and the snapshot reports `coverage.historyAvailable: false` rather than failing.

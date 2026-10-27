@@ -26,7 +26,8 @@ import {
 } from "../lib/schema.js";
 import { apply, evaluateVerification, initState, rankFacts, roundStateOf } from "../lib/rounds.js";
 import { HistoryStore } from "../lib/store.js";
-import { LeaseRegistry, SummaryBudget, buildPacket, verifyLines } from "../lib/summary.js";
+import { DEFAULT_CONFIG } from "../index.js";
+import { LeaseRegistry, SUMMARY_SYSTEM_PROMPT, SummaryBudget, buildPacket, estimateTokens, verifyLines } from "../lib/summary.js";
 import { buildSnapshot, createRoutes, excerptOf } from "../lib/api.js";
 
 let passed = 0;
@@ -345,6 +346,37 @@ const BUDGET_CONFIG = {
   model: ""
 };
 
+test("regression: an injected checkpoint never renames the round", () => {
+  const state = folded([
+    ...userTurn(0, "修一下登录"),
+    ev(3, "user/message", {
+      content: [{ type: "text", text: "## 交接摘要\n上一轮已经改完登录表单" }],
+      source: { kind: "compact-checkpoint" }
+    })
+  ]);
+  assert.equal(state.round.title, "修一下登录");
+  assert.equal(state.round.userMessages, 1, "a checkpoint is not a request");
+});
+
+test("regression: a human title outranks a generated one", () => {
+  const state = folded([
+    ...userTurn(0, "修一下登录"),
+    ev(3, "session/title", { title: "修复登录表单", source: { kind: "user" } }),
+    ev(4, "session/title", { title: "登录页重构", source: { kind: "provider" } })
+  ]);
+  assert.equal(state.round.title, "修复登录表单");
+  assert.equal(state.sessionTitle, "修复登录表单");
+});
+
+test("regression: a path-like generated title never becomes the heading", () => {
+  const state = folded([
+    ...userTurn(0, "修一下登录"),
+    ev(3, "session/title", { title: "/Users/apple/Desktop/DSH/dsh-vantage/index.js", source: { kind: "provider" } })
+  ]);
+  assert.equal(state.round.title, "修一下登录");
+  assert.equal(state.sessionTitle, "");
+});
+
 test("summary: the rolling budget stops at the request ceiling", () => {
   const budget = new SummaryBudget(BUDGET_CONFIG, warn);
   budget.now = now;
@@ -363,6 +395,64 @@ test("summary: the rolling budget stops at the request ceiling", () => {
   budget.drain(now());
   assert.equal(budget.used().tokens, 0);
   assert.equal(budget.isExhausted(SESSION), false);
+});
+
+test("summary: concurrency is one call per Host, not one per session", () => {
+  const budget = new SummaryBudget(BUDGET_CONFIG, warn);
+  budget.now = now;
+  assert.equal(budget.admits(SESSION).ok, true);
+  budget.reserve(SESSION);
+  const other = budget.admits("another-session");
+  assert.deepEqual(other, { ok: false, reason: "running" }, "a second session cannot start a parallel call");
+  // The reservation is already on the books, so the hour sees it too.
+  assert.equal(budget.used().tokens, 1250);
+  assert.equal(budget.used().requests, 1);
+});
+
+test("summary: the ledger survives a restart and charges interrupted calls in full", () => {
+  const budget = new SummaryBudget(BUDGET_CONFIG, warn);
+  budget.now = now;
+  budget.reserve(SESSION);
+  budget.settle(SESSION, 900);
+  budget.reserve(SESSION);
+  const saved = budget.snapshot();
+  assert.equal(saved.spent.length, 2);
+  // A process that dies mid-call still spent the reservation.
+  const restarted = new SummaryBudget(BUDGET_CONFIG, warn);
+  restarted.now = now;
+  restarted.restore(saved);
+  assert.equal(restarted.used().tokens, 900 + 1250);
+  assert.equal(restarted.used().requests, 2);
+  assert.equal(restarted.used().tokens, 2150);
+  assert.deepEqual(restarted.admits(SESSION), { ok: false, reason: "budget" });
+  const empty = new SummaryBudget(BUDGET_CONFIG, warn);
+  empty.now = now;
+  empty.restore({ spent: [{ at: "soon", tokens: "many" }], fingerprints: "nope", paused: [7] });
+  assert.deepEqual(empty.used(), { tokens: 0, requests: 0 });
+});
+
+test("summary: the packet plus its instruction stays inside the input cap", () => {
+  const state = folded([
+    ...userTurn(0, "跑测试"),
+    ...checkCall(2, "c1", "pnpm test"),
+    ...checkCall(3, "c2", "pnpm lint")
+  ]);
+  const cap = DEFAULT_CONFIG.summary.maxInputTokens;
+  const room = Math.max(64, cap - estimateTokens(SUMMARY_SYSTEM_PROMPT) - 8);
+  const packet = buildPacket(state.round, 200, room);
+  assert.ok(estimateTokens(SUMMARY_SYSTEM_PROMPT) + estimateTokens(packet.text) <= cap, "whole request fits");
+});
+
+test("summary: the shipped defaults match the documented policy", () => {
+  const { summary } = DEFAULT_CONFIG;
+  assert.equal(summary.maxInputTokens, 1000);
+  assert.equal(summary.maxOutputTokens, 250);
+  assert.equal(summary.maxRequestsPerRollingHour, 2);
+  assert.equal(summary.maxTokensPerRollingHour, 2500);
+  assert.equal(summary.maxConcurrentRequests, 1);
+  assert.equal(summary.retryAttempts, 0);
+  assert.equal(summary.firstEligibleAfterMs, 300_000);
+  assert.equal(summary.minIntervalMs, 1_800_000);
 });
 
 test("summary: duplicate summaries for the same coverage are refused", () => {
@@ -414,11 +504,21 @@ test("summary: the packet is bounded and only ships observed facts", () => {
   assert.ok(packet.text.split("\n").length <= 8);
 });
 
-test("summary: invented numbers and conclusions are dropped", () => {
+test("summary: invented numbers, conclusions, and citations are dropped", () => {
   const state = folded([...userTurn(0, "跑测试"), ...checkCall(2, "c1", "pnpm test")]);
   const packet = buildPacket(state.round, 8);
+  const [factId] = [...packet.facts.keys()];
+  assert.ok(factId, "packet has a fact to cite");
   const items = verifyLines(
-    ["已通过 pnpm test", "已完成任务，测试全过", "耗时 999 毫秒", "```js\nx\n```"].join("\n"),
+    JSON.stringify({
+      items: [
+        { factIds: [factId], title: "已通过 pnpm test" },
+        { factIds: [factId], title: "已完成任务，测试全过" },
+        { factIds: [factId], title: "耗时 999 毫秒" },
+        { factIds: ["f-not-in-packet"], title: "已通过 pnpm test" },
+        { title: "没有引用任何事实" }
+      ]
+    }),
     packet.facts,
     3
   );
@@ -426,6 +526,17 @@ test("summary: invented numbers and conclusions are dropped", () => {
   assert.ok(lines.includes("已通过 pnpm test"), `items=${JSON.stringify(items)}`);
   for (const line of lines) assert.ok(!line.includes("测试全过"), line);
   for (const line of lines) assert.ok(!line.includes("999"), line);
+  assert.ok(items.every((item) => item.factIds.every((id) => packet.facts.has(id))), "every citation exists");
+  assert.equal(verifyLines("已通过 pnpm test\n已完成任务", packet.facts, 3).length, 0, "prose is not an answer");
+});
+
+test("summary: the packet cap keeps the input inside the token budget", () => {
+  const state = folded([...userTurn(0, "跑测试"), ...checkCall(2, "c1", "pnpm test")]);
+  const loose = buildPacket(state.round, 200);
+  const tight = buildPacket(state.round, 200, 20);
+  assert.ok(tight.text.length < loose.text.length, "the cap drops facts");
+  assert.ok(estimateTokens(tight.text) <= 20, `tokens=${estimateTokens(tight.text)}`);
+  assert.equal(tight.truncated, true);
 });
 
 // --- store ------------------------------------------------------------------
@@ -596,6 +707,33 @@ async function testRoutes() {
     assert.ok(typeof body.round.goalState === "string");
     assert.ok(typeof body.round.verificationState === "string");
     assert.ok(body.coverage.summaryCoveredSeq <= body.coverage.coreObservedSeq);
+  });
+
+  test("snapshot: a paraphrased failed check cannot stay green", () => {
+    const failedState = folded([
+      ...userTurn(0, "构建"),
+      ev(2, "tool/call", { callId: "b1", name: "shell", arguments: JSON.stringify({ command: "pnpm build" }) }),
+      ev(3, "tool/result", { message: { toolCallId: "b1", content: [{ type: "text", text: "boom\n[exit code: 1]" }] } })
+    ]);
+    const check = failedState.round.facts.find((fact) => fact.kind === "check");
+    assert.ok(check !== undefined, "the failed run left a check fact");
+    const brief = {
+      roundId: failedState.round.roundId,
+      throughSeq: failedState.lastSeq,
+      revision: "r",
+      generatedAt: now(),
+      items: [{ id: "b:1", factIds: [check.id], text: "构建 失败", tone: "neutral" }]
+    };
+    const body = buildSnapshot({ ...runtime, briefOf: () => brief }, session, failedState, "rev2");
+    const item = body.brief.items[0];
+    assert.equal(item.text, "构建 失败");
+    assert.equal(item.tone, "error", "a failed check stays red even when the model says it plainly");
+  });
+
+  test("schema: the running status is part of the documented set", () => {
+    assert.ok(STATUS_KEYS.includes("running"));
+    assert.ok(STATUS_KEYS.includes("waiting"));
+    assert.ok(STATUS_KEYS.includes("summary-paused"));
   });
 
   await testAsync("evidence: excerpts are plain text, never payloads", async () => {
