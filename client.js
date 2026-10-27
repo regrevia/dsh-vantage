@@ -64,7 +64,7 @@ window.__ModuleLoader__.load({
           none: '没有目标', // ui-copy-ignore
           unknown: '目标状态暂不可知' // ui-copy-ignore
         },
-        history: '历史记录', // ui-copy-ignore
+        history: '历史', // ui-copy-ignore
         historyAll: '查看全部', // ui-copy-ignore
         historyEmpty: '还没有更早的轮次',
         historyViewing: '正在查看历史', // ui-copy-ignore
@@ -198,6 +198,7 @@ window.__ModuleLoader__.load({
     }
 
     const STYLE = `
+html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-root {
   container-type: inline-size; display: flex; justify-content: center; width: 100%; padding: 28px 32px 40px; box-sizing: border-box; color: var(--dsw-alias-label-primary); font-size: 14px; line-height: 22px; font-family: ui-sans-serif, system-ui, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
 }
@@ -517,6 +518,13 @@ window.__ModuleLoader__.load({
 
     function View(props) {
       ensureStyle()
+      React.useEffect(() => {
+        const root = document.documentElement
+        root.setAttribute('data-dsv-overview', '')
+        return () => {
+          root.removeAttribute('data-dsv-overview')
+        }
+      }, [])
       const sessionId = props.sessionId
       const [snapshot, setSnapshot] = React.useState(null)
       const [blocked, setBlocked] = React.useState(false)
@@ -868,7 +876,7 @@ window.__ModuleLoader__.load({
     }
 
     return {
-      inject: ['slots'], // ui-copy-ignore
+      inject: ['slots', 'locale'], // ui-copy-ignore
       apply(ctx) {
         LANG = langOf(ctx) // ui-copy-ignore
         const locale = ctx === null || ctx === undefined ? undefined : ctx.locale
