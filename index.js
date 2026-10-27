@@ -306,7 +306,7 @@ class Runtime {
     this.budget.reserve(session.id);
     let tokens = 0;
     try {
-      const result = await summarise(this.ctx, {
+      const result = await summarise(this.owner ?? this.ctx, {
         sessionId: session.id,
         provider: route.provider,
         model: route.model,
@@ -348,9 +348,16 @@ class Runtime {
       const events = session.ownEvents();
       for (let index = events.length - 1; index >= 0; index -= 1) {
         const event = events[index];
-        if (event.type !== "model/selection") continue;
-        if (typeof event.data?.provider === "string" && typeof event.data?.model === "string") {
-          return { provider: event.data.provider, model: event.data.model };
+        if (event.type === "model/selection") {
+          if (typeof event.data?.provider === "string" && typeof event.data?.model === "string") {
+            return { provider: event.data.provider, model: event.data.model };
+          }
+          continue;
+        }
+        if (event.type !== "request/header") continue;
+        const config = event.data?.header?.config;
+        if (typeof config?.provider === "string" && typeof config?.model === "string") {
+          return { provider: config.provider, model: config.model };
         }
       }
     } catch {
@@ -376,7 +383,7 @@ class Runtime {
    */
   async tick() {
     if (this.closed) return;
-    const sessions = safeService(this.ctx, "sessions");
+    const sessions = safeService(this.owner ?? this.ctx, "sessions");
     if (sessions === undefined) return;
     for (const sessionId of [...this.summaries.keys(), ...this.cache.keys()]) {
       if (!this.leases.visible(sessionId)) continue;
