@@ -17,6 +17,7 @@ window.__ModuleLoader__.load({
         label: '概览', // ui-copy-ignore
         emptyTitle: '还没有可概览的工作',
         emptyBody: '这一轮有记录之后，这里会显示进展和核验结果。',
+        failedTitle: '概览没能显示', // ui-copy-ignore
         blocked: '这个会话只能在自己的窗口里查看', // ui-copy-ignore
         loading: '正在读取', // ui-copy-ignore
         retry: '重试', // ui-copy-ignore
@@ -64,6 +65,7 @@ window.__ModuleLoader__.load({
         label: 'Overview', // ui-copy-ignore
         emptyTitle: 'No work to summarize yet',
         emptyBody: 'Progress and checks appear here once this turn has a record.',
+        failedTitle: 'The overview did not load', // ui-copy-ignore
         blocked: 'This session can only be viewed in its own window',
         loading: 'Reading', // ui-copy-ignore
         retry: 'Retry', // ui-copy-ignore
@@ -456,7 +458,7 @@ window.__ModuleLoader__.load({
       if (failed && snapshot === null) {
         return h('div', { className: 'dsv-root' }, h('div', { className: 'dsv-panel' },
           h('div', { className: 'dsv-empty' }, [
-            h('div', { key: 't', className: 'dsv-empty-title' }, copy().emptyTitle),
+            h('div', { key: 't', className: 'dsv-empty-title' }, copy().failedTitle),
             h('button', { key: 'r', type: 'button', className: 'dsv-link', onClick: () => load(true) }, copy().retry)
           ])))
       }
