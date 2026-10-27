@@ -1,0 +1,23 @@
+{
+  "view.overview": "Overview",
+  "empty.title": "No work to summarize yet",
+  "empty.body": "Progress and checks appear here once this turn has a record.",
+  "loading": "Reading",
+  "retry": "Retry",
+  "blocked": "This session can only be viewed in its own window",
+  "progress": "Progress",
+  "verification": "Checks",
+  "outcomes": "Results",
+  "history": "Earlier rounds",
+  "history.all": "Show all",
+  "facts": "Basis",
+  "request": "Re-check",
+  "requesting": "Checking",
+  "follow.on": "Following",
+  "follow.off": "Keep following",
+  "verify.passed": "Known checks pass",
+  "verify.failed": "Checks fail",
+  "verify.unknown": "Check state unavailable",
+  "verify.pending": "Checks not started",
+  "verify.none": "Not stated"
+}

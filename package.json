@@ -1,0 +1,47 @@
+{
+  "name": "dsh-vantage",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "A read-only overview tab next to the conversation: what this round asked, what has been observed, what still needs checking, and a bounded history of answered rounds.",
+  "license": "MIT",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "lib/*.js",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "cordis",
+    "overview",
+    "brief"
+  ],
+  "engines": {
+    "dsh": ">=0.2.1-rc.3"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "scripts": {
+    "test": "node test/run.mjs"
+  }
+}

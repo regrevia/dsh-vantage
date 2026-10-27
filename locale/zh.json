@@ -1,0 +1,23 @@
+{
+  "view.overview": "概览",
+  "empty.title": "还没有可概览的工作",
+  "empty.body": "这一轮有记录之后，这里会显示进展和核验结果。",
+  "loading": "正在读取",
+  "retry": "重试",
+  "blocked": "这个会话只能在自己的窗口里查看",
+  "progress": "进展情况",
+  "verification": "收尾核验",
+  "outcomes": "本轮结果",
+  "history": "历史记录",
+  "history.all": "查看全部",
+  "facts": "依据",
+  "request": "重新核对",
+  "requesting": "正在核对",
+  "follow.on": "已开启跟进",
+  "follow.off": "持续跟进",
+  "verify.passed": "当前已知核验已通过",
+  "verify.failed": "当前验证未通过",
+  "verify.unknown": "核验状态暂不可知",
+  "verify.pending": "验证还没有开始",
+  "verify.none": "尚未明确"
+}
