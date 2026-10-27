@@ -28,7 +28,7 @@ import { apply, evaluateVerification, initState, rankFacts, roundStateOf } from 
 import { HistoryStore } from "../lib/store.js";
 import { DEFAULT_CONFIG } from "../index.js";
 import { LeaseRegistry, SUMMARY_SYSTEM_PROMPT, SummaryBudget, buildPacket, estimateTokens, publishVerdict, verifyLines } from "../lib/summary.js";
-import { buildSnapshot, createRoutes, excerptOf } from "../lib/api.js";
+import { buildSnapshot, createRoutes, excerptOf, publicFact } from "../lib/api.js";
 
 let passed = 0;
 const failures = [];
@@ -770,7 +770,25 @@ async function testRoutes() {
     assert.equal(fact.subject, "envoy-f52motion.mp4");
   });
 
-  test("snapshot: a long goal objective becomes a one-clause heading", () => {
+  test("api: a stored deliverable path is shown as its file name", () => {
+  // Rounds sealed before the basename rule are still in storage; the wire shape
+  // is the last place that can keep a directory out of a one-line brief.
+  const wire = publicFact({
+    id: "b:1",
+    kind: "deliverable",
+    statement: "已生成：/Users/apple/CreatorStudio/deliver/promo-261028.mp4",
+    basis: "passed",
+    validity: "current",
+    refs: [{ seq: 3, label: "工具结果" }]
+  });
+  assert.equal(wire.statement, "已生成：promo-261028.mp4");
+  assert.equal(wire.id, "b:1");
+  assert.equal(wire.refs[0].seq, 3);
+  const plain = publicFact({ id: "b:2", kind: "check", statement: "测试通过", basis: "passed", validity: "current", refs: [] });
+  assert.equal(plain.statement, "测试通过");
+});
+
+test("snapshot: a long goal objective becomes a one-clause heading", () => {
     const routes = createRoutes({ ...runtime, stateOf: () => ({ ...state, round: { ...state.round, title: "10 小时低资源开发：修复 Envoy 确定性缺陷（ASR 稳定身份、游标、预算），并补齐恢复路径" } }) });
     const route = routes.find((item) => item.path === ROUTES.snapshot);
     return route.fetch(new Request(`http://x${ROUTES.snapshot}?session=${SESSION}`)).then(async (response) => {
