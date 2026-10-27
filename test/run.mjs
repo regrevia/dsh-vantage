@@ -402,7 +402,7 @@ test("summary: the rolling budget stops at the request ceiling", () => {
   budget.settle(SESSION, 1250);
   assert.equal(budget.admits(SESSION).ok, false);
   assert.equal(budget.admits(SESSION).reason, "budget");
-  assert.equal(budget.isExhausted(SESSION), false);
+  assert.equal(budget.isExhausted(SESSION), true, "the page is told the same truth the request gets");
   clock += 3_600_001;
   budget.drain(now());
   assert.equal(budget.used().tokens, 0);
