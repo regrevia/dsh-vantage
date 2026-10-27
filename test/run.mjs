@@ -95,7 +95,7 @@ test("schema: clip keeps short strings and bounds long ones", () => {
 });
 
 test("schema: round ids are stable and session-prefixed", () => {
-  assert.equal(roundIdOf(SESSION, 12), `${SESSION.slice(0, 8)}:12`);
+  assert.equal(roundIdOf(SESSION, 12), `${SESSION.replace(/^session-/, "").slice(0, 8)}:12`);
   assert.equal(roundIdOf(SESSION, 12), roundIdOf(SESSION, 12));
   assert.notEqual(roundIdOf(SESSION, 12), roundIdOf(SESSION, 13));
   assert.equal(factIdOf("a:1", "check", "pnpm test"), factIdOf("a:1", "check", "pnpm test"));

@@ -23,7 +23,7 @@
 
 import { readFileSync } from "node:fs";
 
-import { LIMITS, ROUTES, ROUTE_PREFIX, clip } from "./lib/schema.js";
+import { LIMITS, OverviewError, ROUTES, ROUTE_PREFIX, clip } from "./lib/schema.js";
 import { PROJECTION_VERSION, apply as foldEvent, chooseStatus, evaluateVerification, initState, roundStateOf } from "./lib/rounds.js";
 import { HistoryStore } from "./lib/store.js";
 import { createRoutes } from "./lib/api.js";
@@ -143,6 +143,8 @@ class Runtime {
    */
   constructor(ctx, config, warn) {
     this.ctx = ctx;
+    /** Context that owns the injected services, once they are available. */
+    this.owner = undefined;
     this.config = config;
     this.warn = warn;
     this.store = new HistoryStore({
@@ -175,13 +177,13 @@ class Runtime {
    * @throws {Error & {code?: string, status?: number}} `session/not-found`.
    */
   async session(sessionId) {
-    const sessions = safeService(this.ctx, "sessions");
+    const sessions = safeService(this.owner ?? this.ctx, "sessions");
     const session = sessions?.get?.(sessionId);
     if (session === undefined || session === null) {
-      const error = new Error("session not found");
-      error.code = "session/not-found";
-      error.status = 404;
-      throw error;
+      // The panel only ever reads a session this GUI has open. Anything else is
+      // out of the caller's scope, not a server fault: answer 403 and let the
+      // page keep showing what it already has.
+      throw new OverviewError("forbidden", "本页面只读取当前打开的会话", 403);
     }
     return session;
   }
@@ -461,7 +463,14 @@ function install(ctx, runtime, warn) {
 
   // Wait for the connection service the way shipped plugins do, so ordering
   // between plugins cannot leave the panel without routes.
-  if (typeof ctx.inject === "function") ctx.inject(["connection"], (owner) => mountRoutes(owner ?? ctx));
+  if (typeof ctx.inject === "function") {
+    // Wait for the session registry too: the panel reads live sessions only, and
+    // a route mounted before it exists would answer 403 for every request.
+    ctx.inject(["connection", "sessions"], (owner) => {
+      runtime.owner = owner ?? ctx;
+      return mountRoutes(owner ?? ctx);
+    });
+  }
   else ctx.effect(() => mountRoutes(ctx));
 
   try {
