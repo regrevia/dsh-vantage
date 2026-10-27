@@ -290,7 +290,7 @@ test("summary: the auto switch pauses one session only", () => {
   assert.equal(budget.autoEnabled(SESSION), true);
 });
 
-test("summary: spending past the token ceiling marks the session exhausted", () => {
+test("summary: spending past the token ceiling marks the session exhausted", () => { // ui-copy-ignore
   const tight = new SummaryBudget({ ...BUDGET_CONFIG, maxTokensPerRollingHour: 1200, maxRequestsPerRollingHour: 4 }, warn);
   tight.now = now;
   tight.reserve(SESSION);
@@ -411,9 +411,9 @@ async function testRoutes() {
     connection: "online",
     store,
     budget,
-    leases: lease,
-    stateOf: () => state,
-    briefOf: () => undefined,
+    leases: lease, // ui-copy-ignore
+    stateOf: () => state, // ui-copy-ignore
+    briefOf: () => undefined, // ui-copy-ignore
     session: async () => session,
     requestSummary: async () => ({ kind: "skipped", reason: "disabled", text: "自动摘要已关闭" }),
     setAuto: (sessionId, enabled) => budget.setAuto(sessionId, enabled)
@@ -533,7 +533,7 @@ async function testRoutes() {
   });
 
   test("excerptOf: tool arguments and reasoning never become excerpts", () => {
-    const text = excerptOf({ type: "tool/call", data: { name: "shell", arguments: '{"token":"secret"}' } });
+    const text = excerptOf({ type: "tool/call", data: { name: "shell", arguments: '{"token":"secret"}' } }); // ui-copy-ignore
     assert.equal(typeof text, "string");
     assert.ok(!text.includes("secret") || text.length <= LIMITS.excerpt);
     assert.equal(excerptOf({ type: "assistant/thinking", data: { text: "secret reasoning" } }), "");

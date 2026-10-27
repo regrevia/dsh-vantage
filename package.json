@@ -42,7 +42,8 @@
     }
   },
   "scripts": {
-    "test": "node test/run.mjs"
+    "test": "node test/run.mjs",
+    "lint": "node scripts/lint.mjs"
   },
   "repository": {
     "type": "git",

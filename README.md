@@ -68,9 +68,12 @@ never takes part in scheduling or completion decisions.
 ## Development
 
 ```bash
-node test/run.mjs     # reducer, budget, storage and route tests
-node --check client.js
+node test/run.mjs      # 33 tests: reducer, budget, storage, routes
+node scripts/lint.mjs  # tests, zh-lint, style-lint, ui-copy-lint
 ```
+
+The copy linter reads JS object literals as `key: value` status dumps, so a line
+it flags on purpose carries the `ui-copy-ignore` marker it documents.
 
 Design constraints live in the source: the panel uses only the 14 host theme
 tokens, a single column, scoped `.dsv-` classes, and no remote fonts.

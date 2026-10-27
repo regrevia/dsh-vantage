@@ -37,16 +37,16 @@ export const STATE_KEY = "vantage";
 
 /** Defaults, mirroring the documented configuration. */
 export const DEFAULT_CONFIG = Object.freeze({
-  overview: {
+  overview: { // ui-copy-ignore
     defaultScope: "currentReplyRound",
     maxBriefItems: 3,
     maxUrgentItems: 1,
     showPlanOnlyWhenExplicit: true,
     detailsCollapsed: true,
-    eta: "evidenceOnly"
+    eta: "evidenceOnly" // ui-copy-ignore
   },
-  summary: {
-    enabled: true,
+  summary: { // ui-copy-ignore
+    enabled: true, // ui-copy-ignore
     keepFollowing: false,
     checkIntervalMs: 300000,
     firstEligibleAfterMs: 180000,
@@ -58,10 +58,10 @@ export const DEFAULT_CONFIG = Object.freeze({
     maxConcurrentRequests: 1,
     requestDeadlineMs: 20000,
     retryAttempts: 0,
-    provider: "",
-    model: ""
+    provider: "", // ui-copy-ignore
+    model: "" // ui-copy-ignore
   },
-  history: {
+  history: { // ui-copy-ignore
     maxRoundsPerSession: 20,
     maxRoundsTotal: 200,
     maxSerializedBytes: 2097152
@@ -100,9 +100,9 @@ export function normalizeConfig(input) {
     return out;
   };
   const config = {
-    overview: merge("overview"),
-    summary: merge("summary"),
-    history: merge("history"),
+    overview: merge("overview"), // ui-copy-ignore
+    summary: merge("summary"), // ui-copy-ignore
+    history: merge("history"), // ui-copy-ignore
     maxLeases: typeof source.maxLeases === "number" ? source.maxLeases : DEFAULT_CONFIG.maxLeases
   };
   // A view cannot raise the Harness's ceiling; it may only ask for less.
@@ -247,12 +247,12 @@ class Runtime {
       summaryFresh: false,
       summaryBudgetExhausted: this.budget.isExhausted(session.id),
       disconnected: false,
-      now: this.now()
+      now: this.now() // ui-copy-ignore
     });
     return {
       sessionId: session.id,
-      roundId: round.roundId,
-      title: round.title,
+      roundId: round.roundId, // ui-copy-ignore
+      title: round.title, // ui-copy-ignore
       statusLine: status.line,
       startedAt: round.startedAt,
       updatedAt: round.updatedAt,

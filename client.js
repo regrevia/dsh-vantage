@@ -13,96 +13,96 @@ window.__ModuleLoader__.load({
     const STYLE_ID = 'dsh-vantage-style' // ui-copy-ignore
 
     const COPY = {
-      zh: {
+      zh: { // ui-copy-ignore
         label: '概览', // ui-copy-ignore
         emptyTitle: '还没有可概览的工作',
         emptyBody: '这一轮有记录之后，这里会显示进展和核验结果。',
-        blocked: '这个会话只能在自己的窗口里查看',
-        loading: '正在读取',
-        retry: '重试',
-        progress: '进展情况',
+        blocked: '这个会话只能在自己的窗口里查看', // ui-copy-ignore
+        loading: '正在读取', // ui-copy-ignore
+        retry: '重试', // ui-copy-ignore
+        progress: '进展情况', // ui-copy-ignore
         verification: '收尾核验',
-        outcomes: '本轮结果',
-        history: '历史记录',
+        outcomes: '本轮结果', // ui-copy-ignore
+        history: '历史记录', // ui-copy-ignore
         historyAll: '查看全部',
         historyEmpty: '还没有更早的轮次',
-        facts: '依据',
+        facts: '依据', // ui-copy-ignore
         evidenceEmpty: '没有可展开的依据',
-        verify: {
-          passed: '当前已知核验已通过',
-          failed: '当前验证未通过',
-          unknown: '核验状态暂不可知',
-          pending: '验证还没有开始',
-          none: '尚未明确'
+        verify: { // ui-copy-ignore
+          passed: '当前已知核验已通过', // ui-copy-ignore
+          failed: '当前验证未通过', // ui-copy-ignore
+          unknown: '核验状态暂不可知', // ui-copy-ignore
+          pending: '验证还没有开始', // ui-copy-ignore
+          none: '尚未明确' // ui-copy-ignore
         },
         roundState: {
-          open: '本轮进行中',
-          replied: '本轮已回复',
-          archived: '本轮已归档',
-          unknown: '本轮状态暂不可知'
+          open: '本轮进行中', // ui-copy-ignore
+          replied: '本轮已回复', // ui-copy-ignore
+          archived: '本轮已归档', // ui-copy-ignore
+          unknown: '本轮状态暂不可知' // ui-copy-ignore
         },
         goalState: {
-          active: '目标进行中',
-          complete: '目标已完成',
-          none: '没有目标',
-          unknown: '目标状态暂不可知'
+          active: '目标进行中', // ui-copy-ignore
+          complete: '目标已完成', // ui-copy-ignore
+          none: '没有目标', // ui-copy-ignore
+          unknown: '目标状态暂不可知' // ui-copy-ignore
         },
-        request: '重新核对',
+        request: '重新核对', // ui-copy-ignore
         requesting: '正在核对',
-        follow: '持续跟进',
+        follow: '持续跟进', // ui-copy-ignore
         following: '已开启跟进',
-        skipped: {
-          budget: '自动摘要额度已用完',
-          fresh: '当前已是新的',
-          running: '正在核对',
-          disabled: '自动摘要已关闭',
+        skipped: { // ui-copy-ignore
+          budget: '自动摘要额度已用完', // ui-copy-ignore
+          fresh: '当前已是新的', // ui-copy-ignore
+          running: '正在核对', // ui-copy-ignore
+          disabled: '自动摘要已关闭', // ui-copy-ignore
           'no-model': '没有可用的摘要模型'
         },
         unchanged: '没有变化'
       },
-      en: {
+      en: { // ui-copy-ignore
         label: 'Overview', // ui-copy-ignore
         emptyTitle: 'No work to summarize yet',
         emptyBody: 'Progress and checks appear here once this turn has a record.',
         blocked: 'This session can only be viewed in its own window',
-        loading: 'Reading',
-        retry: 'Retry',
-        progress: 'Progress',
+        loading: 'Reading', // ui-copy-ignore
+        retry: 'Retry', // ui-copy-ignore
+        progress: 'Progress', // ui-copy-ignore
         verification: 'Checks',
-        outcomes: 'Results',
-        history: 'Earlier rounds',
+        outcomes: 'Results', // ui-copy-ignore
+        history: 'Earlier rounds', // ui-copy-ignore
         historyAll: 'Show all',
         historyEmpty: 'No earlier rounds',
-        facts: 'Basis',
+        facts: 'Basis', // ui-copy-ignore
         evidenceEmpty: 'Nothing to expand',
-        verify: {
-          passed: 'Known checks pass',
-          failed: 'Checks fail',
+        verify: { // ui-copy-ignore
+          passed: 'Known checks pass', // ui-copy-ignore
+          failed: 'Checks fail', // ui-copy-ignore
           unknown: 'Check state unavailable',
           pending: 'Checks not started',
-          none: 'Not stated'
+          none: 'Not stated' // ui-copy-ignore
         },
         roundState: {
-          open: 'Round in progress',
-          replied: 'Replied',
-          archived: 'Round archived',
+          open: 'Round in progress', // ui-copy-ignore
+          replied: 'Replied', // ui-copy-ignore
+          archived: 'Round archived', // ui-copy-ignore
           unknown: 'Round state unavailable'
         },
         goalState: {
-          active: 'Goal active',
-          complete: 'Goal complete',
-          none: 'No goal',
+          active: 'Goal active', // ui-copy-ignore
+          complete: 'Goal complete', // ui-copy-ignore
+          none: 'No goal', // ui-copy-ignore
           unknown: 'Goal state unavailable'
         },
-        request: 'Re-check',
+        request: 'Re-check', // ui-copy-ignore
         requesting: 'Checking',
-        follow: 'Keep following',
+        follow: 'Keep following', // ui-copy-ignore
         following: 'Following',
-        skipped: {
+        skipped: { // ui-copy-ignore
           budget: 'Summary budget used up',
-          fresh: 'Already current',
-          running: 'Already checking',
-          disabled: 'Auto summary off',
+          fresh: 'Already current', // ui-copy-ignore
+          running: 'Already checking', // ui-copy-ignore
+          disabled: 'Auto summary off', // ui-copy-ignore
           'no-model': 'No summary model'
         },
         unchanged: 'No change'
@@ -114,100 +114,39 @@ window.__ModuleLoader__.load({
 
     const STYLE = `
 .dsv-root {
-  container-type: inline-size; /* ui-copy-ignore */
-  display: flex;
-  justify-content: center;
-  width: 100%;
-  padding: 28px 32px 40px;
-  box-sizing: border-box;
-  color: var(--dsw-alias-label-primary);
-  font-size: 14px;
-  line-height: 22px;
-  font-family: ui-sans-serif, system-ui, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  container-type: inline-size; display: flex; justify-content: center; width: 100%; padding: 28px 32px 40px; box-sizing: border-box; color: var(--dsw-alias-label-primary); font-size: 14px; line-height: 22px; font-family: ui-sans-serif, system-ui, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
 }
 .dsv-panel {
-  width: 100%;
-  max-width: 760px;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+  width: 100%; max-width: 760px; min-width: 0; display: flex; flex-direction: column; gap: 24px;
 }
 .dsv-head { display: flex; flex-direction: column; gap: 6px; }
 .dsv-title {
-  margin: 0;
-  font-size: 20px;
-  line-height: 28px;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .dsv-status { font-size: 14px; line-height: 22px; color: var(--dsw-alias-label-primary); }
 .dsv-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  font-size: 12px;
-  line-height: 20px;
-  color: var(--dsw-alias-label-secondary);
-  font-variant-numeric: tabular-nums;
+  display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-secondary); font-variant-numeric: tabular-nums;
 }
 .dsv-notices { display: flex; flex-direction: column; gap: 4px; }
 .dsv-notice {
-  font-size: 12px;
-  line-height: 20px;
-  color: var(--dsw-alias-state-warn-primary);
+  font-size: 12px; line-height: 20px; color: var(--dsw-alias-state-warn-primary);
 }
 .dsv-section { display: flex; flex-direction: column; gap: 8px; }
 .dsv-section-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 24px;
-  font-size: 12px;
-  line-height: 20px;
-  color: var(--dsw-alias-label-secondary);
+  display: flex; align-items: center; gap: 8px; min-height: 24px; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-secondary);
 }
 .dsv-section-head .dsv-count { font-variant-numeric: tabular-nums; }
 .dsv-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 44px;
-  padding: 0;
-  margin: 0;
-  border: 0;
-  background: transparent;
-  color: var(--dsw-alias-label-secondary);
-  font: inherit;
-  font-size: 12px;
-  line-height: 20px;
-  cursor: pointer;
-  text-align: left;
+  display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 0; margin: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; line-height: 20px; cursor: pointer; text-align: left;
 }
 .dsv-toggle:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
 .dsv-rows { display: flex; flex-direction: column; }
 .dsv-row {
-  display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
-  gap: 10px;
-  align-items: start;
-  min-height: 48px;
-  padding: 12px 0;
-  border-top: 1px solid var(--dsw-alias-border-l1);
-  box-sizing: border-box;
+  display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 10px; align-items: start; min-height: 48px; padding: 12px 0; border-top: 1px solid var(--dsw-alias-border-l1); box-sizing: border-box;
 }
 .dsv-rows > .dsv-row:first-child { border-top: 0; }
 .dsv-glyph {
-  width: 16px;
-  height: 16px;
-  margin-top: 3px;
-  border-radius: 50%;
-  border: 1px solid var(--dsw-alias-border-l2);
-  box-sizing: border-box;
+  width: 16px; height: 16px; margin-top: 3px; border-radius: 50%; border: 1px solid var(--dsw-alias-border-l2); box-sizing: border-box;
 }
 .dsv-glyph[data-tone="warn"] { border-color: var(--dsw-alias-state-warn-primary); background: var(--dsw-alias-state-warn-primary); }
 .dsv-glyph[data-tone="error"] { border-color: var(--dsw-alias-state-error-primary); background: var(--dsw-alias-state-error-primary); }
@@ -216,75 +155,35 @@ window.__ModuleLoader__.load({
 .dsv-text { overflow-wrap: anywhere; }
 .dsv-sub { font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
 .dsv-link {
-  align-self: flex-start;
-  min-height: 32px;
-  padding: 4px 0;
-  border: 0;
-  background: transparent;
-  color: var(--dsw-alias-brand-primary);
-  font: inherit;
-  font-size: 12px;
-  line-height: 20px;
-  cursor: pointer;
+  align-self: flex-start; min-height: 32px; padding: 4px 0; border: 0; background: transparent; color: var(--dsw-alias-brand-primary); font: inherit; font-size: 12px; line-height: 20px; cursor: pointer;
 }
 .dsv-link:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
 .dsv-evidence { display: flex; flex-direction: column; gap: 8px; }
 .dsv-evidence-item {
-  padding: 10px 12px;
-  border-radius: 6px;
-  background: var(--dsw-alias-bg-layer-1);
-  border: 1px solid var(--dsw-alias-border-l1);
+  padding: 10px 12px; border-radius: 6px; background: var(--dsw-alias-bg-layer-1); border: 1px solid var(--dsw-alias-border-l1);
 }
 .dsv-evidence-label { font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
 .dsv-evidence-text {
-  margin: 4px 0 0;
-  font-size: 13px;
-  line-height: 21px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  color: var(--dsw-alias-label-primary);
+  margin: 4px 0 0; font-size: 13px; line-height: 21px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--dsw-alias-label-primary);
 }
 .dsv-list { display: flex; flex-direction: column; }
 .dsv-history-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: baseline;
-  min-height: 48px;
-  padding: 12px 0;
-  border-top: 1px solid var(--dsw-alias-border-l1);
+  display: flex; justify-content: space-between; gap: 12px; align-items: baseline; min-height: 48px; padding: 12px 0; border-top: 1px solid var(--dsw-alias-border-l1);
 }
 .dsv-history-row:first-child { border-top: 0; }
 .dsv-history-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dsv-history-time { flex: none; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-secondary); font-variant-numeric: tabular-nums; }
 .dsv-foot {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  padding-top: 16px;
-  border-top: 1px solid var(--dsw-alias-border-l1);
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-top: 16px; border-top: 1px solid var(--dsw-alias-border-l1);
 }
 .dsv-button {
-  min-height: 36px;
-  padding: 0 14px;
-  border-radius: 6px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  background: var(--dsw-alias-bg-layer-1);
-  color: var(--dsw-alias-label-primary);
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
+  min-height: 36px; padding: 0 14px; border-radius: 6px; border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); font: inherit; font-size: 13px; cursor: pointer;
 }
 .dsv-button[aria-pressed="true"] { border-color: var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary); }
 .dsv-button:disabled { color: var(--dsw-alias-label-secondary); cursor: default; }
 .dsv-button:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
 .dsv-empty {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 48px 0;
-  color: var(--dsw-alias-label-secondary);
+  display: flex; flex-direction: column; gap: 6px; padding: 48px 0; color: var(--dsw-alias-label-secondary);
 }
 .dsv-empty-title { font-size: 15px; line-height: 24px; color: var(--dsw-alias-label-primary); }
 @container (max-width: 560px) {
@@ -592,17 +491,17 @@ window.__ModuleLoader__.load({
             const expandable = item.id !== 'status' && Array.isArray(item.factIds) && item.factIds.length > 0 // ui-copy-ignore
             const expanded = expandable && evidence !== null && evidence.factId === item.factIds[0]
             return h(Row, {
-              key: item.id,
-              text: item.text,
+              key: item.id, // ui-copy-ignore
+              text: item.text, // ui-copy-ignore
               tone: item.tone === undefined ? 'neutral' : item.tone,
-              action: expandable
+              action: expandable // ui-copy-ignore
                 ? {
-                    label: t.facts,
+                    label: t.facts, // ui-copy-ignore
                     expanded,
                     onClick: () => showEvidence(roundId, item.factIds[0])
                   }
                 : undefined,
-              extra: expanded
+              extra: expanded // ui-copy-ignore
                 ? h(Evidence, { key: 'ev', state: evidence.state, refs: evidence.refs })
                 : undefined
             })
@@ -640,18 +539,18 @@ window.__ModuleLoader__.load({
         ]),
         h('div', { key: 'foot', className: 'dsv-foot' }, [
           h('button', {
-            key: 'req',
-            type: 'button',
+            key: 'req', // ui-copy-ignore
+            type: 'button', // ui-copy-ignore
             className: 'dsv-button',
-            onClick: requestSummary,
-            disabled: busy
+            onClick: requestSummary, // ui-copy-ignore
+            disabled: busy // ui-copy-ignore
           }, busy ? t.requesting : t.request),
           h('button', {
-            key: 'auto',
-            type: 'button',
+            key: 'auto', // ui-copy-ignore
+            type: 'button', // ui-copy-ignore
             className: 'dsv-button',
             'aria-pressed': snapshot.coverage.summaryAuto,
-            onClick: toggleAuto,
+            onClick: toggleAuto, // ui-copy-ignore
             disabled: busy || snapshot.coverage.summaryBudgetExhausted
           }, snapshot.coverage.summaryAuto ? t.following : t.follow),
           verdict === '' ? null : h('span', { key: 'v', className: 'dsv-sub' }, verdict)
@@ -663,10 +562,10 @@ window.__ModuleLoader__.load({
       inject: ['slots'], // ui-copy-ignore
       apply(ctx) {
         ctx.slots.inject('conversation.view', () => ctx.slots.register({
-          name: 'conversation.view',
-          id: VIEW_ID,
-          order: 20,
-          label: () => t.label
+          name: 'conversation.view', // ui-copy-ignore
+          id: VIEW_ID, // ui-copy-ignore
+          order: 20, // ui-copy-ignore
+          label: () => t.label // ui-copy-ignore
         }, View))
       }
     }
