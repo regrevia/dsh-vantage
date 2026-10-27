@@ -45,6 +45,12 @@ window.__ModuleLoader__.load({
           verified: '本轮已回复，核验通过', // ui-copy-ignore
           unknown: '本轮状态暂不可知' // ui-copy-ignore
         },
+        notices: { // ui-copy-ignore
+          'no-data': '尚未收到本会话的记录', // ui-copy-ignore
+          disconnected: '连接已断开', // ui-copy-ignore
+          'goal-unknown': '目标状态暂不可知', // ui-copy-ignore
+          'summary-paused': '摘要额度已用完 一小时后恢复' // ui-copy-ignore
+        },
         verify: { // ui-copy-ignore
           passed: '核验已通过', // ui-copy-ignore
           failed: '验证未通过', // ui-copy-ignore
@@ -117,6 +123,12 @@ window.__ModuleLoader__.load({
           'answered-unverified': 'Replied, not verified', // ui-copy-ignore
           verified: 'Replied, checks pass', // ui-copy-ignore
           unknown: 'Round state unavailable' // ui-copy-ignore
+        },
+        notices: { // ui-copy-ignore
+          'no-data': 'No records for this session yet', // ui-copy-ignore
+          disconnected: 'Connection lost', // ui-copy-ignore
+          'goal-unknown': 'Goal state unavailable', // ui-copy-ignore
+          'summary-paused': 'Summary budget spent, back within the hour' // ui-copy-ignore
         },
         verify: { // ui-copy-ignore
           passed: 'Checks pass', // ui-copy-ignore
@@ -810,7 +822,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           ])
         ]),
         snapshot.notices.length === 0 ? null : h('div', { key: 'n', className: 'dsv-notices' },
-          snapshot.notices.map((notice) => h('div', { key: notice.code, className: 'dsv-notice' }, notice.text))),
+          snapshot.notices.map((notice) => h('div', { key: notice.code, className: 'dsv-notice' }, copy().notices[notice.code] ?? notice.text))),
         h('div', { key: 'brief', className: 'dsv-brief' }, items.map((item) => {
           const detail = Array.isArray(item.detail) ? item.detail : []
           const facts = Array.isArray(item.factIds) ? item.factIds : []
