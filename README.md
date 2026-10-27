@@ -15,6 +15,12 @@ so far, what still needs checking, and a bounded history of answered rounds.
 - **Verification** — the closing check and its state: passed, failed, or not yet stated.
 - **History** — the last few rounds that ended with a real reply, newest first.
 
+The overview is a reading surface, so the message composer stays out of the
+way: while this view is mounted the plugin hides the composer seat, and it
+returns the moment you switch back to the conversation. That is a scoped
+attribute plus one CSS rule on the host’s own seat, not a DOM rewrite — the
+host keeps ownership of its chrome.
+
 A round is a product-level unit, not a turn or a step. A reply closes a round, but
 "replied" never means "verified". An empty verification list reads 「尚未明确」 and
 never passes by default.
@@ -71,7 +77,7 @@ never takes part in scheduling or completion decisions.
 ## Development
 
 ```bash
-node test/run.mjs      # 51 tests: reducer, budget, storage, routes
+node test/run.mjs      # 57 tests: reducer, budget, storage, routes
 node scripts/lint.mjs  # tests, zh-lint, style-lint, ui-copy-lint
 ```
 
