@@ -74,11 +74,12 @@ export const DEFAULT_CONFIG = Object.freeze({
  * and are re-validated field by field on restore, so the schema's only duty is
  * to let a stored row through unchanged.
  */
-const passthrough = Object.freeze({ parse: (value) => value });
-const STORE_SPEC = Object.freeze({ version: 1, roundSchema: passthrough, sessionSchema: passthrough });
+const STORE_SPEC = Object.freeze({ version: 1 });
 
 /** How often the scheduler wakes up to check a visible session. */
 const TICK_MS = 30000;
+/** How many folded sessions stay in memory before the oldest is dropped. */
+const CACHE_LIMIT = 24;
 
 /**
  * Merge user config over the defaults, one section at a time so a partial
@@ -201,12 +202,66 @@ class Runtime {
     if (fresh) return cached.state;
     try {
       const state = initState(session.id);
-      for (const event of session.ownEvents()) foldEvent(state, event);
-      this.cache.set(session.id, { state, key, at: this.now() });
+      const events = session.ownEvents();
+      for (const event of events) foldEvent(state, event);
+      this.cache.set(session.id, { state, key, seen: events.length, at: this.now() });
+      this.trimCache(session.id);
       return state;
     } catch (error) {
       this.warn(`cannot read the session log: ${messageOf(error)}`);
       return undefined;
+    }
+  }
+
+  /**
+   * Fold the events committed since the last read into the cached state.
+   *
+   * A cached projection used to answer every later read unchanged: the panel
+   * froze at whatever it saw first. Replaying the tail keeps it current, and the
+   * fold ignores an event at or below its watermark, so repeated delivery is
+   * free. A shorter log or a new session header means the cache is stale, and
+   * the caller gets a full replay instead.
+   *
+   * @param {object} session - runtime session.
+   * @returns {object|undefined} state, or undefined when the log is unreadable.
+   */
+  noteEvent(session) {
+    const cached = this.cache.get(session.id);
+    let events;
+    try {
+      events = session.ownEvents();
+    } catch (error) {
+      this.warn(`cannot read the session log: ${messageOf(error)}`);
+      return undefined;
+    }
+    if (cached === undefined || cached.key !== identityOf(session) || cached.state.v !== PROJECTION_VERSION || events.length < cached.seen) {
+      return this.stateOf(session);
+    }
+    try {
+      for (let index = cached.seen; index < events.length; index += 1) foldEvent(cached.state, events[index]);
+      cached.seen = events.length;
+      cached.at = this.now();
+      return cached.state;
+    } catch (error) {
+      this.warn(`cannot follow the session log: ${messageOf(error)}`);
+      return undefined;
+    }
+  }
+
+  /**
+   * Keep the projection cache bounded; an idle session is re-read from its log
+   * when it comes back, which is cheaper than retaining every session forever.
+   *
+   * @param {string} keep - session id that must survive the trim.
+   * @returns {void}
+   */
+  trimCache(keep) {
+    if (this.cache.size <= CACHE_LIMIT) return;
+    const entries = [...this.cache.entries()].sort((left, right) => left[1].at - right[1].at);
+    for (const [sessionId] of entries) {
+      if (this.cache.size <= CACHE_LIMIT) break;
+      if (sessionId === keep) continue;
+      this.cache.delete(sessionId);
     }
   }
 
@@ -430,7 +485,7 @@ function install(ctx, runtime, warn) {
   ctx.effect(() => {
     const off = ctx.on?.("session/event", (session, event) => {
       if (event === undefined || session === undefined) return;
-      const state = runtime.stateOf(session);
+      const state = runtime.noteEvent(session);
       if (state === undefined) return;
       runtime.settle(session, state);
     });
@@ -453,6 +508,7 @@ function install(ctx, runtime, warn) {
         warn(`route ${route.path} was not registered: ${messageOf(error)}`);
       }
     }
+    if (runtime.timer !== null && runtime.timer !== undefined) clearInterval(runtime.timer);
     runtime.timer = setInterval(() => {
       void runtime.tick();
     }, TICK_MS);

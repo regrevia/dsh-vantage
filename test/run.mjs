@@ -95,7 +95,8 @@ test("schema: clip keeps short strings and bounds long ones", () => {
 });
 
 test("schema: round ids are stable and session-prefixed", () => {
-  assert.equal(roundIdOf(SESSION, 12), `${SESSION.replace(/^session-/, "").slice(0, 8)}:12`);
+  assert.equal(roundIdOf(SESSION, 12), `${SESSION.replace(/^session-/u, "")}:12`);
+  assert.notEqual(roundIdOf("session-aaaaaaaa-1", 12), roundIdOf("session-aaaaaaaa-2", 12));
   assert.equal(roundIdOf(SESSION, 12), roundIdOf(SESSION, 12));
   assert.notEqual(roundIdOf(SESSION, 12), roundIdOf(SESSION, 13));
   assert.equal(factIdOf("a:1", "check", "pnpm test"), factIdOf("a:1", "check", "pnpm test"));
@@ -234,6 +235,97 @@ test("rounds: the folder never keeps more than the round fact bound", () => {
   assert.ok(state.round.facts.filter((fact) => fact.urgent === true).length <= 64);
 });
 
+// --- regressions reported against 0.1.2 -------------------------------------
+
+function toolCall(seq, callId, name, args) {
+  return ev(seq, "tool/call", { callId, name, arguments: JSON.stringify(args) });
+}
+
+function toolResult(seq, callId, text) {
+  return ev(seq, "tool/result", { message: { toolCallId: callId, content: [{ type: "text", text }] } });
+}
+
+function conditionOf(state, prefix) {
+  return state.round.conditions.find((condition) => condition.subject.startsWith(prefix));
+}
+
+test("regression: a non-zero exit is a failed check, not a pass", () => {
+  const state = folded([
+    ...userTurn(1, "跑一下测试"),
+    toolCall(3, "c1", "shell", { command: "pnpm test" }),
+    toolResult(4, "c1", "1 failed\n[exit code: 1]")
+  ]);
+  assert.equal(conditionOf(state, "check:").state, "failed");
+  const check = state.round.facts.find((fact) => fact.kind === "check");
+  assert.match(check.statement, /未通过/u);
+});
+
+test("regression: a check started in the background is not a pass", () => {
+  const state = folded([
+    ...userTurn(1, "后台跑测试"),
+    toolCall(3, "c1", "shell", { command: "pnpm test" }),
+    toolResult(4, "c1", "后台任务已启动：pnpm test")
+  ]);
+  assert.equal(conditionOf(state, "check:").state, "pending");
+  assert.equal(state.round.facts.some((fact) => fact.kind === "check"), false);
+});
+
+test("regression: a plan is not a workspace change", () => {
+  const state = folded([
+    ...userTurn(1, "列个计划"),
+    toolCall(3, "c1", "todo_write", { todos: [{ text: "写测试", status: "pending" }] }),
+    toolResult(4, "c1", "ok")
+  ]);
+  assert.equal(state.round.facts.some((fact) => fact.kind === "change"), false);
+});
+
+test("regression: a formal reply archives the round immediately", () => {
+  const state = folded([
+    ...userTurn(1, "改一下"),
+    ev(3, "assistant/message", { turn: 1, step: 1, message: { role: "assistant", content: [{ type: "tool_call", name: "write", arguments: "{}" }] } }),
+    finalMessage(4, "已改好，测试通过。"),
+    ev(5, "turn/end", { turn: 1, reason: { kind: "completed" } })
+  ]);
+  assert.equal(state.round, null);
+  assert.equal(state.settled.roundId, state.recent[0].roundId);
+});
+
+test("regression: a goal continuation after a reply opens a new round", () => {
+  let state = folded([
+    ...userTurn(1, "改一下"),
+    finalMessage(3, "已完成。"),
+    ev(4, "turn/end", { turn: 1, reason: { kind: "completed" } })
+  ]);
+  const archived = state.settled.roundId;
+  state = apply(state, ev(5, "user/message", { content: [{ type: "text", text: "继续推进" }], source: { kind: "goal" } }));
+  assert.notEqual(state.round, null);
+  assert.notEqual(state.round.roundId, archived);
+});
+
+test("regression: a late result lands on the round that started the job", () => {
+  let state = folded([
+    ...userTurn(1, "后台跑测试"),
+    ev(3, "job/registered", { jobId: "j1", kind: "bash", label: "pnpm test", startedAt: 3 }),
+    finalMessage(4, "已经安排好了。"),
+    ev(5, "turn/end", { turn: 1, reason: { kind: "completed" } })
+  ]);
+  const archived = state.settled.roundId;
+  state = apply(state, ev(6, "job/settled", { jobId: "j1", status: "completed", detail: "exit code: 0" }));
+  assert.equal(state.round, null);
+  const round = state.recentRounds.find((item) => item.roundId === archived);
+  assert.equal(conditionOf({ round }, "check:").state, "passed");
+  assert.equal(round.facts.some((fact) => fact.kind === "late"), true);
+});
+
+test("regression: a finished background job reports its exit status", () => {
+  let state = folded([
+    ...userTurn(1, "后台跑测试"),
+    ev(3, "job/registered", { jobId: "j1", kind: "bash", label: "pnpm test", startedAt: 3 }),
+    ev(4, "job/settled", { jobId: "j1", status: "completed", detail: "exit code: 2" })
+  ]);
+  assert.equal(conditionOf(state, "check:").state, "failed");
+});
+
 // --- summary ----------------------------------------------------------------
 
 const BUDGET_CONFIG = {
@@ -342,7 +434,7 @@ function roundRecord(index, sessionId = SESSION) {
   return {
     schemaVersion: 1,
     sessionId,
-    roundId: `${sessionId.slice(0, 8)}:${index}`,
+    roundId: roundIdOf(sessionId, index),
     title: `第 ${index} 轮`,
     startedAt: 1000 + index,
     archivedAt: 2000 + index,
@@ -369,16 +461,45 @@ await testAsync("store: memory mode keeps order, paging, and ceilings", async ()
   assert.ok(page.nextCursor !== undefined);
   const recent = store.recent(SESSION, 1);
   assert.equal(recent.length, 1);
-  assert.equal(recent[0].roundId, `${SESSION.slice(0, 8)}:5`);
-  assert.equal(store.get(SESSION, `${SESSION.slice(0, 8)}:5`).title, "第 5 轮");
+  assert.equal(recent[0].roundId, roundIdOf(SESSION, 5));
+  assert.equal(store.get(SESSION, roundIdOf(SESSION, 5)).title, "第 5 轮");
   assert.equal(store.get(SESSION, "missing"), undefined);
+});
+
+await testAsync("store: the storage declaration is legal and evictions reach disk", async () => {
+  const keys = [];
+  const deletes = [];
+  const table = {
+    entries: () => [],
+    put: async (key) => {
+      keys.push(key);
+    },
+    delete: async (key) => {
+      deletes.push(key);
+    }
+  };
+  const service = {
+    open: async (declaration) => {
+      assert.equal(declaration.name, "dsh_vantage");
+      assert.equal(declaration.version, 1);
+      assert.equal(typeof declaration.tables.rounds.valueSchema.parse, "function");
+      return { table: () => table, close: async () => {} };
+    }
+  };
+  const store = new HistoryStore({ maxRoundsPerSession: 2, maxRoundsTotal: 20, maxSerializedBytes: 64 * 1024, warn });
+  await store.open(service, { version: 1 });
+  assert.equal(store.persistent, true);
+  for (let index = 0; index < 4; index += 1) store.insert(roundRecord(index));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(keys.length, 4);
+  assert.equal(new Set(keys).size, 4, "the session survives in the key");
+  assert.equal(deletes.length, 2);
+  assert.ok(deletes.every((key) => typeof key === "string" && key.includes(SESSION)));
+  await store.close();
 });
 
 await testAsync("store: a broken storage domain degrades to memory", async () => {
   const broken = {
-    defineDomain() {
-      return {};
-    },
     open() {
       throw new Error("facet unsupported");
     }
