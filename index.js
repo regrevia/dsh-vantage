@@ -35,6 +35,7 @@ import {
   estimateTokens,
   safeService,
   summarise,
+  publishVerdict,
   SUMMARY_SYSTEM_PROMPT
 } from "./lib/summary.js";
 
@@ -400,23 +401,9 @@ class Runtime {
       // Publish validation: the answer is only true for the state it was asked
       // about. New facts, a new round, a pause, or a newer request all discard
       // it; the usage stays charged either way.
-      if (this.requests.get(session.id) !== requestId) {
-        return { kind: "skipped", reason: "cancelled", text: "这次整理已取消" };
-      }
-      if (input.manual !== true && !this.budget.autoEnabled(session.id)) {
-        return { kind: "skipped", reason: "disabled", text: "自动摘要已关闭" };
-      }
-      const now = this.stateOf(session);
-      if (now === undefined || now.round === null || now.round.roundId !== reservedRound || now.lastSeq !== reservedSeq) {
-        return { kind: "skipped", reason: "fresh", text: "整理期间有新的进展" };
-      }
-      this.summaries.set(session.id, {
-        roundId: reservedRound,
-        throughSeq: reservedSeq,
-        revision: `${reservedRound}:${reservedSeq}`,
-        generatedAt: this.now(),
-        items: result.items
-      });
+      const rejected = publishVerdict({ requestId, currentRequestId: this.requests.get(session.id), manual: input.manual, autoEnabled: this.budget.autoEnabled(session.id), state: this.stateOf(session), roundId: reservedRound, seq: reservedSeq });
+      if (rejected !== null) return { kind: "skipped", reason: rejected.reason, text: rejected.text };
+      this.summaries.set(session.id, { roundId: reservedRound, throughSeq: reservedSeq, revision: `${reservedRound}:${reservedSeq}`, generatedAt: this.now(), items: result.items });
       this.budget.remember(session.id, reservedRound, reservedSeq);
       this.lastSummaryAt.set(session.id, this.now());
       return { kind: "queued" };
@@ -590,11 +577,27 @@ function install(ctx, runtime, warn) {
  * @param {(message: string) => void} warn - logger.
  * @returns {Promise<void>} resolved when opening finished.
  */
+const STORE_OPEN_TIMEOUT_MS = 5000;
+const STORE_OPEN_TIMED_OUT = Symbol("store-open-timeout");
+
 async function openStore(runtime, warn) {
   const storageDomain = safeService(runtime.ctx, "storageDomain");
   if (storageDomain === undefined) return;
   try {
-    await runtime.store.open(storageDomain, STORE_SPEC);
+    // A domain that never answers must not hold the boot path open: the store
+    // falls back to memory and the panel still renders.
+    let timer;
+    const timeout = new Promise((resolve) => {
+      timer = setTimeout(() => resolve(STORE_OPEN_TIMED_OUT), STORE_OPEN_TIMEOUT_MS);
+      timer.unref?.();
+    });
+    const opened = await Promise.race([runtime.store.open(storageDomain, STORE_SPEC), timeout]);
+    clearTimeout(timer);
+    if (opened === STORE_OPEN_TIMED_OUT) {
+      runtime.store.abandon();
+      warn("history stays in memory: the storage domain did not answer");
+      return;
+    }
     const ledger = await runtime.store.loadLedger();
     if (ledger !== undefined) runtime.budget.restore(ledger);
     // Restoring happens before the first tick can admit anything, so a cold

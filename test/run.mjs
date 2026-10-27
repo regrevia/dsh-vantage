@@ -27,7 +27,7 @@ import {
 import { apply, evaluateVerification, initState, rankFacts, roundStateOf } from "../lib/rounds.js";
 import { HistoryStore } from "../lib/store.js";
 import { DEFAULT_CONFIG } from "../index.js";
-import { LeaseRegistry, SUMMARY_SYSTEM_PROMPT, SummaryBudget, buildPacket, estimateTokens, verifyLines } from "../lib/summary.js";
+import { LeaseRegistry, SUMMARY_SYSTEM_PROMPT, SummaryBudget, buildPacket, estimateTokens, publishVerdict, verifyLines } from "../lib/summary.js";
 import { buildSnapshot, createRoutes, excerptOf } from "../lib/api.js";
 
 let passed = 0;
@@ -185,6 +185,18 @@ test("rounds: a non-zero tool result is evidence, never a task failure", () => {
   assert.equal(state.round.conditions.length, 0);
   assert.equal(state.round.facts.some((fact) => fact.kind === "failure"), false);
   assert.ok(state.round.facts.some((fact) => fact.kind === "note"));
+});
+
+test("rounds: a file written after a pass puts the check back to recheck", () => {
+  const state = folded([
+    ...userTurn(0, "跑测试"),
+    ...checkCall(2, "c1", "pnpm test"),
+    ev(4, "tool/call", { callId: "w1", name: "write", arguments: "{\"path\":\"a.js\",\"content\":\"x\"}" }),
+    ev(5, "tool/result", { message: { toolCallId: "w1", content: [] } })
+  ]);
+  assert.equal(state.round.conditions[0].state, "recheck");
+  assert.equal(evaluateVerification(state.round).state, "recheck");
+  assert.equal(state.round.facts.find((fact) => fact.kind === "check").validity, "needsRecheck");
 });
 
 test("rounds: empty conditions evaluate to unknown, never to passed", () => {
@@ -474,6 +486,18 @@ test("summary: the auto switch pauses one session only", () => {
   assert.equal(budget.autoEnabled(SESSION), true);
 });
 
+test("summary: publish re-validation discards a stale, paused, or superseded answer", () => {
+  const base = { requestId: "r1", currentRequestId: "r1", manual: true, autoEnabled: true, roundId: "s:1", seq: 7 };
+  const live = { round: { roundId: "s:1" }, lastSeq: 7 };
+  assert.equal(publishVerdict({ ...base, state: live }), null);
+  assert.equal(publishVerdict({ ...base, state: live, currentRequestId: "r2" }).reason, "cancelled");
+  assert.equal(publishVerdict({ ...base, state: live, manual: false, autoEnabled: false }).reason, "disabled");
+  assert.equal(publishVerdict({ ...base, state: live, manual: false, autoEnabled: true }), null);
+  assert.equal(publishVerdict({ ...base, state: { round: { roundId: "s:1" }, lastSeq: 8 } }).reason, "fresh");
+  assert.equal(publishVerdict({ ...base, state: { round: { roundId: "s:2" }, lastSeq: 7 } }).reason, "fresh");
+  assert.equal(publishVerdict({ ...base, state: undefined }).reason, "fresh");
+});
+
 test("summary: spending past the token ceiling marks the session exhausted", () => { // ui-copy-ignore
   const tight = new SummaryBudget({ ...BUDGET_CONFIG, maxTokensPerRollingHour: 1200, maxRequestsPerRollingHour: 4 }, warn);
   tight.now = now;
@@ -607,6 +631,53 @@ await testAsync("store: the storage declaration is legal and evictions reach dis
   assert.equal(deletes.length, 2);
   assert.ok(deletes.every((key) => typeof key === "string" && key.includes(SESSION)));
   await store.close();
+});
+
+await testAsync("store: a domain answering after the boot gave up is closed, not adopted", async () => {
+  let closed = false;
+  let answer;
+  const table = { entries: () => [], put: async () => {}, delete: async () => {} };
+  const service = {
+    open: () =>
+      new Promise((resolve) => {
+        answer = () => resolve({ table: () => table, close: async () => (closed = true) });
+      })
+  };
+  const store = new HistoryStore({ maxRoundsPerSession: 3, maxRoundsTotal: 5, maxSerializedBytes: 64 * 1024, warn });
+  const opening = store.open(service, { version: 1 });
+  store.abandon();
+  answer();
+  await opening;
+  assert.equal(store.persistent, false);
+  assert.equal(store.domain, null);
+  assert.equal(closed, true);
+});
+
+await testAsync("store: a cold session reads its rounds back from the domain", async () => {
+  const disk = new Map();
+  const table = {
+    entries: () => [...disk.entries()],
+    put: async (key, row) => {
+      disk.set(key, row);
+    },
+    delete: async (key) => {
+      disk.delete(key);
+    }
+  };
+  const service = { open: async () => ({ table: () => table, close: async () => {} }) };
+  const first = new HistoryStore({ maxRoundsPerSession: 20, maxRoundsTotal: 200, maxSerializedBytes: 2 * 1024 * 1024, warn });
+  await first.open(service, { version: 1 });
+  for (let index = 0; index < 3; index += 1) first.insert(roundRecord(index));
+  await first.close();
+  assert.equal(disk.size, 3);
+  const second = new HistoryStore({ maxRoundsPerSession: 20, maxRoundsTotal: 200, maxSerializedBytes: 2 * 1024 * 1024, warn });
+  await second.open(service, { version: 1 });
+  assert.equal(second.persistent, true);
+  assert.equal(second.count(SESSION), 3);
+  assert.equal(second.recent(SESSION, 1)[0].title, "第 2 轮");
+  assert.equal(second.get(SESSION, roundIdOf(SESSION, 1)).title, "第 1 轮");
+  assert.equal(second.page(SESSION, { limit: 2 }).items.length, 2);
+  await second.close();
 });
 
 await testAsync("store: a broken storage domain degrades to memory", async () => {
@@ -823,7 +894,9 @@ function loadClient() {
 
 function testClient() {
   const plugin = loadClient();
-  assert.deepEqual(plugin.inject, ["slots"]);
+  // locale is a declared dependency: reading ctx.locale without it throws
+  // at boot and leaves the shell entry stuck on loading.
+  assert.deepEqual(plugin.inject, ["slots", "locale"]); // ui-copy-ignore
   let registration;
   const ctx = {
     locale: { getSnapshot: () => ({ active: "zh" }) },
