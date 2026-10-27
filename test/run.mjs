@@ -760,6 +760,16 @@ async function testRoutes() {
     assert.deepEqual(JSON.parse(serialized), body);
   });
 
+  test("projection: a deliverable is named by its file, not its directory", () => {
+    const state = folded([
+      ...userTurn(0, "导出视频"),
+      ev(2, "deliverables/presented", { files: [{ path: "/Users/apple/CreatorStudio/deliver/envoy-f52motion.mp4", name: "envoy-f52motion.mp4" }] })
+    ]);
+    const fact = state.round.facts.find((item) => item.kind === "deliverable");
+    assert.equal(fact.statement, "已生成：envoy-f52motion.mp4");
+    assert.equal(fact.subject, "envoy-f52motion.mp4");
+  });
+
   test("snapshot: a long goal objective becomes a one-clause heading", () => {
     const routes = createRoutes({ ...runtime, stateOf: () => ({ ...state, round: { ...state.round, title: "10 小时低资源开发：修复 Envoy 确定性缺陷（ASR 稳定身份、游标、预算），并补齐恢复路径" } }) });
     const route = routes.find((item) => item.path === ROUTES.snapshot);

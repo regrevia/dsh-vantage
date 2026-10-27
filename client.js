@@ -474,6 +474,8 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       ])))
     }
 
+    const CONCLUDING_KINDS = new Set(['blocker', 'failure', 'deliverable', 'check', 'change', 'interruption'])
+
     // The archived round the reader opened from history, shown above the live one.
     function ArchivedRound(props) {
       const viewing = props.viewing
@@ -496,7 +498,9 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       const conditions = round.verification !== null && round.verification !== undefined && Array.isArray(round.verification.conditions)
         ? round.verification.conditions
         : []
-      const facts = Array.isArray(round.facts) ? round.facts : []
+      // A sealed round is read as conclusions. Command output and error text stay
+      // in the evidence for that fact instead of becoming bullets.
+      const facts = (Array.isArray(round.facts) ? round.facts : []).filter((fact) => CONCLUDING_KINDS.has(fact.kind))
       const at = typeof round.archivedAt === 'number' && round.archivedAt > 0 ? round.archivedAt : round.startedAt
       return h('section', { className: 'dsv-viewing' }, [
         head,
