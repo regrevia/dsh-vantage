@@ -21,13 +21,16 @@ window.__ModuleLoader__.load({
         blocked: '这个会话只能在自己的窗口里查看', // ui-copy-ignore
         loading: '正在读取', // ui-copy-ignore
         retry: '重试', // ui-copy-ignore
-        progress: '进展情况', // ui-copy-ignore
+        elapsed: '本轮历时',
+        updated: '摘要更新于',
+        factsUpdated: '依据更新于',
+        summaryIdle: '摘要未更新',
+        unverified: '尚未验证',
         verification: '收尾核验',
-        outcomes: '本轮结果', // ui-copy-ignore
         history: '历史记录', // ui-copy-ignore
         historyAll: '查看全部',
         historyEmpty: '还没有更早的轮次',
-        facts: '依据', // ui-copy-ignore
+        facts: '查看依据', // ui-copy-ignore
         evidenceEmpty: '没有可展开的依据',
         verify: { // ui-copy-ignore
           passed: '当前已知核验已通过', // ui-copy-ignore
@@ -70,12 +73,17 @@ window.__ModuleLoader__.load({
         loading: 'Reading', // ui-copy-ignore
         retry: 'Retry', // ui-copy-ignore
         progress: 'Progress', // ui-copy-ignore
+        elapsed: 'Elapsed',
+        updated: 'Summary updated',
+        factsUpdated: 'Evidence updated',
+        summaryIdle: 'Summary not updated',
+        unverified: 'Not verified',
         verification: 'Checks',
         outcomes: 'Results', // ui-copy-ignore
         history: 'Earlier rounds', // ui-copy-ignore
         historyAll: 'Show all',
         historyEmpty: 'No earlier rounds',
-        facts: 'Basis', // ui-copy-ignore
+        facts: 'View evidence', // ui-copy-ignore
         evidenceEmpty: 'Nothing to expand',
         verify: { // ui-copy-ignore
           passed: 'Known checks pass', // ui-copy-ignore
@@ -137,6 +145,27 @@ window.__ModuleLoader__.load({
 .dsv-meta {
   display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-secondary); font-variant-numeric: tabular-nums;
 }
+.dsv-head-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; min-height: 24px; }
+.dsv-head-state { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.dsv-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--dsw-alias-label-secondary); }
+.dsv-dot[data-tone="info"] { background: var(--dsw-alias-brand-primary); }
+.dsv-dot[data-tone="success"] { background: var(--dsw-alias-state-success-primary); }
+.dsv-dot[data-tone="warn"] { background: var(--dsw-alias-state-warn-primary); }
+.dsv-dot[data-tone="error"] { background: var(--dsw-alias-state-error-primary); }
+.dsv-brief { display: flex; flex-direction: column; }
+.dsv-brief-item { border-top: 1px solid var(--dsw-alias-border-l1); }
+.dsv-brief-item:first-child { border-top: 0; }
+.dsv-brief-head {
+  display: grid; grid-template-columns: 16px minmax(0, 1fr) auto 12px; gap: 10px; align-items: start; width: 100%; min-height: 48px; padding: 12px 0; margin: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.dsv-brief-head:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+.dsv-brief-text { overflow-wrap: anywhere; }
+.dsv-qual { align-self: start; padding: 0 8px; border-radius: 6px; border: 1px solid var(--dsw-alias-border-l2); color: var(--dsw-alias-state-warn-primary); font-size: 12px; line-height: 20px; white-space: nowrap; }
+.dsv-chevron { color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 22px; }
+.dsv-detail { display: flex; flex-direction: column; gap: 8px; padding: 0 0 16px 26px; }
+.dsv-detail-row { display: flex; gap: 8px; min-width: 0; font-size: 14px; line-height: 22px; }
+.dsv-detail-label { flex: none; color: var(--dsw-alias-label-secondary); }
+.dsv-detail-value { min-width: 0; overflow-wrap: anywhere; }
 .dsv-notices { display: flex; flex-direction: column; gap: 4px; }
 .dsv-notice {
   font-size: 12px; line-height: 20px; color: var(--dsw-alias-state-warn-primary);
@@ -174,7 +203,7 @@ window.__ModuleLoader__.load({
 }
 .dsv-evidence-label { font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
 .dsv-evidence-text {
-  margin: 4px 0 0; font-size: 13px; line-height: 21px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--dsw-alias-label-primary);
+  margin: 4px 0 0; font-size: 14px; line-height: 22px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--dsw-alias-label-primary);
 }
 .dsv-list { display: flex; flex-direction: column; }
 .dsv-history-row {
@@ -187,7 +216,7 @@ window.__ModuleLoader__.load({
   display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-top: 16px; border-top: 1px solid var(--dsw-alias-border-l1);
 }
 .dsv-button {
-  min-height: 36px; padding: 0 14px; border-radius: 6px; border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); font: inherit; font-size: 13px; cursor: pointer;
+  min-height: 36px; padding: 0 14px; border-radius: 6px; border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); font: inherit; font-size: 14px; cursor: pointer;
 }
 .dsv-button[aria-pressed="true"] { border-color: var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary); }
 .dsv-button:disabled { color: var(--dsw-alias-label-secondary); cursor: default; }
@@ -195,7 +224,7 @@ window.__ModuleLoader__.load({
 .dsv-empty {
   display: flex; flex-direction: column; gap: 6px; padding: 48px 0; color: var(--dsw-alias-label-secondary);
 }
-.dsv-empty-title { font-size: 15px; line-height: 24px; color: var(--dsw-alias-label-primary); }
+.dsv-empty-title { font-size: 16px; line-height: 24px; color: var(--dsw-alias-label-primary); }
 @container (max-width: 560px) {
   .dsv-root { padding: 16px 16px 32px; }
 }
@@ -221,11 +250,20 @@ window.__ModuleLoader__.load({
       return clock
     }
 
+    function durationOf(ms) {
+      if (typeof ms !== 'number' || ms < 60000) return LANG === 'zh' ? '不到 1 分钟' : 'under a minute'
+      const minutes = Math.floor(ms / 60000)
+      if (minutes < 60) return LANG === 'zh' ? `${minutes} 分钟` : `${minutes} min`
+      const hours = Math.floor(minutes / 60)
+      return LANG === 'zh' ? `${hours} 小时 ${minutes % 60} 分` : `${hours} h ${minutes % 60} min`
+    }
+
     async function callHost(path, options) {
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), REQUEST_MS)
       try {
-        const response = await fetch(`${HOST_BASE}${path}`, { ...options, signal: controller.signal, cache: 'no-store' }) // ui-copy-ignore
+        const init = Object.assign({}, options, { signal: controller.signal, cache: 'no-store' })
+        const response = await fetch(`${HOST_BASE}${path}`, init) // ui-copy-ignore
         if (response.status === 403) return { blocked: true }
         let body = null
         try {
@@ -274,31 +312,20 @@ window.__ModuleLoader__.load({
       ])
     }
 
+    // One line telling a reader where a trace came from and when it happened.
+    function evidenceStampOf(now, ref) {
+      const name = ref.label === '' || ref.label === undefined ? ref.type : ref.label // ui-copy-ignore
+      const stamp = timeOf(ref.time, now === undefined ? Date.now() : now)
+      return stamp === '' ? name : `${name} · ${stamp}`
+    }
+
     function Evidence(props) {
       if (props.state === 'loading') return h('div', { className: 'dsv-sub' }, copy().loading)
       if (props.refs.length === 0) return h('div', { className: 'dsv-sub' }, copy().evidenceEmpty)
       return h('div', { className: 'dsv-evidence' }, props.refs.map((ref) => h('div', { key: `${ref.seq}`, className: 'dsv-evidence-item' }, [
-        h('div', { key: 'l', className: 'dsv-evidence-label' }, ref.label === '' ? ref.type : ref.label),
+        h('div', { key: 'l', className: 'dsv-evidence-label' }, evidenceStampOf(props.now, ref)),
         h('pre', { key: 'x', className: 'dsv-evidence-text' }, ref.excerpt)
       ])))
-    }
-
-    function VerificationBlock(props) {
-      const payload = props.verification
-      const conditions = payload === null || payload === undefined ? [] : payload.conditions
-      return h('div', { className: 'dsv-section' }, [
-        h('div', { key: 'h', className: 'dsv-section-head' }, [
-          h('span', { key: 'l' }, copy().verification),
-          h('span', { key: 's', className: 'dsv-count' }, copy().verify[payload === null || payload === undefined ? 'unknown' : payload.state] ?? copy().verify.unknown)
-        ]),
-        conditions.length === 0
-          ? h('div', { key: 'e', className: 'dsv-sub' }, copy().verify.none)
-          : h('div', { key: 'r', className: 'dsv-rows' }, conditions.map((condition) => h(Row, {
-              key: condition.id,
-              text: condition.text,
-              tone: condition.state === 'passed' ? 'success' : condition.state === 'failed' ? 'error' : 'neutral'
-            })))
-      ])
     }
 
     function View(props) {
@@ -308,7 +335,7 @@ window.__ModuleLoader__.load({
       const [blocked, setBlocked] = React.useState(false)
       const [failed, setFailed] = React.useState(false)
       const [loading, setLoading] = React.useState(true)
-      const [openProgress, setOpenProgress] = React.useState(false)
+      const [openItem, setOpenItem] = React.useState(null) // ui-copy-ignore
       const [openHistory, setOpenHistory] = React.useState(false)
       const [history, setHistory] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
@@ -472,96 +499,88 @@ window.__ModuleLoader__.load({
 
       const round = snapshot.round
       const now = Date.now()
-      const briefItems = snapshot.brief.items
-      const outcomes = snapshot.outcomes.items
+      const items = snapshot.brief.items
       const roundId = round.roundId
+      const conditions = snapshot.verification.conditions ?? []
+      const unverified = conditions.filter((condition) => condition.state !== 'passed')
+      const hasFacts = items.some((item) => item.id !== 'no-facts')
+      const updated = timeOf(round.contentAt, now)
+      const meta = snapshot.mode === 'summary' && updated !== ''
+        ? `${copy().updated} ${updated}`
+        : hasFacts && updated !== '' ? `${copy().factsUpdated} ${updated}` : copy().summaryIdle
+      const historyItems = history === null ? snapshot.history.items : history
 
       return h('div', { className: 'dsv-root' }, h('div', { className: 'dsv-panel' }, [
         h('div', { key: 'head', className: 'dsv-head' }, [
+          h('div', { key: 'row', className: 'dsv-head-row' }, [
+            h('div', { key: 's', className: 'dsv-head-state' }, [
+              h('span', { key: 'd', className: 'dsv-dot', 'data-tone': round.statusTone ?? 'neutral', 'aria-hidden': 'true' }),
+              h('span', { key: 't', className: 'dsv-status' }, round.statusLine)
+            ]),
+            snapshot.history.count === 0 ? null : h('button', {
+              key: 'h', type: 'button', className: 'dsv-link', onClick: expandHistory, 'aria-expanded': openHistory
+            }, `${copy().history} ${snapshot.history.count}`)
+          ]),
           h('h2', { key: 't', className: 'dsv-title' }, round.title),
-          h('div', { key: 's', className: 'dsv-status' }, round.statusLine),
           h('div', { key: 'm', className: 'dsv-meta' }, [
-            h('span', { key: 'r' }, copy().roundState[round.roundState] ?? copy().roundState.unknown),
-            h('span', { key: 'g' }, copy().goalState[round.goalState] ?? copy().goalState.unknown),
-            timeOf(round.updatedAt, now) === '' ? null : h('span', { key: 'u' }, timeOf(round.updatedAt, now))
+            h('span', { key: 'e' }, `${copy().elapsed} ${durationOf(round.elapsedMs)}`),
+            h('span', { key: 'u' }, meta)
           ])
         ]),
         snapshot.notices.length === 0 ? null : h('div', { key: 'n', className: 'dsv-notices' },
           snapshot.notices.map((notice) => h('div', { key: notice.code, className: 'dsv-notice' }, notice.text))),
-        h('div', { key: 'brief', className: 'dsv-section' }, [
-          h('div', { key: 'h', className: 'dsv-section-head' },
+        h('div', { key: 'brief', className: 'dsv-brief' }, items.map((item) => {
+          const detail = Array.isArray(item.detail) ? item.detail : []
+          const facts = Array.isArray(item.factIds) ? item.factIds : []
+          const open = openItem === item.id
+          const shown = open && evidence !== null && facts.length > 0 && evidence.factId === facts[0]
+          return h('div', { key: item.id, className: 'dsv-brief-item' }, [
             h('button', {
-              key: 'toggle',
+              key: 'b',
               type: 'button',
-              className: 'dsv-toggle',
-              'aria-expanded': openProgress,
-              onClick: () => setOpenProgress((value) => !value)
-            }, [h('span', { key: 'a' }, openProgress ? '▾' : '▸'), h('span', { key: 'l' }, copy().progress)])),
-          h('div', { key: 'r', className: 'dsv-rows' }, briefItems.map((item) => {
-            const expandable = item.id !== 'status' && Array.isArray(item.factIds) && item.factIds.length > 0 // ui-copy-ignore
-            const expanded = expandable && evidence !== null && evidence.factId === item.factIds[0]
-            return h(Row, {
-              key: item.id, // ui-copy-ignore
-              text: item.text, // ui-copy-ignore
-              tone: item.tone === undefined ? 'neutral' : item.tone,
-              action: expandable // ui-copy-ignore
-                ? {
-                    label: copy().facts, // ui-copy-ignore
-                    expanded,
-                    onClick: () => showEvidence(roundId, item.factIds[0])
-                  }
-                : undefined,
-              extra: expanded // ui-copy-ignore
-                ? h(Evidence, { key: 'ev', state: evidence.state, refs: evidence.refs })
-                : undefined
-            })
-          }))
-        ]),
-        h(VerificationBlock, { key: 'verify', verification: snapshot.verification }),
-        outcomes.length === 0 ? null : h('div', { key: 'out', className: 'dsv-section' }, [
-          h('div', { key: 'h', className: 'dsv-section-head' }, copy().outcomes),
-          h('div', { key: 'r', className: 'dsv-rows' }, outcomes.map((item) => h(Row, {
-            key: item.id,
-            text: item.text,
-            tone: item.kind === 'check' ? 'success' : 'neutral'
-          })))
-        ]),
-        snapshot.history.count === 0 ? null : h('div', { key: 'hist', className: 'dsv-section' }, [
-          h('div', { key: 'h', className: 'dsv-section-head' }, [
-            h('span', { key: 'l' }, copy().history),
-            h('span', { key: 'c', className: 'dsv-count' }, String(snapshot.history.count)),
-            h('button', { key: 'm', type: 'button', className: 'dsv-link', onClick: expandHistory, 'aria-expanded': openHistory }, copy().historyAll)
-          ]),
-          h('div', { key: 'r', className: 'dsv-list' }, snapshot.history.items.map((item) => h('div', {
+              className: 'dsv-brief-head',
+              'aria-expanded': open,
+              onClick: () => setOpenItem(open ? null : item.id)
+            }, [
+              h('span', { key: 'g', className: 'dsv-glyph', 'data-tone': item.tone ?? 'neutral', 'aria-hidden': 'true' }),
+              h('span', { key: 't', className: 'dsv-brief-text' }, item.text),
+              item.limit === '' || item.limit === undefined ? null : h('span', { key: 'q', className: 'dsv-qual' }, item.limit),
+              h('span', { key: 'c', className: 'dsv-chevron', 'aria-hidden': 'true' }, open ? '▾' : '▸')
+            ]),
+            open ? h('div', { key: 'x', className: 'dsv-detail' }, [
+              ...detail.map((line, index) => h('div', { key: `d${index}`, className: 'dsv-detail-row' }, [
+                h('span', { key: 'l', className: 'dsv-detail-label' }, line.label),
+                h('span', { key: 'v', className: 'dsv-detail-value' }, line.value)
+              ])),
+              unverified.length === 0 ? null : h('div', { key: 'v', className: 'dsv-sub' },
+                `${copy().unverified}：${unverified.map((condition) => condition.text).join(' · ')}`),
+              facts.length === 0 ? null : h('button', {
+                key: 'e',
+                type: 'button',
+                className: 'dsv-link',
+                onClick: () => showEvidence(roundId, facts[0]),
+                'aria-expanded': shown
+              }, copy().facts),
+              shown ? h(Evidence, { key: 'ev', state: evidence.state, refs: evidence.refs, now }) : null
+            ]) : null
+          ])
+        })),
+        openHistory ? h('div', { key: 'hist', className: 'dsv-section' }, [
+          h('div', { key: 'h', className: 'dsv-section-head' }, copy().history),
+          h('div', { key: 'r', className: 'dsv-list' }, historyItems.map((item) => h('div', {
             key: item.roundId,
             className: 'dsv-history-row'
           }, [
             h('span', { key: 't', className: 'dsv-history-title' }, item.title),
             h('span', { key: 'u', className: 'dsv-history-time' }, timeOf(item.archivedAt, now))
-          ]))),
-          openHistory
-            ? h('div', { key: 'all', className: 'dsv-list' },
-                (history === null ? [] : history).map((item) => h('div', { key: item.roundId, className: 'dsv-history-row' }, [
-                  h('span', { key: 't', className: 'dsv-history-title' }, item.title),
-                  h('span', { key: 'u', className: 'dsv-history-time' }, timeOf(item.archivedAt, now))
-                ])))
-            : null
-        ]),
+          ])))
+        ]) : null,
         h('div', { key: 'foot', className: 'dsv-foot' }, [
+          h('button', { key: 'req', type: 'button', className: 'dsv-link', onClick: requestSummary, disabled: busy },
+            busy ? copy().requesting : copy().request),
           h('button', {
-            key: 'req', // ui-copy-ignore
-            type: 'button', // ui-copy-ignore
-            className: 'dsv-button',
-            onClick: requestSummary, // ui-copy-ignore
-            disabled: busy // ui-copy-ignore
-          }, busy ? copy().requesting : copy().request),
-          h('button', {
-            key: 'auto', // ui-copy-ignore
-            type: 'button', // ui-copy-ignore
-            className: 'dsv-button',
-            'aria-pressed': snapshot.coverage.summaryAuto,
-            onClick: toggleAuto, // ui-copy-ignore
-            disabled: busy || snapshot.coverage.summaryBudgetExhausted
+            key: 'auto', type: 'button', className: 'dsv-link', 'aria-pressed': snapshot.coverage.summaryAuto,
+            onClick: toggleAuto, disabled: busy || snapshot.coverage.summaryBudgetExhausted
           }, snapshot.coverage.summaryAuto ? copy().following : copy().follow),
           verdict === '' ? null : h('span', { key: 'v', className: 'dsv-sub' }, verdict)
         ])

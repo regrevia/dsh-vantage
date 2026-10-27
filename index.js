@@ -24,7 +24,7 @@
 import { readFileSync } from "node:fs";
 
 import { LIMITS, ROUTES, ROUTE_PREFIX, clip } from "./lib/schema.js";
-import { apply as foldEvent, chooseStatus, evaluateVerification, initState, roundStateOf } from "./lib/rounds.js";
+import { PROJECTION_VERSION, apply as foldEvent, chooseStatus, evaluateVerification, initState, roundStateOf } from "./lib/rounds.js";
 import { HistoryStore } from "./lib/store.js";
 import { createRoutes } from "./lib/api.js";
 import { LeaseRegistry, LEASE_RENEW_MS, SummaryBudget, buildPacket, safeService, summarise } from "./lib/summary.js";
@@ -195,7 +195,8 @@ class Runtime {
   stateOf(session) {
     const key = identityOf(session);
     const cached = this.cache.get(session.id);
-    if (cached !== undefined && cached.key === key) return cached.state;
+    const fresh = cached !== undefined && cached.key === key && cached.state.v === PROJECTION_VERSION;
+    if (fresh) return cached.state;
     try {
       const state = initState(session.id);
       for (const event of session.ownEvents()) foldEvent(state, event);

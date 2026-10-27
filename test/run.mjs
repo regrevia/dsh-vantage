@@ -172,16 +172,17 @@ test("rounds: a failed check never passes verification", () => {
   ]);
   assert.equal(state.round.conditions[0].state, "failed");
   assert.equal(evaluateVerification(state.round).state, "failed");
-  assert.ok(state.round.facts.some((fact) => fact.kind === "check" && fact.statement.startsWith("未通过")));
+  assert.ok(state.round.facts.some((fact) => fact.kind === "check" && fact.statement === "测试未通过"));
 });
 
-test("rounds: an unpaired tool result is a failure, not a check", () => {
+test("rounds: a non-zero tool result is evidence, never a task failure", () => {
   const state = folded([
     ...userTurn(0, "继续"),
     ev(2, "tool/result", { message: { toolCallId: "ghost", isError: true, content: [] } })
   ]);
   assert.equal(state.round.conditions.length, 0);
-  assert.ok(state.round.facts.some((fact) => fact.kind === "failure"));
+  assert.equal(state.round.facts.some((fact) => fact.kind === "failure"), false);
+  assert.ok(state.round.facts.some((fact) => fact.kind === "note"));
 });
 
 test("rounds: empty conditions evaluate to unknown, never to passed", () => {
@@ -206,7 +207,7 @@ test("rounds: the next user turn archives the previous one", () => {
 test("rounds: urgent facts and rank order keep blockers first", () => {
   const state = folded([
     ...userTurn(0, "处理失败"),
-    ev(2, "tool/call", { callId: "c1", name: "shell", arguments: "{}" }),
+    ev(2, "tool/call", { callId: "c1", name: "write", arguments: '{"path":"a.js"}' }),
     ev(3, "tool/result", { message: { toolCallId: "c1", isError: true, content: [{ type: "text", text: "boom" }] } }),
     ...checkCall(4, "c2", "pnpm test")
   ]);
