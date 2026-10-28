@@ -846,6 +846,20 @@ async function testRoutes() {
     assert.equal(buildSnapshot(stale, session, state, "rev-stale").brief.mode, "facts", "an older summary never hides new facts");
   });
 
+  test("snapshot: edits make one line, and their paths wait in the evidence", () => {
+    const edited = folded([
+      ...userTurn(0, "重构首页"),
+      ...changeCall(2, "w1", "site/a.md"),
+      ...changeCall(4, "w2", "site/b.md")
+    ]);
+    const body = buildSnapshot(runtime, session, edited, "rev-edits");
+    const rows = body.brief.items;
+    assert.equal(rows.length, 1, JSON.stringify(rows.map((row) => row.text)));
+    assert.deepEqual(rows[0].detail, [], "a work log is not the conclusion");
+    const paths = rows[0].evidence.filter((row) => row.label === "文件").map((row) => row.text);
+    assert.deepEqual(paths.sort(), ["site/a.md", "site/b.md"]);
+  });
+
   test("snapshot: the payload is small, complete, and JSON-pure", async () => {
     const routes = createRoutes(runtime);
     const route = routes.find((item) => item.path === ROUTES.snapshot);
