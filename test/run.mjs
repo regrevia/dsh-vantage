@@ -456,6 +456,30 @@ test("summary: publish re-validation discards a stale, superseded, or switched-o
   assert.equal(publishVerdict({ ...base, state: undefined }).reason, "fresh");
 });
 
+test("summary: a few topics is fine, none is fine, and ids follow the facts", () => {
+  const facts = new Map([
+    ["f1", { id: "f1", statement: "src/login.test.ts 未通过", kind: "check" }],
+    ["f2", { id: "f2", statement: "src/login.ts 已改动", kind: "change" }],
+    ["f3", { id: "f3", statement: "登录流程无法保存", kind: "blocker" }]
+  ]);
+  const answer = (headline, factIds) => JSON.stringify({ topics: [{ headline, factIds, details: [] }] });
+  const many = JSON.stringify({
+    topics: [
+      { headline: "登录流程无法保存", factIds: ["f3"] },
+      { headline: "src/login.test.ts 未通过", factIds: ["f1"] },
+      { headline: "src/login.ts 已改动", factIds: ["f2"] },
+      { headline: "登录流程无法保存", factIds: ["f3"] },
+      { headline: "src/login.ts 已改动", factIds: ["f2"] }
+    ]
+  });
+  const capped = verifyTopics(many, facts, 3);
+  assert.equal(capped.length, 3, "no more than the cap reaches the panel");
+  assert.deepEqual(verifyTopics(answer("登录流程无法保存", ["f3"]), facts, 3).map((topic) => topic.id), ["t:f3"]);
+  assert.deepEqual(verifyTopics(answer("登录流程无法保存", ["f3"]), facts, 3).map((topic) => topic.id), ["t:f3"], "the same facts name the same topic");
+  assert.deepEqual(verifyTopics(JSON.stringify({ topics: [] }), facts, 3), []);
+  assert.deepEqual(verifyTopics("not json", facts, 3), []);
+});
+
 test("summary: passing checks never become headroom for a topic", () => {
   const onlyChecks = folded([...userTurn(0, "跑测试"), ...checkCall(2, "c1", "pnpm test")]);
   assert.equal(buildPacket(onlyChecks.round, { maxFacts: 8 }).text.length, 0, "a pass alone is not a summary topic");
@@ -643,9 +667,12 @@ await testAsync("store: a broken storage domain degrades to memory", async () =>
   const store = new HistoryStore({ maxRoundsPerSession: 3, maxRoundsTotal: 5, maxSerializedBytes: 64 * 1024, warn: (m) => notes.push(m) });
   await store.open(broken, { version: 1 });
   assert.equal(store.persistent, false);
+  assert.equal(store.domain, null, "no domain was adopted");
   assert.equal(notes.length, 1);
+  assert.ok(notes[0].includes("history store stays in memory"), notes[0]);
   store.insert(roundRecord(1));
-  assert.equal(store.count(SESSION), 1);
+  assert.equal(store.count(SESSION), 1, "reads still answer without a domain");
+  assert.equal(store.abandoned, false);
 });
 
 // --- http payloads ----------------------------------------------------------
@@ -690,6 +717,27 @@ async function testRoutes() {
       ].sort()
     );
     for (const route of routes) assert.ok(route.methods.length >= 1);
+  });
+
+  test("snapshot: a fresh summary replaces the fact lines without losing their evidence", () => {
+    const fact = [...state.round.facts.values()][0];
+    assert.ok(fact !== undefined, "the round recorded a fact");
+    const summary = {
+      roundId: state.round.roundId,
+      throughSeq: state.lastSeq,
+      revision: "summary-1", // ui-copy-ignore
+      generatedAt: now(),
+      topics: [{ id: `t:${fact.id}`, headline: "登录流程无法保存", qualifier: "需要一次决定", details: [], factIds: [fact.id] }]
+    };
+    const withSummary = { ...runtime, briefOf: () => summary };
+    const body = buildSnapshot(withSummary, session, state, "rev-summary");
+    assert.equal(body.mode, "summary");
+    assert.equal(body.brief.mode, "summary");
+    assert.equal(body.brief.items[0].source, "model");
+    assert.equal(body.brief.items[0].text, "登录流程无法保存");
+    assert.ok(body.brief.items[0].evidence.length >= 1, "the topic still points at its record");
+    const stale = { ...runtime, briefOf: () => ({ ...summary, throughSeq: state.lastSeq - 1 }) };
+    assert.equal(buildSnapshot(stale, session, state, "rev-stale").brief.mode, "facts", "an older summary never hides new facts");
   });
 
   test("snapshot: the payload is small, complete, and JSON-pure", async () => {
@@ -830,23 +878,6 @@ test("store: a failed open leaves the store readable in memory", () => {
   assert.equal(store.persistent, false);
   assert.equal(store.domain, null, "no domain was adopted");
   assert.equal(store.abandoned, false);
-});
-
-testAsync("store: a domain that refuses to open degrades to memory", async () => {
-  const notes = [];
-  const store = new HistoryStore({ maxRoundsPerSession: 10, maxRoundsTotal: 100, maxSerializedBytes: 1 << 20, warn: (line) => notes.push(line) });
-  await store.open({
-    open: async () => {
-      throw new Error("version-mismatch");
-    }
-  }, { version: 3, compatibleVersions: [1, 2], tables: {} });
-  assert.equal(store.persistent, false);
-  assert.equal(store.domain, null);
-  assert.equal(notes.length, 1, "the fallback is reported once");
-  assert.ok(notes[0].includes("history store stays in memory"), notes[0]);
-  store.insert({ sessionId: SESSION, roundId: "r1", revision: "v1", created: now(), updated: now() });
-  assert.equal(store.count(SESSION), 1, "reads still answer without a domain");
-  assert.equal(store.persistent, false);
 });
 
 test("snapshot: every brief item carries clean inline evidence", () => {
