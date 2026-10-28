@@ -67,8 +67,8 @@ Failures are one small envelope, never a log tail:
         "id": "f:…",
         "factIds": ["f:…"],             // empty means no evidence to open
         "source": "rule" | "model",
-        "text": "改了 2 个文件，尚未运行测试",
-        "limit": "已有新改动 需要复验",   // qualifier line, "" when none
+        "text": "已修改 api.js、client.js",   // names the work, never a file count
+        "limit": "已有改动 先前验证需重跑",  // qualifier line, "" when none
         "detail": [{ "label": "文件", "value": "client.js" }],
         "evidence": [{ "label": "npm test", "text": "3 passing" }],  // ready to render, may be []
         "tone": "neutral" | "warn" | "error" | "success",

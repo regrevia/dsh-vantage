@@ -199,7 +199,7 @@ test("rounds: a failed check never passes verification", () => {
   assert.equal(evaluateVerification(state.round).state, "failed");
   const fact = state.round.facts.find((entry) => entry.kind === "check");
   assert.ok(fact.statement.endsWith("未通过"), fact.statement);
-  assert.equal(fact.statement.includes("测试"), false, "the tool kind is not the finding");
+  assert.equal(fact.statement, "测试未通过", "a targetless check is named by what ran, not by the command");
 });
 
 test("rounds: a check names the work it covered, never the runner", () => {
@@ -478,6 +478,16 @@ test("summary: a few topics is fine, none is fine, and ids follow the facts", ()
   assert.deepEqual(verifyTopics(answer("登录流程无法保存", ["f3"]), facts, 3).map((topic) => topic.id), ["t:f3"], "the same facts name the same topic");
   assert.deepEqual(verifyTopics(JSON.stringify({ topics: [] }), facts, 3), []);
   assert.deepEqual(verifyTopics("not json", facts, 3), []);
+  assert.deepEqual(
+    verifyTopics(answer("已修改 4 个文件", ["f2"]), facts, 3),
+    [],
+    "a count of files is not a topic"
+  );
+  assert.deepEqual(
+    verifyTopics(answer("登录页的提交按钮", ["f2"]), facts, 3).map((topic) => topic.headline),
+    ["登录页的提交按钮"],
+    "a named piece of work survives"
+  );
 });
 
 test("summary: the packet carries the goal and the previous topics as delta", () => {
@@ -903,6 +913,43 @@ async function testRoutes() {
     assert.deepEqual(rows[0].detail, [], "a work log is not the conclusion");
     const paths = rows[0].evidence.filter((row) => row.label === "文件").map((row) => row.text);
     assert.deepEqual(paths.sort(), ["site/a.md", "site/b.md"]);
+  });
+
+  test("snapshot: a change line names the files instead of counting them", () => {
+    const body = buildSnapshot(runtime, session, folded([
+      ...userTurn(0, "重构首页"),
+      ...changeCall(2, "w1", "site/a.md"),
+      ...changeCall(4, "w2", "site/b.md")
+    ]), "rev-names");
+    assert.equal(body.brief.items[0].text, "已修改 a.md、b.md");
+  });
+
+  test("snapshot: a passing check never takes a line, even after a new edit", () => {
+    const round = folded([
+      ...userTurn(0, "修首页"),
+      ...checkCall(2, "c1", "pnpm test"),
+      ...changeCall(4, "w1", "site/a.md")
+    ]);
+    const body = buildSnapshot(runtime, session, round, "rev-stale");
+    const texts = body.brief.items.map((item) => item.text);
+    assert.equal(texts.some((text) => text.includes("通过")), false, JSON.stringify(texts));
+    assert.equal(body.brief.items[0].limit, "已有改动 先前验证需重跑");
+  });
+
+  test("snapshot: the same headline from two topics is shown once", () => {
+    const fact = [...state.round.facts.values()][0];
+    const summary = {
+      roundId: state.round.roundId,
+      throughSeq: state.lastSeq,
+      revision: "summary-dup", // ui-copy-ignore
+      generatedAt: now(),
+      topics: [
+        { id: `t:${fact.id}-a`, headline: "登录流程无法保存", qualifier: "", details: [], factIds: [fact.id] },
+        { id: `t:${fact.id}-b`, headline: "登录流程无法保存。", qualifier: "", details: [], factIds: [fact.id] }
+      ]
+    };
+    const body = buildSnapshot({ ...runtime, briefOf: () => summary }, session, state, "rev-dup");
+    assert.equal(body.brief.items.length, 1, JSON.stringify(body.brief.items.map((item) => item.text)));
   });
 
   test("snapshot: the payload is small, complete, and JSON-pure", async () => {

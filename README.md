@@ -105,7 +105,7 @@ session causes no model call and no stored round.
 ## Development
 
 ```bash
-node test/run.mjs      # 73 tests: reducer, summaries, storage, routes
+node test/run.mjs      # 76 tests: reducer, summaries, storage, routes
 node scripts/lint.mjs  # tests, zh-lint, style-lint, ui-copy-lint
 
 # Boot a throwaway profile with this checkout installed, then check that the
