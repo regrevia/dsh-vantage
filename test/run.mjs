@@ -737,6 +737,15 @@ await testAsync("switch: a session without a stored flag is off until it is turn
   assert.equal(runtime.isEnabled(first), false);
 });
 
+await testAsync("switch: a disabled session builds no state and asks the model for nothing", async () => {
+  const runtime = new Runtime({}, DEFAULT_CONFIG, () => {});
+  const session = { id: "quiet", header: { createdAt: 3, cwd: "/w" }, ownEvents: () => [] };
+  assert.equal(runtime.cache.size, 0, "nothing is cached");
+  const answer = await runtime.requestSummary(session, {});
+  assert.equal(answer.kind, "skipped");
+  assert.equal(answer.reason, "disabled", "the model is never asked while off");
+});
+
 await testAsync("switch: enabling one session never enables another, and a fork starts off", async () => {
   const runtime = new Runtime({}, DEFAULT_CONFIG, () => {});
   const a = fakeSession("a", { header: { createdAt: 1, cwd: "/w" } });
@@ -793,6 +802,27 @@ async function testRoutes() {
       ].sort()
     );
     for (const route of routes) assert.ok(route.methods.length >= 1);
+  });
+
+  await testAsync("snapshot: a switched-off session answers closed without folding its log", async () => {
+    let folded = 0;
+    const closed = {
+      ...runtime,
+      isEnabled: () => false,
+      stateOf: () => {
+        folded += 1;
+        return state;
+      }
+    };
+    const route = createRoutes(closed).find((entry) => entry.path === ROUTES.snapshot);
+    const answer = await route.fetch(new Request(`http://local${ROUTES.snapshot}?session=${SESSION}`));
+    const body = await answer.json();
+    assert.equal(answer.status, 200);
+    assert.equal(body.coverage.enabled, false, "the panel is told it is off");
+    assert.equal(body.round, null, "no round is shown");
+    assert.deepEqual(body.brief.items, [], "no fact lines are built");
+    assert.equal(body.coverage.coreObservedSeq, -1);
+    assert.equal(folded, 0, "the disabled read never folded the session log");
   });
 
   test("snapshot: a fresh summary replaces the fact lines without losing their evidence", () => {

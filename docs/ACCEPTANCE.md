@@ -15,7 +15,7 @@ node scripts/accept-installed.mjs # booted profile: module listed, bundle served
 
 | ID | Contract | Evidence | Status |
 | --- | --- | --- | --- |
-| A01 | No stored switch means disabled; no facts, cache, history or model packet is built | `switch: a session without a stored flag is off until it is turned on` | covered |
+| A01 | No stored switch means disabled; no facts, cache, history or model packet is built | `snapshot: a switched-off session answers closed without folding its log`, `switch: a session without a stored flag is off until it is turned on` | covered |
 | A02 | Session A enabled, session B disabled: only A is recorded and summarised | `switch: enabling one session never enables another, and a fork starts off`; `isEnabled` gates ingest and `requestSummary` | covered |
 | A03 | Hidden Overview Tab keeps observing on the Host and stops client polling | client `POLL_MS` timer in `client.js`; no committed check | code |
 | A04 | A disable from another window cancels the in-flight request and rejects its late answer | `summary: publish re-validation discards a stale, superseded, or switched-off answer` | covered |
