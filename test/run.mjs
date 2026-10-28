@@ -27,7 +27,7 @@ import {
 import { apply, evaluateVerification, initState, rankFacts, roundStateOf } from "../lib/rounds.js";
 import { HistoryStore } from "../lib/store.js";
 import { DEFAULT_CONFIG } from "../index.js";
-import { LeaseRegistry, SUMMARY_SYSTEM_PROMPT, SummaryBudget, buildPacket, estimateTokens, publishVerdict, verifyLines } from "../lib/summary.js";
+import { SUMMARY_SYSTEM_PROMPT, SummaryScheduler, buildPacket, estimateTokens, publishVerdict, verifyTopics } from "../lib/summary.js";
 import { buildSnapshot, createRoutes, excerptOf, publicFact } from "../lib/api.js";
 
 let passed = 0;
@@ -155,6 +155,24 @@ test("rounds: a user turn opens exactly one round", () => {
   assert.equal(state.round.title, "修一下登录");
   assert.equal(state.round.userMessages, 1);
   assert.equal(state.recent.length, 0);
+});
+
+test("rounds: a fast-mode notice never opens a round or becomes its title", () => {
+  // dsh-fast-mode writes its schedule reminders as user messages whose source
+  // kind is `plugin:fast-mode`. They are context for the model, not a request:
+  // a round must not open on them, and they must never rename the user's round.
+  const notice = (seq) =>
+    ev(seq, "user/message", {
+      content: [{ type: "text", text: "Auto schedule: this turn is long enough that prose is now the cost." }],
+      source: { kind: "plugin:fast-mode", form: "notice", summary: "auto: compress output" }
+    });
+
+  const alone = folded([notice(0)]);
+  assert.equal(alone.round, null);
+
+  const state = folded([...userTurn(1, "修一下登录"), notice(5), notice(6)]);
+  assert.equal(state.round.userMessages, 1);
+  assert.equal(state.round.title, "修一下登录");
 });
 
 test("rounds: a check becomes one fact and one condition", () => {
@@ -341,23 +359,6 @@ test("regression: a finished background job reports its exit status", () => {
 
 // --- summary ----------------------------------------------------------------
 
-const BUDGET_CONFIG = {
-  enabled: true,
-  keepFollowing: false,
-  checkIntervalMs: 300_000,
-  firstEligibleAfterMs: 180_000,
-  minIntervalMs: 900_000,
-  maxInputTokens: 1000,
-  maxOutputTokens: 250,
-  maxRequestsPerRollingHour: 2,
-  maxTokensPerRollingHour: 5000,
-  maxConcurrentRequests: 1,
-  requestDeadlineMs: 20_000,
-  retryAttempts: 0,
-  provider: "",
-  model: ""
-};
-
 test("regression: an injected checkpoint never renames the round", () => {
   const state = folded([
     ...userTurn(0, "修一下登录"),
@@ -389,140 +390,57 @@ test("regression: a path-like generated title never becomes the heading", () => 
   assert.equal(state.sessionTitle, "");
 });
 
-test("summary: the rolling budget stops at the request ceiling", () => {
-  const budget = new SummaryBudget(BUDGET_CONFIG, warn);
-  budget.now = now;
-  assert.deepEqual(budget.admits(SESSION), { ok: true });
-  budget.reserve(SESSION);
-  assert.deepEqual(budget.admits(SESSION), { ok: false, reason: "running" });
-  budget.settle(SESSION, 1250);
-  const second = budget.admits(SESSION);
-  assert.equal(second.ok, true);
-  budget.reserve(SESSION);
-  budget.settle(SESSION, 1250);
-  assert.equal(budget.admits(SESSION).ok, false);
-  assert.equal(budget.admits(SESSION).reason, "budget");
-  assert.equal(budget.isExhausted(SESSION), true, "the page is told the same truth the request gets");
-  clock += 3_600_001;
-  budget.drain(now());
-  assert.equal(budget.used().tokens, 0);
-  assert.equal(budget.isExhausted(SESSION), false);
+test("summary: the cadence decides when a summary is due", () => {
+  const scheduler = new SummaryScheduler({ cadenceMs: 180_000, firstEligibleMs: 60_000 });
+  const t0 = 1_000_000;
+  assert.deepEqual(scheduler.due(SESSION, { lastAt: 0, firstAt: t0, now: t0 + 30_000 }), { ok: false, reason: "interval" });
+  assert.deepEqual(scheduler.due(SESSION, { lastAt: 0, firstAt: t0, now: t0 + 70_000 }), { ok: true });
+  assert.deepEqual(scheduler.due(SESSION, { lastAt: t0, firstAt: t0, now: t0 + 120_000 }), { ok: false, reason: "interval" });
+  assert.deepEqual(scheduler.due(SESSION, { lastAt: t0, firstAt: t0, now: t0 + 181_000 }), { ok: true });
 });
 
-test("summary: concurrency is one call per Host, not one per session", () => {
-  const budget = new SummaryBudget(BUDGET_CONFIG, warn);
-  budget.now = now;
-  assert.equal(budget.admits(SESSION).ok, true);
-  budget.reserve(SESSION);
-  const other = budget.admits("another-session");
-  assert.deepEqual(other, { ok: false, reason: "running" }, "a second session cannot start a parallel call");
-  // The reservation is already on the books, so the hour sees it too.
-  assert.equal(budget.used().tokens, 1250);
-  assert.equal(budget.used().requests, 1);
-});
-
-test("summary: the ledger survives a restart and charges interrupted calls in full", () => {
-  const budget = new SummaryBudget(BUDGET_CONFIG, warn);
-  budget.now = now;
-  budget.reserve(SESSION);
-  budget.settle(SESSION, 900);
-  budget.reserve(SESSION);
-  const saved = budget.snapshot();
-  assert.equal(saved.spent.length, 2);
-  // A process that dies mid-call still spent the reservation.
-  const restarted = new SummaryBudget(BUDGET_CONFIG, warn);
-  restarted.now = now;
-  restarted.restore(saved);
-  assert.equal(restarted.used().tokens, 900 + 1250);
-  assert.equal(restarted.used().requests, 2);
-  assert.equal(restarted.used().tokens, 2150);
-  assert.deepEqual(restarted.admits(SESSION), { ok: false, reason: "budget" });
-  const empty = new SummaryBudget(BUDGET_CONFIG, warn);
-  empty.now = now;
-  empty.restore({ spent: [{ at: "soon", tokens: "many" }], fingerprints: "nope", paused: [7] });
-  assert.deepEqual(empty.used(), { tokens: 0, requests: 0 });
-});
-
-test("summary: the packet plus its instruction stays inside the input cap", () => {
-  const state = folded([
-    ...userTurn(0, "跑测试"),
-    ...checkCall(2, "c1", "pnpm test"),
-    ...checkCall(3, "c2", "pnpm lint")
-  ]);
-  const cap = DEFAULT_CONFIG.summary.maxInputTokens;
-  const room = Math.max(64, cap - estimateTokens(SUMMARY_SYSTEM_PROMPT) - 8);
-  const packet = buildPacket(state.round, 200, room);
-  assert.ok(estimateTokens(SUMMARY_SYSTEM_PROMPT) + estimateTokens(packet.text) <= cap, "whole request fits");
+test("summary: one call per session, and a duplicate position is refused", () => {
+  const scheduler = new SummaryScheduler({ cadenceMs: 180_000, firstEligibleMs: 60_000 });
+  scheduler.begin(SESSION);
+  assert.equal(scheduler.busy(SESSION), true);
+  assert.equal(scheduler.due(SESSION, { lastAt: 0, firstAt: 0, now: 999_999 }).reason, "running");
+  scheduler.end(SESSION);
+  assert.equal(scheduler.busy(SESSION), false);
+  assert.equal(scheduler.duplicate(SESSION, "r1", 42), false);
+  scheduler.remember(SESSION, "r1", 42);
+  assert.equal(scheduler.duplicate(SESSION, "r1", 42), true);
+  assert.equal(scheduler.duplicate(SESSION, "r1", 43), false);
+  scheduler.forget(SESSION);
+  assert.equal(scheduler.duplicate(SESSION, "r1", 42), false, "switching off forgets the position");
 });
 
 test("summary: the shipped defaults match the documented policy", () => {
   const { summary } = DEFAULT_CONFIG;
-  assert.equal(summary.maxInputTokens, 1000);
-  assert.equal(summary.maxOutputTokens, 250);
-  assert.equal(summary.maxRequestsPerRollingHour, 2);
-  assert.equal(summary.maxTokensPerRollingHour, 2500);
-  assert.equal(summary.maxConcurrentRequests, 1);
-  assert.equal(summary.retryAttempts, 0);
-  assert.equal(summary.firstEligibleAfterMs, 300_000);
-  assert.equal(summary.minIntervalMs, 1_800_000);
+  assert.equal(summary.enabled, true);
+  assert.equal(summary.cadenceMs, 180_000);
+  assert.equal(summary.firstEligibleMs, 60_000);
+  assert.equal(summary.maxTopics, 3);
+  assert.equal(summary.maxInputTokens, 2400);
+  assert.equal(summary.maxOutputTokens, 400);
+  assert.equal(summary.requestDeadlineMs, 25_000);
 });
 
-test("summary: duplicate summaries for the same coverage are refused", () => {
-  const budget = new SummaryBudget(BUDGET_CONFIG, warn);
-  budget.now = now;
-  assert.equal(budget.duplicate(SESSION, "r1", 42), false);
-  budget.remember(SESSION, "r1", 42);
-  assert.equal(budget.duplicate(SESSION, "r1", 42), true);
-  assert.equal(budget.duplicate(SESSION, "r1", 43), false);
-});
-
-test("summary: the auto switch pauses one session only", () => {
-  const budget = new SummaryBudget(BUDGET_CONFIG, warn);
-  assert.equal(budget.autoEnabled(SESSION), true);
-  budget.setAuto(SESSION, false);
-  assert.equal(budget.autoEnabled(SESSION), false);
-  assert.equal(budget.autoEnabled("other"), true);
-  budget.setAuto(SESSION, true);
-  assert.equal(budget.autoEnabled(SESSION), true);
-});
-
-test("summary: publish re-validation discards a stale, paused, or superseded answer", () => {
-  const base = { requestId: "r1", currentRequestId: "r1", manual: true, autoEnabled: true, roundId: "s:1", seq: 7 };
+test("summary: publish re-validation discards a stale, superseded, or switched-off answer", () => {
+  const base = { requestId: "r1", currentRequestId: "r1", manual: false, enabled: true, generation: 2, expectedGeneration: 2, roundId: "s:1", seq: 7 };
   const live = { round: { roundId: "s:1" }, lastSeq: 7 };
   assert.equal(publishVerdict({ ...base, state: live }), null);
   assert.equal(publishVerdict({ ...base, state: live, currentRequestId: "r2" }).reason, "cancelled");
-  assert.equal(publishVerdict({ ...base, state: live, manual: false, autoEnabled: false }).reason, "disabled");
-  assert.equal(publishVerdict({ ...base, state: live, manual: false, autoEnabled: true }), null);
+  assert.equal(publishVerdict({ ...base, state: live, generation: 3 }).reason, "cancelled", "a restart invalidates it");
+  assert.equal(publishVerdict({ ...base, state: live, enabled: false }).reason, "disabled");
+  assert.equal(publishVerdict({ ...base, state: live, enabled: false, manual: true }), null, "a manual read still answers");
   assert.equal(publishVerdict({ ...base, state: { round: { roundId: "s:1" }, lastSeq: 8 } }).reason, "fresh");
   assert.equal(publishVerdict({ ...base, state: { round: { roundId: "s:2" }, lastSeq: 7 } }).reason, "fresh");
   assert.equal(publishVerdict({ ...base, state: undefined }).reason, "fresh");
 });
 
-test("summary: spending past the token ceiling marks the session exhausted", () => { // ui-copy-ignore
-  const tight = new SummaryBudget({ ...BUDGET_CONFIG, maxTokensPerRollingHour: 1200, maxRequestsPerRollingHour: 4 }, warn);
-  tight.now = now;
-  tight.reserve(SESSION);
-  tight.settle(SESSION, 1250);
-  assert.equal(tight.isExhausted(SESSION), true);
-  assert.deepEqual(tight.admits(SESSION), { ok: false, reason: "budget" });
-});
-
-test("summary: leases cap the number of watching windows", () => {
-  const leases = new LeaseRegistry(1);
-  leases.now = now;
-  const first = leases.touch(SESSION, "a", true);
-  assert.equal(first.visible, true);
-  assert.equal(leases.visible(SESSION), true);
-  assert.throws(() => leases.touch(SESSION, "b", true), (error) => error.code === "lease/limit");
-  leases.touch(SESSION, "a", false);
-  assert.equal(leases.visible(SESSION), false);
-  const again = leases.touch(SESSION, "b", true);
-  assert.equal(again.visible, true);
-});
-
 test("summary: the packet is bounded and only ships observed facts", () => {
   const state = folded([...userTurn(0, "跑测试"), ...checkCall(2, "c1", "pnpm test")]);
-  const packet = buildPacket(state.round, 8);
+  const packet = buildPacket(state.round, { maxFacts: 8 });
   assert.ok(packet.text.length > 0);
   assert.ok(packet.facts.size >= 1);
   assert.ok(packet.text.split("\n").length <= 8);
@@ -530,37 +448,46 @@ test("summary: the packet is bounded and only ships observed facts", () => {
 
 test("summary: invented numbers, conclusions, and citations are dropped", () => {
   const state = folded([...userTurn(0, "跑测试"), ...checkCall(2, "c1", "pnpm test")]);
-  const packet = buildPacket(state.round, 8);
+  const packet = buildPacket(state.round, { maxFacts: 8 });
   const [factId] = [...packet.facts.keys()];
   assert.ok(factId, "packet has a fact to cite");
-  const items = verifyLines(
+  const topics = verifyTopics(
     JSON.stringify({
-      items: [
-        { factIds: [factId], title: "已通过 pnpm test" },
-        { factIds: [factId], title: "已完成任务，测试全过" },
-        { factIds: [factId], title: "耗时 999 毫秒" },
-        { factIds: ["f-not-in-packet"], title: "已通过 pnpm test" },
-        { title: "没有引用任何事实" }
+      topics: [
+        { factIds: [factId], headline: "已通过 pnpm test" },
+        { factIds: [factId], headline: "已完成任务，测试全过" },
+        { factIds: [factId], headline: "耗时 999 毫秒" },
+        { factIds: ["f-not-in-packet"], headline: "已通过 pnpm test" },
+        { headline: "没有引用任何事实" }
       ]
     }),
     packet.facts,
     3
   );
-  const lines = items.map((item) => item.text);
-  assert.ok(lines.includes("已通过 pnpm test"), `items=${JSON.stringify(items)}`);
+  const lines = topics.map((topic) => topic.headline);
+  assert.ok(lines.includes("已通过 pnpm test"), `topics=${JSON.stringify(topics)}`);
   for (const line of lines) assert.ok(!line.includes("测试全过"), line);
   for (const line of lines) assert.ok(!line.includes("999"), line);
-  assert.ok(items.every((item) => item.factIds.every((id) => packet.facts.has(id))), "every citation exists");
-  assert.equal(verifyLines("已通过 pnpm test\n已完成任务", packet.facts, 3).length, 0, "prose is not an answer");
+  assert.ok(topics.every((topic) => topic.factIds.every((id) => packet.facts.has(id))), "every citation exists");
+  assert.ok(topics.every((topic) => topic.id === `t:${topic.factIds.join("+")}`), "the id is derived from its evidence");
+  assert.equal(verifyTopics("已通过 pnpm test\n已完成任务", packet.facts, 3).length, 0, "prose is not an answer");
 });
 
-test("summary: the packet cap keeps the input inside the token budget", () => {
+test("summary: the packet cap keeps the input inside the cap", () => {
   const state = folded([...userTurn(0, "跑测试"), ...checkCall(2, "c1", "pnpm test")]);
-  const loose = buildPacket(state.round, 200);
-  const tight = buildPacket(state.round, 200, 20);
+  const loose = buildPacket(state.round, { maxFacts: 200 });
+  const tight = buildPacket(state.round, { maxFacts: 200, maxTokens: 20 });
   assert.ok(tight.text.length < loose.text.length, "the cap drops facts");
   assert.ok(estimateTokens(tight.text) <= 20, `tokens=${estimateTokens(tight.text)}`);
   assert.equal(tight.truncated, true);
+});
+
+test("summary: the packet plus its instruction stays inside the input cap", () => {
+  const state = folded([...userTurn(0, "跑测试"), ...checkCall(2, "c1", "pnpm test"), ...checkCall(3, "c2", "pnpm lint")]);
+  const cap = DEFAULT_CONFIG.summary.maxInputTokens;
+  const room = Math.max(64, cap - estimateTokens(SUMMARY_SYSTEM_PROMPT) - 8);
+  const packet = buildPacket(state.round, { maxTokens: room });
+  assert.ok(estimateTokens(SUMMARY_SYSTEM_PROMPT) + estimateTokens(packet.text) <= cap, "whole request fits");
 });
 
 // --- store ------------------------------------------------------------------
@@ -698,8 +625,6 @@ await testAsync("store: a broken storage domain degrades to memory", async () =>
 // --- http payloads ----------------------------------------------------------
 
 async function testRoutes() {
-  const lease = new LeaseRegistry(8);
-  const budget = new SummaryBudget(BUDGET_CONFIG, warn);
   const store = new HistoryStore({ maxRoundsPerSession: 20, maxRoundsTotal: 200, maxSerializedBytes: 2 * 1024 * 1024, warn });
   await store.open(undefined, { version: 1 });
   const state = folded([...userTurn(0, "跑测试"), ...checkCall(2, "c1", "pnpm test")]);
@@ -715,16 +640,15 @@ async function testRoutes() {
     now,
     connection: "online",
     store,
-    budget,
-    leases: lease, // ui-copy-ignore
     stateOf: () => state, // ui-copy-ignore
     briefOf: () => undefined, // ui-copy-ignore
     session: async () => session,
-    requestSummary: async () => ({ kind: "skipped", reason: "disabled", text: "自动摘要已关闭" }),
-    setAuto: (sessionId, enabled) => budget.setAuto(sessionId, enabled)
+    requestSummary: async () => ({ kind: "skipped", reason: "disabled", text: "概览已关闭" }),
+    isEnabled: () => true,
+    setEnabled: async (_session, enabled) => ({ enabled: enabled === true, generation: 1 })
   };
 
-  test("routes: exactly the documented seven paths, no duplicates", () => {
+  test("routes: exactly the documented six paths, no duplicates", () => {
     const routes = createRoutes(runtime);
     const paths = routes.map((route) => route.path);
     assert.equal(new Set(paths).size, paths.length);
@@ -732,11 +656,10 @@ async function testRoutes() {
       [...paths].sort(),
       [
         ROUTES.evidence,
+        ROUTES.enable,
         ROUTES.history,
-        ROUTES.lease,
         ROUTES.round,
         ROUTES.snapshot,
-        ROUTES.summaryAuto,
         ROUTES.summaryRequest
       ].sort()
     );
@@ -873,20 +796,30 @@ test("snapshot: a long goal objective becomes a one-clause heading", () => {
     assert.ok(typeof body.error.message === "string");
   });
 
-  await testAsync("lease: limit answers a structured 429", async () => {
-    const tight = new LeaseRegistry(1);
-    const routes = createRoutes({ ...runtime, leases: tight });
-    const route = routes.find((item) => item.path === ROUTES.lease);
-    const post = (leaseId) =>
-      route.fetch(new Request(`http://x${ROUTES.lease}`, {
+  await testAsync("enable: the switch answers the state the Host now holds", async () => {
+    const seen = [];
+    const routes = createRoutes({
+      ...runtime,
+      setEnabled: async (_session, enabled) => {
+        seen.push(enabled);
+        return { enabled, generation: 2 };
+      }
+    });
+    const route = routes.find((item) => item.path === ROUTES.enable);
+    const post = (enabled) =>
+      route.fetch(new Request(`http://x${ROUTES.enable}`, {
         method: "POST",
-        body: JSON.stringify({ session: SESSION, leaseId })
+        body: JSON.stringify({ session: SESSION, enabled })
       }));
-    assert.equal((await post("one")).status, 200);
-    const limited = await post("two");
-    assert.equal(limited.status, 429);
-    const body = await limited.json();
-    assert.equal(body.error.code, "lease/limit");
+    const on = await post(true);
+    assert.equal(on.status, 200);
+    assert.deepEqual(await on.json(), { kind: "enable", enabled: true, generation: 2, throughSeq: state.lastSeq });
+    const off = await post(false);
+    assert.deepEqual(await off.json(), { kind: "enable", enabled: false, generation: 2, throughSeq: -1 });
+    assert.deepEqual(seen, [true, false]);
+    const bad = await post("yes");
+    assert.equal(bad.status, 400);
+    assert.equal((await bad.json()).error.code, "bad-request");
   });
 
   test("guarded: an internal failure is logged and returned as JSON", async () => {

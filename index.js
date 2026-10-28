@@ -16,9 +16,9 @@
  *    keyed by the session header rather than by the id alone (a fork or a reuse
  *    of the id must not continue an old watermark).
  * 2. The summary is best effort by construction. When no model is reachable, or
- *    the rolling budget is spent, or the last packet already covered this
- *    position, the page stays in facts mode and says so. Facts mode is a
- *    complete state, not a degraded one.
+ *    the last packet already covered this position, the page keeps the last
+ *    valid topic lines. Facts mode is a complete state, not a degraded one, and
+ *    there is no usage quota to spend.
  */
 
 import { readFileSync } from "node:fs";
@@ -28,14 +28,12 @@ import { PROJECTION_VERSION, apply as foldEvent, chooseStatus, evaluateVerificat
 import { HistoryStore } from "./lib/store.js";
 import { createRoutes } from "./lib/api.js";
 import {
-  LeaseRegistry,
-  LEASE_RENEW_MS,
-  SummaryBudget,
+  SummaryScheduler,
   buildPacket,
   estimateTokens,
+  publishVerdict,
   safeService,
   summarise,
-  publishVerdict,
   SUMMARY_SYSTEM_PROMPT
 } from "./lib/summary.js";
 
@@ -56,18 +54,15 @@ export const DEFAULT_CONFIG = Object.freeze({
     eta: "evidenceOnly" // ui-copy-ignore
   },
   summary: { // ui-copy-ignore
+    // Recording is per session and starts off; this switch can only forbid every
+    // model call, never enable a session behind the reader's back.
     enabled: true, // ui-copy-ignore
-    keepFollowing: false,
-    checkIntervalMs: 300000,
-    firstEligibleAfterMs: 300000,
-    minIntervalMs: 1800000,
-    maxInputTokens: 1000,
-    maxOutputTokens: 250,
-    maxRequestsPerRollingHour: 2,
-    maxTokensPerRollingHour: 2500,
-    maxConcurrentRequests: 1,
-    requestDeadlineMs: 20000,
-    retryAttempts: 0,
+    cadenceMs: 180000,
+    firstEligibleMs: 60000,
+    maxInputTokens: 2400,
+    maxOutputTokens: 400,
+    maxTopics: 3,
+    requestDeadlineMs: 25000,
     provider: "", // ui-copy-ignore
     model: "" // ui-copy-ignore
   },
@@ -75,8 +70,7 @@ export const DEFAULT_CONFIG = Object.freeze({
     maxRoundsPerSession: 20,
     maxRoundsTotal: 200,
     maxSerializedBytes: 2097152
-  },
-  maxLeases: 8
+  }
 });
 
 /**
@@ -84,7 +78,7 @@ export const DEFAULT_CONFIG = Object.freeze({
  * and are re-validated field by field on restore, so the schema's only duty is
  * to let a stored row through unchanged.
  */
-const STORE_SPEC = Object.freeze({ version: 1 });
+const STORE_SPEC = Object.freeze({ version: 2, compatibleVersions: [1] });
 
 /** How often the scheduler wakes up to check a visible session. */
 const TICK_MS = 30000;
@@ -113,8 +107,7 @@ export function normalizeConfig(input) {
   const config = {
     overview: merge("overview"), // ui-copy-ignore
     summary: merge("summary"), // ui-copy-ignore
-    history: merge("history"), // ui-copy-ignore
-    maxLeases: typeof source.maxLeases === "number" ? source.maxLeases : DEFAULT_CONFIG.maxLeases
+    history: merge("history") // ui-copy-ignore
   };
   // A view cannot raise the Harness's ceiling; it may only ask for less.
   config.history.maxRoundsPerSession = Math.min(Math.max(1, config.history.maxRoundsPerSession), 20);
@@ -143,8 +136,8 @@ export function apply(ctx, input) {
 }
 
 /**
- * One runtime per plugin instance: the state cache, the store, the budget, the
- * leases, and the scheduler that ties them together.
+ * One runtime per plugin instance: the state cache, the store, the per-session
+ * switches, and the scheduler that ties them together.
  */
 class Runtime {
   /**
@@ -164,13 +157,15 @@ class Runtime {
       maxSerializedBytes: config.history.maxSerializedBytes,
       warn
     });
-    this.budget = new SummaryBudget(config.summary, warn);
-    // The ledger is the runtime's: every reservation and every receipt is
-    // written through the store, so a restart cannot refund the hour.
-    this.budget.onChange = (snapshot) => {
-      void this.store.saveLedger(snapshot);
-    };
-    this.leases = new LeaseRegistry(config.maxLeases);
+    // Cadence and single-flight only; usage never gates the work itself.
+    this.scheduler = new SummaryScheduler({
+      cadenceMs: config.summary.cadenceMs,
+      firstEligibleMs: config.summary.firstEligibleMs
+    });
+    /** @type {Map<string, boolean>} session identity key -> overview enabled. */
+    this.switches = new Map();
+    /** @type {Map<string, number>} session identity key -> generation, bumped on every flip. */
+    this.generations = new Map();
     /** @type {Map<string, {state: object, key: string, at: number}>} */
     this.cache = new Map();
     /** @type {Map<string, object>} sessionId -> last published brief. */
@@ -244,6 +239,9 @@ class Runtime {
    * @returns {object|undefined} state, or undefined when the log is unreadable.
    */
   noteEvent(session) {
+    // A session whose overview is off has no projection, no watermark and no
+    // cache: the check is one map lookup, so the global listener stays cheap.
+    if (!this.isEnabled(session)) return undefined;
     const cached = this.cache.get(session.id);
     let events;
     try {
@@ -293,7 +291,7 @@ class Runtime {
   }
 
   /**
-   * Hand a just-archived round to the bounded store, once per round.
+   * Store an archived round, once per round.
    *
    * @param {object} session - runtime session.
    * @param {object|undefined} state - folded state.
@@ -321,7 +319,6 @@ class Runtime {
     const status = chooseStatus(state, round, {
       verificationState: verification.state,
       summaryFresh: false,
-      summaryBudgetExhausted: this.budget.isExhausted(session.id),
       disconnected: false,
       now: this.now() // ui-copy-ignore
     });
@@ -348,44 +345,120 @@ class Runtime {
   }
 
   /**
-   * Ask for one summary. Manual requests skip the time interval and the
-   * freshness window, and nothing else.
+   * Whether one session's overview is switched on. Missing state means off: the
+   * default is never "record everything, hide it later".
+   *
+   * @param {object} session - runtime session.
+   * @returns {boolean} true when this session is being recorded.
+   */
+  isEnabled(session) {
+    return this.switches.get(identityOf(session)) === true;
+  }
+
+  /**
+   * Generation of a session's switch. Bumped on every flip so an answer from an
+   * earlier enabled period can never be published after it is switched off.
+   *
+   * @param {string} key - session identity key.
+   * @returns {number} current generation.
+   */
+  generationOf(key) {
+    return this.generations.get(key) ?? 0;
+  }
+
+  /**
+   * Turn the overview on or off for one session. This side owns the decision: the
+   * view may ask, and every window reads the same answer back. Switching off is
+   * immediate — pending work is dropped, the in-flight answer is discarded, and
+   * the main agent is never touched.
+   *
+   * @param {object} session - runtime session.
+   * @param {boolean} enabled - requested state.
+   * @returns {Promise<{enabled: boolean, generation: number}>} the recorded answer.
+   */
+  async setEnabled(session, enabled) {
+    const key = identityOf(session);
+    const want = enabled === true;
+    const was = this.switches.get(key) === true;
+    if (was === want) return { enabled: was, generation: this.generationOf(key) };
+    this.switches.set(key, want);
+    const generation = this.generationOf(key) + 1;
+    this.generations.set(key, generation);
+    if (!want) {
+      this.scheduler.forget(session.id);
+      this.summaries.delete(session.id);
+      this.lastSummaryAt.delete(session.id);
+      this.requests.delete(session.id);
+      this.cache.delete(session.id);
+    }
+    // The switch is a runtime fact and must survive a restart in both directions.
+    this.store.saveSwitches(Object.fromEntries(this.switches)).catch(() => {});
+    return { enabled: want, generation };
+  }
+
+  /**
+   * The goal line handed to the summariser, when the round has one.
+   *
+   * @param {object} state - folded session state.
+   * @returns {string} goal or empty string.
+   */
+  goalOf(state) {
+    const goal = state?.goal;
+    if (goal === null || goal === undefined) return "";
+    for (const value of [goal.objective, goal.text, goal.title, goal.statement]) {
+      if (typeof value === "string" && value.trim() !== "") return value.trim();
+    }
+    return "";
+  }
+
+  /**
+   * Ask for one summary. A manual request skips the cadence window and nothing
+   * else; a session that is switched off never reaches the model at all.
    *
    * @param {object} session - runtime session.
    * @param {{manual: boolean}} input - who asked.
    * @returns {Promise<object>} verdict sent to the client.
    */
   async requestSummary(session, input) {
+    if (!this.isEnabled(session) || !this.config.summary.enabled) {
+      return { kind: "skipped", reason: "disabled", text: "概览已关闭" };
+    }
     const state = this.stateOf(session);
     if (state === undefined) return { kind: "skipped", reason: "fresh", text: "本会话的记录暂不可读" };
     const round = state.round;
-    if (round === null) return { kind: "skipped", reason: "fresh", text: "还没有可整理的一轮" };
-    if (!this.config.summary.enabled) return { kind: "skipped", reason: "disabled", text: "自动摘要已关闭" };
+    if (round === null) return { kind: "skipped", reason: "fresh", text: "正在整理本轮进展" };
     const route = this.routeOf(session);
     if (route === null) return { kind: "skipped", reason: "no-model", text: "当前没有可用的模型" };
-    if (this.budget.duplicate(session.id, round.roundId, state.lastSeq)) {
+    if (this.scheduler.duplicate(session.id, round.roundId, state.lastSeq)) {
       return { kind: "skipped", reason: "fresh", text: "没有新的进展" };
     }
-    const admits = this.budget.admits(session.id);
-    if (!admits.ok) {
-      return {
-        kind: "skipped",
-        reason: admits.reason,
-        text: admits.reason === "budget" ? "摘要预算已用完" : "正在整理"
-      };
+    if (!input.manual) {
+      const verdict = this.scheduler.due(session.id, {
+        lastAt: this.lastSummaryAt.get(session.id) ?? 0,
+        firstAt: round.startedAt,
+        now: this.now()
+      });
+      if (!verdict.ok) return { kind: "skipped", reason: verdict.reason, text: "正在整理" };
     }
-    // The input cap covers the whole request, system prompt included, so the
-    // packet gets what is left after the instruction it is sent with.
-    const cap = Number.isFinite(this.config.summary.maxInputTokens) ? this.config.summary.maxInputTokens : 1000;
-    const roomForFacts = Math.max(64, cap - estimateTokens(SUMMARY_SYSTEM_PROMPT) - 8);
-    const packet = buildPacket(round, 24, roomForFacts);
-    if (packet.text === "") return { kind: "skipped", reason: "fresh", text: "还没有可整理的进展" };
+    // The input cap covers the whole request including the instruction, so the
+    // packet gets what is left after the prompt it is sent with.
+    const cap = Number.isFinite(this.config.summary.maxInputTokens) ? this.config.summary.maxInputTokens : 2400;
+    const room = Math.max(96, cap - estimateTokens(SUMMARY_SYSTEM_PROMPT) - 8);
+    const previousTopics = this.summaries.get(session.id)?.topics?.map((topic) => topic.headline) ?? [];
+    const packet = buildPacket(round, {
+      goal: this.goalOf(state),
+      previousTopics,
+      maxFacts: 24,
+      maxTokens: room
+    });
+    if (packet.text === "") return { kind: "skipped", reason: "fresh", text: "正在整理本轮进展" };
+    const key = identityOf(session);
+    const generation = this.generationOf(key);
+    const roundId = round.roundId;
+    const seq = state.lastSeq;
     const requestId = `${session.id}:${this.now()}:${(this.requestSeq += 1)}`;
     this.requests.set(session.id, requestId);
-    const reservedRound = round.roundId;
-    const reservedSeq = state.lastSeq;
-    this.budget.reserve(session.id);
-    let tokens = 0;
+    this.scheduler.begin(session.id);
     try {
       const result = await summarise(this.owner ?? this.ctx, {
         sessionId: session.id,
@@ -393,22 +466,37 @@ class Runtime {
         model: route.model,
         maxOutputTokens: this.config.summary.maxOutputTokens,
         deadlineMs: this.config.summary.requestDeadlineMs,
-        packet,
-        maxItems: this.config.overview.maxBriefItems
+        maxTopics: this.config.summary.maxTopics,
+        packet
       });
       if (result === null) return { kind: "skipped", reason: "no-model", text: "模型没有给出可用结果" };
-      tokens = result.tokens;
-      // Publish validation: the answer is only true for the state it was asked
-      // about. New facts, a new round, a pause, or a newer request all discard
-      // it; the usage stays charged either way.
-      const rejected = publishVerdict({ requestId, currentRequestId: this.requests.get(session.id), manual: input.manual, autoEnabled: this.budget.autoEnabled(session.id), state: this.stateOf(session), roundId: reservedRound, seq: reservedSeq });
+      // A topic is only true for the state it was asked about; a newer request, a
+      // switched-off session, a new round, or new facts all discard it.
+      const rejected = publishVerdict({
+        requestId,
+        currentRequestId: this.requests.get(session.id),
+        manual: input.manual,
+        enabled: this.isEnabled(session),
+        generation,
+        expectedGeneration: this.generationOf(key),
+        state: this.stateOf(session),
+        roundId,
+        seq
+      });
       if (rejected !== null) return { kind: "skipped", reason: rejected.reason, text: rejected.text };
-      this.summaries.set(session.id, { roundId: reservedRound, throughSeq: reservedSeq, revision: `${reservedRound}:${reservedSeq}`, generatedAt: this.now(), items: result.items });
-      this.budget.remember(session.id, reservedRound, reservedSeq);
+      this.summaries.set(session.id, {
+        roundId,
+        throughSeq: seq,
+        revision: `${roundId}:${seq}`, // ui-copy-ignore
+        generatedAt: this.now(),
+        topics: result.topics, // ui-copy-ignore
+        tokens: result.tokens // ui-copy-ignore
+      });
+      this.scheduler.remember(session.id, roundId, seq);
       this.lastSummaryAt.set(session.id, this.now());
       return { kind: "queued" };
     } finally {
-      this.budget.settle(session.id, tokens);
+      this.scheduler.end(session.id);
       if (this.requests.get(session.id) === requestId) this.requests.delete(session.id);
     }
   }
@@ -453,37 +541,31 @@ class Runtime {
    * @param {boolean} enabled - wanted state.
    * @returns {void}
    */
-  setAuto(sessionId, enabled) {
-    this.budget.setAuto(sessionId, enabled);
-  }
+
 
   /**
-   * One scheduler pass. Automatic summaries run only for a session somebody is
-   * looking at, so a background conversation cannot spend the whole budget.
+   * One scheduler pass. An enabled session keeps recording and summarising even
+   * while nobody is looking at the panel; the view only stops polling itself.
+   *
    * @returns {Promise<void>} resolved when the pass finishes.
    */
   async tick() {
     if (this.closed) return;
     const sessions = safeService(this.owner ?? this.ctx, "sessions");
     if (sessions === undefined) return;
-    for (const sessionId of [...this.summaries.keys(), ...this.cache.keys()]) {
-      if (!this.leases.visible(sessionId)) continue;
-      if (!this.budget.autoEnabled(sessionId)) continue;
+    const ids = new Set([...this.cache.keys(), ...this.summaries.keys()]);
+    for (const sessionId of ids) {
       let session;
       try {
         session = await this.session(sessionId);
       } catch {
         continue;
       }
+      if (!this.isEnabled(session)) continue;
       const state = this.stateOf(session);
       const round = state?.round;
       if (round === null || round === undefined) continue;
-      const verdict = this.budget.due(sessionId, {
-        lastAt: this.lastSummaryAt.get(sessionId) ?? 0,
-        firstAt: round.startedAt
-      });
-      if (!verdict.ok) continue;
-      if (this.budget.duplicate(sessionId, round.roundId, state.lastSeq)) continue;
+      if (this.scheduler.duplicate(session.id, round.roundId, state.lastSeq)) continue;
       await this.requestSummary(session, { manual: false });
     }
   }
@@ -598,11 +680,12 @@ async function openStore(runtime, warn) {
       warn("history stays in memory: the storage domain did not answer");
       return;
     }
-    const ledger = await runtime.store.loadLedger();
-    if (ledger !== undefined) runtime.budget.restore(ledger);
-    // Restoring happens before the first tick can admit anything, so a cold
-    // start never sees an empty ledger it could spend twice.
-    runtime.budget.changed();
+    const switches = await runtime.store.loadSwitches();
+    if (switches !== undefined) {
+      // Restored before the listener can classify a single event, so a restart
+      // never records a session that was switched off when the app closed.
+      for (const [key, value] of Object.entries(switches)) runtime.switches.set(key, value === true);
+    }
   } catch (error) {
     warn(`history stays in memory: ${messageOf(error)}`);
   }
