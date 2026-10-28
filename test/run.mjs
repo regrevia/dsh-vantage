@@ -832,6 +832,23 @@ test("store: a failed open leaves the store readable in memory", () => {
   assert.equal(store.abandoned, false);
 });
 
+testAsync("store: a domain that refuses to open degrades to memory", async () => {
+  const notes = [];
+  const store = new HistoryStore({ maxRoundsPerSession: 10, maxRoundsTotal: 100, maxSerializedBytes: 1 << 20, warn: (line) => notes.push(line) });
+  await store.open({
+    open: async () => {
+      throw new Error("version-mismatch");
+    }
+  }, { version: 3, compatibleVersions: [1, 2], tables: {} });
+  assert.equal(store.persistent, false);
+  assert.equal(store.domain, null);
+  assert.equal(notes.length, 1, "the fallback is reported once");
+  assert.ok(notes[0].includes("history store stays in memory"), notes[0]);
+  store.insert({ sessionId: SESSION, roundId: "r1", revision: "v1", created: now(), updated: now() });
+  assert.equal(store.count(SESSION), 1, "reads still answer without a domain");
+  assert.equal(store.persistent, false);
+});
+
 test("snapshot: every brief item carries clean inline evidence", () => {
   const state = folded([
     ...userTurn(0, "跑测试"),
@@ -857,7 +874,7 @@ test("snapshot: every brief item carries clean inline evidence", () => {
 });
 
 test("schema: the documented statuses no longer include a spent budget", () => {
-    assert.ok(STATUS_KEYS.includes("running"));
+  assert.ok(STATUS_KEYS.includes("running"));
     assert.ok(STATUS_KEYS.includes("waiting"));
     assert.ok(!STATUS_KEYS.includes("summary-paused"));
   });

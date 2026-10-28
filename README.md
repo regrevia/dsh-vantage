@@ -107,6 +107,10 @@ session causes no model call and no stored round.
 ```bash
 node test/run.mjs      # 60 tests: reducer, summaries, storage, routes
 node scripts/lint.mjs  # tests, zh-lint, style-lint, ui-copy-lint
+
+# Boot a throwaway profile with this checkout installed, then check that the
+# Host lists and serves the client module and that its route answers.
+node scripts/accept-installed.mjs
 ```
 
 The copy linter reads JS object literals as `key: value` status dumps, so a line
