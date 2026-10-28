@@ -26,7 +26,7 @@ import {
 } from "../lib/schema.js";
 import { apply, evaluateVerification, initState, rankFacts, roundStateOf } from "../lib/rounds.js";
 import { HistoryStore } from "../lib/store.js";
-import { DEFAULT_CONFIG } from "../index.js";
+import { DEFAULT_CONFIG, Runtime } from "../index.js";
 import { SUMMARY_SYSTEM_PROMPT, SummaryScheduler, buildPacket, estimateTokens, publishVerdict, verifyTopics } from "../lib/summary.js";
 import { buildSnapshot, createRoutes, excerptOf, publicFact } from "../lib/api.js";
 
@@ -673,6 +673,38 @@ await testAsync("store: a broken storage domain degrades to memory", async () =>
   store.insert(roundRecord(1));
   assert.equal(store.count(SESSION), 1, "reads still answer without a domain");
   assert.equal(store.abandoned, false);
+});
+
+// --- session switches -------------------------------------------------------
+
+const fakeSession = (id, extra = {}) => ({ id, header: { createdAt: 1, cwd: "/w" }, ...extra });
+
+await testAsync("switch: a session without a stored flag is off until it is turned on", async () => {
+  const runtime = new Runtime({}, DEFAULT_CONFIG, () => {});
+  const first = fakeSession("s1");
+  assert.equal(runtime.isEnabled(first), false, "no stored flag means disabled");
+  assert.equal(runtime.switches.size, 0, "reading the state never writes a switch");
+  const on = await runtime.setEnabled(first, true);
+  assert.deepEqual(on, { enabled: true, generation: 1 });
+  assert.equal(runtime.isEnabled(first), true);
+  const off = await runtime.setEnabled(first, false);
+  assert.equal(off.enabled, false);
+  assert.equal(off.generation, 2, "every flip bumps the generation");
+  assert.equal(runtime.isEnabled(first), false);
+});
+
+await testAsync("switch: enabling one session never enables another, and a fork starts off", async () => {
+  const runtime = new Runtime({}, DEFAULT_CONFIG, () => {});
+  const a = fakeSession("a", { header: { createdAt: 1, cwd: "/w" } });
+  const b = fakeSession("b", { header: { createdAt: 2, cwd: "/w" } });
+  const fork = fakeSession("fork", { header: { createdAt: 1, cwd: "/w", isSeeded: true } });
+  await runtime.setEnabled(a, true);
+  assert.equal(runtime.isEnabled(a), true);
+  assert.equal(runtime.isEnabled(b), false, "B stays disabled");
+  assert.equal(runtime.isEnabled(fork), false, "a fork inherits no switch");
+  await runtime.setEnabled(b, true);
+  assert.equal(runtime.isEnabled(a), true, "enabling B leaves A alone");
+  assert.equal(runtime.isEnabled(b), true);
 });
 
 // --- http payloads ----------------------------------------------------------

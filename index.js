@@ -139,7 +139,7 @@ export function apply(ctx, input) {
  * One runtime per plugin instance: the state cache, the store, the per-session
  * switches, and the scheduler that ties them together.
  */
-class Runtime {
+export class Runtime {
   /**
    * @param {object} ctx - runtime plugin context.
    * @param {object} config - effective config.

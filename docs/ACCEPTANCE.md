@@ -15,8 +15,8 @@ node scripts/accept-installed.mjs # booted profile: module listed, bundle served
 
 | ID | Contract | Evidence | Status |
 | --- | --- | --- | --- |
-| A01 | No stored switch means disabled; no facts, cache, history or model packet is built | `disabled` default in `index.js` (`isEnabled`), snapshot `coverage.enabled` | code |
-| A02 | Session A enabled, session B disabled: only A is recorded and summarised | `isEnabled` gates ingest and `requestSummary` in `index.js` | code |
+| A01 | No stored switch means disabled; no facts, cache, history or model packet is built | `switch: a session without a stored flag is off until it is turned on` | covered |
+| A02 | Session A enabled, session B disabled: only A is recorded and summarised | `switch: enabling one session never enables another, and a fork starts off`; `isEnabled` gates ingest and `requestSummary` | covered |
 | A03 | Hidden Overview Tab keeps observing on the Host and stops client polling | client `POLL_MS` timer in `client.js`; no committed check | code |
 | A04 | A disable from another window cancels the in-flight request and rejects its late answer | `summary: publish re-validation discards a stale, superseded, or switched-off answer` | covered |
 | A05 | Re-enabling after a disabled interval replays nothing and leaves the gap explicit | `committed_cursor_at_enable` in `index.js`; gap flag in coverage | code |
@@ -27,7 +27,7 @@ node scripts/accept-installed.mjs # booted profile: module listed, bundle served
 | A10 | Contradicting evidence invalidates an older success without waiting for a summary | `rounds: a file written after a pass puts the check back to recheck`, `rounds: a non-zero tool result is evidence, never a task failure` | covered |
 | A11 | A historical round and the current view never render together | pager state in `client.js`, `store.page` | code |
 | A12 | Opening one topic shows only its own evidence, not the whole round | `snapshot: every brief item carries clean inline evidence`, `evidence: excerpts are plain text, never payloads` | covered |
-| A13 | A fork of an enabled session starts disabled | `forkInheritsPermission=false`; no committed check | code |
+| A13 | A fork of an enabled session starts disabled | `switch: enabling one session never enables another, and a fork starts off` | covered |
 | A14 | No hourly token or request quota can pause the plugin or show a countdown | `schema: the documented statuses no longer include a spent budget` | covered |
 | A15 | 360 px, desktop, light and dark stay readable with no horizontal overflow and keyboard controls | `.ov-` styles and `@media (max-width:560px)` in `client.js`; no committed check | code |
 
