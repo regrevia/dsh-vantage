@@ -197,7 +197,20 @@ test("rounds: a failed check never passes verification", () => {
   ]);
   assert.equal(state.round.conditions[0].state, "failed");
   assert.equal(evaluateVerification(state.round).state, "failed");
-  assert.ok(state.round.facts.some((fact) => fact.kind === "check" && fact.statement === "测试未通过"));
+  const fact = state.round.facts.find((entry) => entry.kind === "check");
+  assert.ok(fact.statement.endsWith("未通过"), fact.statement);
+  assert.equal(fact.statement.includes("测试"), false, "the tool kind is not the finding");
+});
+
+test("rounds: a check names the work it covered, never the runner", () => {
+  const state = folded([
+    ...userTurn(0, "跑登录测试"),
+    ev(2, "tool/call", { callId: "c1", name: "shell", arguments: JSON.stringify({ command: "pnpm vitest run src/login.test.ts" }) }),
+    ev(3, "tool/result", { message: { toolCallId: "c1", content: [{ type: "text", text: "fail\n[exit code: 1]" }] } })
+  ]);
+  const fact = state.round.facts.find((entry) => entry.kind === "check");
+  assert.equal(fact.statement, "src/login.test.ts 未通过");
+  assert.equal(state.round.conditions[0].text, "src/login.test.ts");
 });
 
 test("rounds: a non-zero tool result is evidence, never a task failure", () => {
