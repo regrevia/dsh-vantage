@@ -202,7 +202,18 @@ export class Runtime {
   async session(sessionId) {
     const sessions = safeService(this.owner ?? this.ctx, "sessions");
     const session = sessions?.get?.(sessionId);
-    if (session !== undefined && session !== null) return session;
+    if (session !== undefined && session !== null) {
+      const readOnly = this.readOnlyOf(session);
+      if (readOnly !== undefined) return readOnly;
+      // Opening a saved conversation gives the registry a live shell whose
+      // own log is still empty: the transcript lives in the persisted prefix.
+      // Fold that prefix for reading instead of answering an empty overview.
+      if (this.storedOnly(session)) {
+        const stored = await this.archivedSession(sessionId);
+        if (stored !== undefined) return stored;
+      }
+      return session;
+    }
     // A conversation opened from history is not in the live registry. Read its
     // stored log instead of refusing the page; a genuinely unknown id still
     // falls through to 403.
@@ -212,6 +223,58 @@ export class Runtime {
     // profile has recorded. Anything else is out of the caller's scope, not a
     // server fault: answer 403 and let the page keep showing what it has.
     throw new OverviewError("forbidden", "本页面只读取当前打开的会话", 403);
+  }
+
+  /**
+   * Treat a stored conversation that is open in the GUI but has no live Agent
+   * as the read-only history it is. The session registry keeps a cold `Session`
+   * after a historical tab opens, and that object has neither an Agent nor the
+   * overview switch; folding it as a live session would answer "off" forever.
+   *
+   * @param {object} session - session from the live registry.
+   * @returns {object|undefined} read-only view, or undefined when it is live.
+   */
+  readOnlyOf(session) {
+    if (session?.archived === true) return undefined;
+    const agents = safeService(this.owner ?? this.ctx, "agents");
+    if (typeof agents?.get !== "function") return undefined;
+    let agent;
+    try {
+      agent = agents.get(session.id);
+    } catch {
+      return undefined;
+    }
+    if (agent !== undefined && agent !== null) return undefined;
+    return {
+      id: session.id,
+      header: session.header,
+      archived: true,
+      firstLiveSeq: -1,
+      inheritedEventCount: 0,
+      ownEvents: () => session.ownEvents()
+    };
+  }
+
+  /**
+   * Whether a registry session holds no events of its own yet but does sit on a
+   * non-empty persisted transcript. A brand-new conversation has sequence 0
+   * and stays live; a cold tab over history is read from its stored log.
+   *
+   * @param {object} session - session from the live registry.
+   * @returns {boolean} true when only the stored prefix exists.
+   */
+  storedOnly(session) {
+    if (session?.archived === true) return false;
+    let own;
+    try {
+      own = session.ownEvents();
+    } catch {
+      return false;
+    }
+    if (Array.isArray(own) && own.length > 0) return false;
+    const seq = Number(session.seq ?? 0);
+    const inherited = Number(session.inheritedEventCount ?? 0);
+    return seq > 0 || inherited > 0;
   }
 
   /**
@@ -424,6 +487,22 @@ export class Runtime {
    */
   isEnabled(session) {
     return this.switches.get(identityOf(session)) === true;
+  }
+
+  /**
+   * Whether a session already holds a transcript worth folding. A historical
+   * session always does; a live one needs at least one committed event.
+   *
+   * @param {object} session - runtime session.
+   * @returns {boolean} true when there is something to read.
+   */
+  hasHistory(session) {
+    if (session?.archived === true) return true;
+    try {
+      return session.ownEvents().length > 0;
+    } catch {
+      return false;
+    }
   }
 
   /**

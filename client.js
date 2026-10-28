@@ -980,7 +980,9 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       const words = copy()
       const mode = view.mode
 
-      const readOnly = snapshot !== null && snapshot.coverage !== null && snapshot.coverage !== undefined && snapshot.coverage.readOnly === true
+      const coverage = snapshot !== null && snapshot.coverage !== null && snapshot.coverage !== undefined ? snapshot.coverage : null
+      const readOnly = coverage !== null && coverage.readOnly === true
+      const archived = coverage !== null && coverage.archived === true
       const agent = snapshot !== null && snapshot.agent !== null && snapshot.agent !== undefined ? snapshot.agent : null
       const sessionTitle = snapshot !== null && typeof snapshot.sessionTitle === 'string' ? snapshot.sessionTitle : ''
       const liveRound = snapshot !== null && snapshot.round !== null && snapshot.round !== undefined ? snapshot.round : null
@@ -998,7 +1000,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           ])
 
       const controls = [
-        readOnly === true ? null : h('button', {
+        archived === true ? null : h('button', {
           key: 'switch', type: 'button', role: 'switch', className: 'ov-switch',
           'aria-checked': coverageEnabled === true ? 'true' : 'false', 'aria-label': words.switchLabel,
           'data-action': 'toggle-switch', disabled: pending === true || snapshot === null
@@ -1106,7 +1108,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         }
       } else if (loading === true && snapshot === null) {
         main.push(h('div', { key: 'q', className: 'ov-quiet' }, [h('p', { key: 'p' }, words.loading)]))
-      } else if (coverageEnabled !== true) {
+      } else if (coverageEnabled !== true && !(snapshot !== null && snapshot.round !== null && snapshot.round !== undefined)) {
         main.push(h('div', { key: 'q', className: 'ov-quiet' }, [
           h('div', { key: 't', className: 'ov-quiet-title' }, words.disabledTitle),
           h('p', { key: 'b' }, words.disabledBody)
@@ -1143,13 +1145,20 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
             ]))
           }
           const roundTitle = titleOf(roundOfSnapshot)
-          if (roundTitle !== sessionTitle) body.push(h('h1', { key: 't', className: 'ov-headline' }, roundTitle))
+          // The goal line already prints the objective; repeating it as the round
+          // heading is the same sentence twice in two sizes.
+          const goalPrefix = objective.replace(/…$/, '').slice(0, 24)
+          const repeatsGoal = goalPrefix !== '' && (roundTitle === objective || roundTitle.replace(/…$/, '').startsWith(goalPrefix))
+          if (roundTitle !== sessionTitle && !repeatsGoal) body.push(h('h1', { key: 't', className: 'ov-headline' }, roundTitle))
           const notices = Array.isArray(snapshot.notices) ? snapshot.notices : []
           notices.forEach((entry, index) => {
             body.push(h(Notice, { key: `n${index}`, text: entry === null || entry === undefined ? '' : entry.text }))
           })
           if (items.length > 0) {
-            body.push(h('div', { key: 'ml', className: 'ov-section-label' }, words.milestones))
+            const conclusionOnly = items.every((item) => item !== null && item !== undefined && item.source === 'transcript')
+            // A quoted reply labels itself; a section heading above it would read
+            // as two headings for one line.
+            if (!conclusionOnly) body.push(h('div', { key: 'ml', className: 'ov-section-label' }, words.milestones))
             body.push(h('div', { key: 'b', className: 'ov-brief' }, items.map((item, index) => {
               const key = itemKeyOf(roundOfSnapshot.roundId, item)
               return h(BriefItem, {

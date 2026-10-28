@@ -804,6 +804,39 @@ await testAsync("switch: enabling one session never enables another, and a fork 
   assert.equal(runtime.isEnabled(b), true);
 });
 
+await testAsync("history: a cold tab is read-only even while the session registry still holds it", async () => {
+  const events = userTurn(0, "跑测试");
+  const cold = {
+    id: "cold",
+    header: { createdAt: 1, cwd: "/w" },
+    ownEvents: () => events
+  };
+  const live = { ...cold, id: "live" };
+  const agents = { get: (id) => (id === "live" ? { session: live } : undefined) };
+  const runtime = new Runtime({ get: (name) => (name === "agents" ? agents : undefined) }, DEFAULT_CONFIG, () => {});
+  const readOnly = runtime.readOnlyOf(cold);
+  assert.equal(readOnly?.archived, true, "a stored conversation without an Agent is history");
+  assert.equal(readOnly?.firstLiveSeq, -1);
+  assert.equal(readOnly?.ownEvents(), events, "its events still come from the open Session");
+  assert.equal(runtime.readOnlyOf(live), undefined, "a session with a live Agent keeps its switch");
+  const unknown = new Runtime({ get: () => undefined }, DEFAULT_CONFIG, () => {});
+  assert.equal(unknown.readOnlyOf(cold), undefined, "without the Agent service, nothing is reclassified");
+  const resumed = {
+    id: "resumed",
+    header: { createdAt: 1, cwd: "/w" },
+    firstLiveSeq: 0,
+    inheritedEventCount: 12,
+    seq: 12,
+    ownEvents: () => []
+  };
+  assert.equal(unknown.storedOnly(resumed), true, "an opened history tab holds only its persisted prefix");
+  const fresh = { id: "fresh", header: { createdAt: 2, cwd: "/w" }, firstLiveSeq: 0, inheritedEventCount: 0, seq: 0, ownEvents: () => [] };
+  assert.equal(unknown.storedOnly(fresh), false, "a brand-new conversation stays live");
+  assert.equal(unknown.hasHistory({ ...cold, archived: true, ownEvents: () => [] }), true, "a stored conversation is always readable");
+  assert.equal(unknown.hasHistory(cold), true, "a live session with events is readable");
+  assert.equal(unknown.hasHistory({ id: "empty", archived: false, ownEvents: () => [] }), false, "a blank session has nothing to read");
+});
+
 // --- http payloads ----------------------------------------------------------
 
 async function testRoutes() {
@@ -825,6 +858,7 @@ async function testRoutes() {
     stateOf: () => state, // ui-copy-ignore
     briefOf: () => undefined, // ui-copy-ignore
     session: async () => session,
+    hasHistory: () => true,
     requestSummary: async () => ({ kind: "skipped", reason: "disabled", text: "概览已关闭" }),
     isEnabled: () => true,
     setEnabled: async (_session, enabled) => ({ enabled: enabled === true, generation: 1 })
@@ -977,7 +1011,7 @@ async function testRoutes() {
     for (const route of routes) assert.ok(route.methods.length >= 1);
   });
 
-  await testAsync("snapshot: a switched-off session answers closed without folding its log", async () => {
+  await testAsync("snapshot: a switched-off session still shows its saved round, read-only", async () => {
     let folded = 0;
     const closed = {
       ...runtime,
@@ -991,11 +1025,67 @@ async function testRoutes() {
     const answer = await route.fetch(new Request(`http://local${ROUTES.snapshot}?session=${SESSION}`));
     const body = await answer.json();
     assert.equal(answer.status, 200);
-    assert.equal(body.coverage.enabled, false, "the panel is told it is off");
-    assert.equal(body.round, null, "no round is shown");
-    assert.deepEqual(body.brief.items, [], "no fact lines are built");
-    assert.equal(body.coverage.coreObservedSeq, -1);
-    assert.equal(folded, 0, "the disabled read never folded the session log");
+    assert.equal(body.coverage.enabled, false, "recording is still off");
+    assert.equal(body.coverage.readOnly, true, "the shown facts come from the saved log");
+    assert.equal(body.coverage.archived, false, "the switch stays available");
+    assert.equal(body.round.statusLine, "已保存");
+    assert.ok(body.brief.items.length > 0, "the saved facts are built");
+    assert.equal(body.coverage.coreObservedSeq, state.lastSeq);
+    assert.equal(folded, 1, "a read may fold the saved log; it records nothing");
+    const blank = {
+      ...runtime,
+      hasHistory: () => false,
+      isEnabled: () => false,
+      stateOf: () => {
+        folded += 1;
+        return state;
+      }
+    };
+    const blankAnswer = await createRoutes(blank).find((entry) => entry.path === ROUTES.snapshot)
+      .fetch(new Request(`http://local${ROUTES.snapshot}?session=${SESSION}`));
+    assert.equal(blankAnswer.status, 200);
+    assert.equal((await blankAnswer.json()).round, null, "a brand-new off session stays empty");
+    assert.equal(folded, 1, "an empty session is never folded");
+  });
+
+  await testAsync("snapshot: an aborted saved turn still shows what the agent last said", async () => {
+    const aborted = folded([
+      ...userTurn(1, "看下进度"),
+      finalMessage(3, "先收归档页的开关。"),
+      ev(4, "turn/end", { turn: 1, reason: { kind: "aborted" } })
+    ]);
+    assert.equal(aborted.reply, null);
+    assert.equal(aborted.lastAssistant.text, "先收归档页的开关。");
+    const route = createRoutes({ ...runtime, isEnabled: () => false, stateOf: () => aborted })
+      .find((entry) => entry.path === ROUTES.snapshot);
+    const body = await (await route.fetch(new Request(`http://local${ROUTES.snapshot}?session=${SESSION}`))).json();
+    assert.equal(body.brief.items[0].label, "最近回复");
+    assert.match(body.brief.items[0].value, /归档页/u);
+  });
+
+  await testAsync("snapshot: an unfinished saved round shows its latest reply instead of nothing", async () => {
+    const open = folded([...userTurn(1, "看下进度"), finalMessage(3, "先把归档页的开关收起来。")]);
+    const route = createRoutes({ ...runtime, isEnabled: () => false, stateOf: () => open })
+      .find((entry) => entry.path === ROUTES.snapshot);
+    const body = await (await route.fetch(new Request(`http://local${ROUTES.snapshot}?session=${SESSION}`))).json();
+    assert.equal(body.brief.items[0].id, "conclusion");
+    assert.equal(body.brief.items[0].label, "最近回复");
+    assert.match(body.brief.items[0].value, /归档页的开关/u);
+  });
+
+  await testAsync("snapshot: a saved transcript with no tool facts shows its closing reply", async () => {
+    const sealed = folded([
+      ...userTurn(1, "整理归档页"),
+      finalMessage(3, "这轮把归档页的开关收起来了。"),
+      ev(4, "turn/end", { turn: 1, reason: { kind: "completed" } })
+    ]);
+    const route = createRoutes({ ...runtime, isEnabled: () => false, stateOf: () => sealed })
+      .find((entry) => entry.path === ROUTES.snapshot);
+    const body = await (await route.fetch(new Request(`http://local${ROUTES.snapshot}?session=${SESSION}`))).json();
+    assert.equal(body.brief.items.length, 1);
+    assert.equal(body.brief.items[0].id, "conclusion");
+    assert.equal(body.brief.items[0].label, "结论");
+    assert.match(body.brief.items[0].value, /归档页的开关/u, "the reply is quoted, not rewritten");
   });
 
   test("snapshot: the round that just finished stays on screen after the reply seals it", () => {
