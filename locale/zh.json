@@ -20,11 +20,7 @@
   "blocked": "这个会话只能在自己的窗口里查看",
   "disabledTitle": "概览已关闭",
   "disabledBody": "开启后从现在开始记录",
-  "disabledNote": "已有轮次仍在历史里",
-  "waitTitle": "等待新的任务活动",
-  "waitBody": "收到新任务后，这里会出现结果",
   "evidence": "查看依据",
-  "evidenceEmpty": "这一项依据当前不可读",
   "switchFailed": "没能切换概览，已回到原来的状态",
   "elapsed": "已运行",
   "updated": "更新于",
@@ -50,5 +46,7 @@
   "verify.pending": "待核验",
   "verify.unknown": "",
   "verify.na": "",
-  "untitled": "本次任务"
+  "untitled": "本次任务",
+  "pendingLabel": "待办",
+  "none": "无"
 }

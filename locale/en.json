@@ -20,11 +20,7 @@
   "blocked": "This session can only be viewed in its own window",
   "disabledTitle": "Overview off",
   "disabledBody": "Recording starts from now",
-  "disabledNote": "Earlier rounds stay in history",
-  "waitTitle": "Waiting for new activity",
-  "waitBody": "A brief appears once there is new activity",
   "evidence": "Show basis",
-  "evidenceEmpty": "This basis cannot be read right now",
   "switchFailed": "The overview did not switch and is back where it was",
   "elapsed": "Running for",
   "updated": "Updated",
@@ -50,5 +46,7 @@
   "verify.pending": "Not verified",
   "verify.unknown": "",
   "verify.na": "",
-  "untitled": "Current task"
+  "untitled": "Current task",
+  "pendingLabel": "Todo",
+  "none": "None"
 }

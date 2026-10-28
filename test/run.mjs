@@ -738,6 +738,23 @@ test("client: only a row with more to show is a control", () => {
   assert.ok(source.includes("'ov-fact-label'"), "a pending row renders as label and value");
 });
 
+test("locale: every dictionary line is one the panel really renders", () => {
+  const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
+  for (const lang of ["zh", "en"]) {
+    const dict = JSON.parse(readFileSync(new URL(`../locale/${lang}.json`, import.meta.url), "utf8"));
+    const flat = Object.entries(dict).flatMap(([key, value]) => key === "status" || key === "verify"
+      ? Object.keys(value).map((inner) => `${key}.${inner}`)
+      : [key]);
+    for (const entry of flat) {
+      const leaf = entry.includes(".") ? entry.split(".")[1] : entry;
+      assert.ok(
+        source.includes(`${entry}:`) || source.includes(`${leaf}:`) || source.includes(`'${leaf}':`),
+        `${lang}.${entry} is declared in the panel`
+      );
+    }
+  }
+});
+
 // --- session switches -------------------------------------------------------
 
 const fakeSession = (id, extra = {}) => ({ id, header: { createdAt: 1, cwd: "/w" }, ...extra });
@@ -888,10 +905,20 @@ async function testRoutes() {
     assert.equal(body.brief.items[0].value, "无", "and says there is none");
   });
 
-  test("rounds: machine markup in a goal never becomes the heading", () => {
+  test("snapshot: the heading falls back to a readable goal, never a payload tag", () => {
+  const state = folded([
+    ...userTurn(0, "<goal_round>"),
+    ev(3, "goal/change", { goal: { phase: "active", objective: "整理概览页的标题" } })
+  ]);
+  const body = buildSnapshot(runtime, session, state, "rev-goal-title");
+  assert.equal(body.round?.title, "整理概览页的标题", "the readable goal wins over the tag");
+  assert.equal(body.brief.items[0].label, "待办");
+});
+
+test("rounds: machine markup in a goal never becomes the heading", () => {
     const state = folded([
       ...userTurn(0, "把这个页面整理一下"),
-      ev(3, "goal/update", { goal: { phase: "active", objective: "<goal_round>" } })
+      ev(3, "goal/change", { goal: { phase: "active", objective: "<goal_round>" } })
     ]);
     assert.equal(state.round.title, "把这个页面整理一下", "the opening request is readable; the tag is not");
   });

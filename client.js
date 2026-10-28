@@ -24,6 +24,8 @@ window.__ModuleLoader__.load({
         contextHistory: '历史记录', // ui-copy-ignore
         history: '历史', // ui-copy-ignore
         historyHeading: '历史', // ui-copy-ignore
+        pendingLabel: '待办', // ui-copy-ignore
+        none: '无', // ui-copy-ignore
         historyEmpty: '还没有更早的轮次', // ui-copy-ignore
         historyLoading: '正在读取历史', // ui-copy-ignore
         historyFailed: '历史记录没能读取', // ui-copy-ignore
@@ -37,9 +39,6 @@ window.__ModuleLoader__.load({
         blocked: '这个会话只能在自己的窗口里查看', // ui-copy-ignore
         disabledTitle: '概览已关闭', // ui-copy-ignore
         disabledBody: '开启后从现在开始记录', // ui-copy-ignore
-        disabledNote: '已有轮次仍在历史里', // ui-copy-ignore
-        waitTitle: '等待新的任务活动', // ui-copy-ignore
-        waitBody: '收到新任务后，这里会出现结果', // ui-copy-ignore
         evidence: '查看依据', // ui-copy-ignore
         openFailed: '没能打开这个文件', // ui-copy-ignore
         switchFailed: '没能切换概览，已回到原来的状态', // ui-copy-ignore
@@ -82,6 +81,8 @@ window.__ModuleLoader__.load({
         contextHistory: 'History', // ui-copy-ignore
         history: 'History', // ui-copy-ignore
         historyHeading: 'History', // ui-copy-ignore
+        pendingLabel: 'Todo', // ui-copy-ignore
+        none: 'None', // ui-copy-ignore
         historyEmpty: 'No earlier rounds yet', // ui-copy-ignore
         historyLoading: 'Reading history', // ui-copy-ignore
         historyFailed: 'History could not be read', // ui-copy-ignore
@@ -95,9 +96,6 @@ window.__ModuleLoader__.load({
         blocked: 'This session can only be viewed in its own window', // ui-copy-ignore
         disabledTitle: 'Overview off', // ui-copy-ignore
         disabledBody: 'Recording starts from now', // ui-copy-ignore
-        disabledNote: 'Earlier rounds stay in history', // ui-copy-ignore
-        waitTitle: 'Waiting for new activity', // ui-copy-ignore
-        waitBody: 'A brief appears once there is new activity', // ui-copy-ignore
         evidence: 'Show basis', // ui-copy-ignore
         switchFailed: 'The overview did not switch and is back where it was', // ui-copy-ignore
         elapsed: 'Running for', // ui-copy-ignore
@@ -274,7 +272,8 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 }
 .dsv-panel .ov-evidence > summary { text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; }
 .dsv-panel .ov-evidence > summary:hover { text-decoration-color: currentColor; }
-.dsv-panel .ov-evidence > summary::after { content: '↗'; margin-left: 6px; }
+.dsv-panel .ov-evidence > summary::after { content: '›'; margin-left: 6px; transform: rotate(0deg); }
+.dsv-panel .ov-evidence[open] > summary::after { transform: rotate(90deg); }
 .dsv-panel .ov-source { margin-top: 10px; padding-left: 12px; border-left: 2px solid var(--dsw-alias-border-l1); }
 .dsv-panel .ov-source p {
   margin-bottom: 6px; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 21px;
@@ -971,15 +970,19 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       } else if (coverageEnabled !== true) {
         main.push(h('div', { key: 'q', className: 'ov-quiet' }, [
           h('div', { key: 't', className: 'ov-quiet-title' }, words.disabledTitle),
-          h('p', { key: 'b' }, words.disabledBody),
-          h('p', { key: 'n' }, words.disabledNote)
+          h('p', { key: 'b' }, words.disabledBody)
         ]))
       } else {
         const roundOfSnapshot = snapshot !== null && snapshot.round !== undefined ? snapshot.round : null
         if (roundOfSnapshot === null) {
-          main.push(h('div', { key: 'q', className: 'ov-quiet' }, [
-            h('div', { key: 't', className: 'ov-quiet-title' }, words.waitTitle),
-            h('p', { key: 'b' }, words.waitBody)
+          main.push(h('div', { key: 'body' }, [
+            h('h1', { key: 't' }, words.untitled),
+            h('div', { key: 'b', className: 'ov-brief' }, [
+              h('div', { key: 'f', className: 'ov-item ov-fact' }, [
+                h('span', { key: 'l', className: 'ov-fact-label' }, words.pendingLabel),
+                h('span', { key: 'v', className: 'ov-fact-value' }, words.none)
+              ])
+            ])
           ]))
         } else {
           const brief = snapshot.brief !== null && snapshot.brief !== undefined ? snapshot.brief : null
