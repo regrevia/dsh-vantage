@@ -77,6 +77,11 @@ const checkCall = (seq, callId, command) => [
   })
 ];
 
+const changeCall = (seq, callId, path) => [
+  ev(seq, "tool/call", { callId, name: "write", arguments: JSON.stringify({ path }) }),
+  ev(seq + 1, "tool/result", { message: { toolCallId: callId, content: [{ type: "text", text: "written" }] } })
+];
+
 const finalMessage = (seq, text) =>
   ev(seq, "assistant/message", {
     turn: 1,
@@ -438,8 +443,13 @@ test("summary: publish re-validation discards a stale, superseded, or switched-o
   assert.equal(publishVerdict({ ...base, state: undefined }).reason, "fresh");
 });
 
+test("summary: passing checks never become headroom for a topic", () => {
+  const onlyChecks = folded([...userTurn(0, "跑测试"), ...checkCall(2, "c1", "pnpm test")]);
+  assert.equal(buildPacket(onlyChecks.round, { maxFacts: 8 }).text.length, 0, "a pass alone is not a summary topic");
+});
+
 test("summary: the packet is bounded and only ships observed facts", () => {
-  const state = folded([...userTurn(0, "跑测试"), ...checkCall(2, "c1", "pnpm test")]);
+  const state = folded([...userTurn(0, "改一下 hero"), ...changeCall(2, "w1", "site/hero.md"), ...checkCall(4, "c1", "pnpm test")]);
   const packet = buildPacket(state.round, { maxFacts: 8 });
   assert.ok(packet.text.length > 0);
   assert.ok(packet.facts.size >= 1);
@@ -447,10 +457,9 @@ test("summary: the packet is bounded and only ships observed facts", () => {
 });
 
 test("summary: invented numbers, conclusions, and citations are dropped", () => {
-  const state = folded([...userTurn(0, "跑测试"), ...checkCall(2, "c1", "pnpm test")]);
-  const packet = buildPacket(state.round, { maxFacts: 8 });
-  const [factId] = [...packet.facts.keys()];
-  assert.ok(factId, "packet has a fact to cite");
+  const factId = "f-check";
+  const check = { id: factId, kind: "check", statement: "测试通过", basis: "observed", validity: "valid", refs: [] };
+  const packet = { facts: new Map([[factId, check]]) };
   const topics = verifyTopics(
     JSON.stringify({
       topics: [
@@ -474,16 +483,20 @@ test("summary: invented numbers, conclusions, and citations are dropped", () => 
 });
 
 test("summary: the packet cap keeps the input inside the cap", () => {
-  const state = folded([...userTurn(0, "跑测试"), ...checkCall(2, "c1", "pnpm test")]);
-  const loose = buildPacket(state.round, { maxFacts: 200 });
-  const tight = buildPacket(state.round, { maxFacts: 200, maxTokens: 20 });
+  const facts = [];
+  for (let index = 0; index < 40; index += 1) {
+    facts.push({ id: `f${index}`, kind: "change", subject: "workspace", statement: `已修改 ${index} 个文件 ${"site/section-".repeat(2)}${index}.md`, basis: "observed", validity: "valid", updatedAt: index, refs: [] });
+  }
+  const round = { roundId: "r", facts };
+  const loose = buildPacket(round, { maxFacts: 200 });
+  const tight = buildPacket(round, { maxFacts: 200, maxTokens: 20 });
   assert.ok(tight.text.length < loose.text.length, "the cap drops facts");
   assert.ok(estimateTokens(tight.text) <= 20, `tokens=${estimateTokens(tight.text)}`);
   assert.equal(tight.truncated, true);
 });
 
 test("summary: the packet plus its instruction stays inside the input cap", () => {
-  const state = folded([...userTurn(0, "跑测试"), ...checkCall(2, "c1", "pnpm test"), ...checkCall(3, "c2", "pnpm lint")]);
+  const state = folded([...userTurn(0, "改一下 hero"), ...changeCall(2, "w1", "site/hero.md"), ...checkCall(4, "c1", "pnpm test")]);
   const cap = DEFAULT_CONFIG.summary.maxInputTokens;
   const room = Math.max(64, cap - estimateTokens(SUMMARY_SYSTEM_PROMPT) - 8);
   const packet = buildPacket(state.round, { maxTokens: room });
@@ -754,7 +767,7 @@ test("snapshot: a long goal objective becomes a one-clause heading", () => {
       throughSeq: failedState.lastSeq,
       revision: "r",
       generatedAt: now(),
-      items: [{ id: "b:1", factIds: [check.id], text: "构建 失败", tone: "neutral" }]
+      topics: [{ id: "b:1", factIds: [check.id], headline: "构建 失败", qualifier: "", details: [], state: "recorded" }]
     };
     const body = buildSnapshot({ ...runtime, briefOf: () => brief }, session, failedState, "rev2");
     const item = body.brief.items[0];
@@ -762,10 +775,78 @@ test("snapshot: a long goal objective becomes a one-clause heading", () => {
     assert.equal(item.tone, "error", "a failed check stays red even when the model says it plainly");
   });
 
-  test("schema: the running status is part of the documented set", () => {
+  test("snapshot: a non-zero exit is a failed check even when the line paraphrases it", () => {
+    const failedState = folded([
+      ...userTurn(0, "构建"),
+      ev(2, "tool/call", { callId: "x1", name: "shell", arguments: JSON.stringify({ command: "pnpm build" }) }),
+      ev(3, "tool/result", { message: { toolCallId: "x1", content: [{ type: "text", text: "boom\n[exit code: 1]" }] } })
+    ]);
+    const check = failedState.round.facts.find((fact) => fact.kind === "check");
+    assert.ok(check !== undefined, "the failed run left a check fact");
+    const brief = {
+      roundId: failedState.round.roundId,
+      throughSeq: failedState.lastSeq,
+      revision: "r",
+      generatedAt: now(),
+      topics: [{ id: "x:1", factIds: [check.id], headline: "构建以 exit 1 结束", qualifier: "", details: [], state: "recorded" }]
+    };
+    const body = buildSnapshot({ ...runtime, briefOf: () => brief }, session, failedState, "rev3");
+    assert.equal(body.brief.items[0].tone, "error");
+  });
+
+  testAsync("store: the domain declaration passes the storage contract", async () => {
+  let captured = null;
+  const store = new HistoryStore({ maxRoundsPerSession: 10, maxRoundsTotal: 100, maxSerializedBytes: 1 << 20, warn: () => {} });
+  await store.open({ open: async (declaration) => {
+    captured = declaration;
+    return { close() {} };
+  } }, { version: 3, compatibleVersions: [1, 2, "x", 3, -1] });
+  assert.ok(captured !== null, "the domain was opened");
+  assert.equal(captured.name, "dsh_vantage");
+  assert.equal(captured.version, 3);
+  assert.deepEqual(captured.compatibleVersions, [1, 2], "only integers below the version survive");
+  assert.equal(captured.layout, "per-record");
+  assert.equal(captured.invalidRecords, "backup-and-skip");
+  assert.deepEqual(Object.keys(captured.tables).sort(), ["rounds", "sessions"]);
+  const record = { any: "value" };
+  assert.equal(captured.tables.rounds.valueSchema.parse(record), record, "the value schema passes records through");
+});
+
+test("store: a failed open leaves the store readable in memory", () => {
+  const store = new HistoryStore({ maxRoundsPerSession: 10, maxRoundsTotal: 100, maxSerializedBytes: 1 << 20, warn: () => {} });
+  assert.equal(store.persistent, false);
+  assert.equal(store.domain, null, "no domain was adopted");
+  assert.equal(store.abandoned, false);
+});
+
+test("snapshot: every brief item carries clean inline evidence", () => {
+  const state = folded([
+    ...userTurn(0, "跑测试"),
+    ev(2, "tool/call", { callId: "e1", name: "shell", arguments: JSON.stringify({ command: "pnpm test" }) }),
+    ev(3, "tool/result", { message: { toolCallId: "e1", content: [{ type: "text", text: "1 failed\n[exit code: 1]" }] } }),
+    ...changeCall(4, "w1", "src/login.js")
+  ]);
+  const body = buildSnapshot(runtime, session, state, "rev4");
+  assert.ok(body.brief.items.length >= 1, "there is something to show");
+  for (const item of body.brief.items) {
+    assert.ok(Array.isArray(item.evidence), `evidence is an array on ${item.id}`);
+    for (const row of item.evidence) {
+      assert.equal(typeof row.label, "string");
+      assert.equal(typeof row.text, "string");
+      assert.equal(row.text.includes("<"), false, "no markup reaches the panel");
+    }
+    assert.ok(item.source === "rule" || item.source === "model");
+  }
+  const change = body.brief.items.find((item) => item.id.includes("change"));
+  assert.ok(change !== undefined, "the change stayed a line of its own");
+  assert.ok(change.evidence.length >= 1, "the change can be expanded to its source");
+  assert.equal(JSON.stringify(body).includes("pnpm test"), false, "a raw command line stays out of the payload");
+});
+
+test("schema: the documented statuses no longer include a spent budget", () => {
     assert.ok(STATUS_KEYS.includes("running"));
     assert.ok(STATUS_KEYS.includes("waiting"));
-    assert.ok(STATUS_KEYS.includes("summary-paused"));
+    assert.ok(!STATUS_KEYS.includes("summary-paused"));
   });
 
   await testAsync("evidence: excerpts are plain text, never payloads", async () => {
