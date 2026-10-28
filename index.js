@@ -177,6 +177,15 @@ export class Runtime {
     this.requestSeq = 0;
     /** @type {Map<string, string>} sessionId -> last round handed to the store. */
     this.archived = new Map();
+    /**
+     * Historical sessions read from the persistence backend, not from the live
+     * registry. Opening an old conversation in the GUI does not make it live, so
+     * a live-only lookup answers 403 for exactly the sessions a reader wants to
+     * revisit. Entries expire quickly: the read is cheap, and a stale copy must
+     * never outlive a session that was resumed in the meantime.
+     * @type {Map<string, {at: number, session: object}>}
+     */
+    this.archivedLogs = new Map();
     this.connection = "online";
     this.now = () => Date.now();
     this.timer = null;
@@ -193,13 +202,75 @@ export class Runtime {
   async session(sessionId) {
     const sessions = safeService(this.owner ?? this.ctx, "sessions");
     const session = sessions?.get?.(sessionId);
-    if (session === undefined || session === null) {
-      // The panel only ever reads a session this GUI has open. Anything else is
-      // out of the caller's scope, not a server fault: answer 403 and let the
-      // page keep showing what it already has.
-      throw new OverviewError("forbidden", "本页面只读取当前打开的会话", 403);
+    if (session !== undefined && session !== null) return session;
+    // A conversation opened from history is not in the live registry. Read its
+    // stored log instead of refusing the page; a genuinely unknown id still
+    // falls through to 403.
+    const archived = await this.archivedSession(sessionId);
+    if (archived !== undefined) return archived;
+    // The panel only ever reads a session this GUI has open, or one this
+    // profile has recorded. Anything else is out of the caller's scope, not a
+    // server fault: answer 403 and let the page keep showing what it has.
+    throw new OverviewError("forbidden", "本页面只读取当前打开的会话", 403);
+  }
+
+  /**
+   * Open one stored session for reading. The persistence handle is closed right
+   * after the read; the events are immutable at that point, so the adapter is
+   * just the shape the reducer already knows.
+   *
+   * @param {string} sessionId - stored session id.
+   * @returns {Promise<object|undefined>} read-only session, when one exists.
+   */
+  async archivedSession(sessionId) {
+    const cached = this.archivedLogs.get(sessionId);
+    if (cached !== undefined && this.now() - cached.at < 60000) return cached.session;
+    const persistence = safeService(this.owner ?? this.ctx, "sessionPersistence");
+    if (typeof persistence?.open !== "function" || typeof persistence?.stat !== "function") return undefined;
+    let handle;
+    try {
+      const stored = await persistence.stat(sessionId);
+      const header = stored?.header;
+      if (header === undefined || header === null) return undefined;
+      handle = await persistence.open(sessionId, "read");
+      const read = await handle.read();
+      const events = Array.isArray(read?.events) ? read.events : [];
+      const session = {
+        id: sessionId,
+        header,
+        archived: true,
+        firstLiveSeq: -1,
+        inheritedEventCount: 0,
+        ownEvents: () => events
+      };
+      this.archivedLogs.set(sessionId, { at: this.now(), session });
+      if (this.archivedLogs.size > 3) {
+        const oldest = [...this.archivedLogs.entries()].sort((left, right) => left[1].at - right[1].at)[0];
+        if (oldest !== undefined) this.archivedLogs.delete(oldest[0]);
+      }
+      return session;
+    } catch (error) {
+      this.warn(`cannot read the stored session: ${messageOf(error)}`);
+      return undefined;
+    } finally {
+      try {
+        await handle?.close?.();
+      } catch {
+        // A failed close only leaks a read handle; the answer already exists.
+      }
     }
-    return session;
+  }
+
+  /**
+   * Whether this session has an overview to show. A historical session is
+   * always viewable: its facts are derived from the stored log on demand, with
+   * no recording and no model call, so there is nothing to opt into.
+   *
+   * @param {object} session - runtime session.
+   * @returns {boolean} true when the page may fold and render it.
+   */
+  isViewable(session) {
+    return session?.archived === true || this.isEnabled(session);
   }
 
   /**

@@ -24,7 +24,7 @@ import {
   requiredParam,
   roundIdOf
 } from "../lib/schema.js";
-import { apply, evaluateVerification, initState, rankFacts, roundStateOf } from "../lib/rounds.js";
+import { apply, evaluateVerification, initState, rankFacts, roundStateOf, summarizeRound } from "../lib/rounds.js";
 import { HistoryStore } from "../lib/store.js";
 import { DEFAULT_CONFIG, Runtime } from "../index.js";
 import { SUMMARY_SYSTEM_PROMPT, SummaryScheduler, buildPacket, estimateTokens, publishVerdict, verifyTopics } from "../lib/summary.js";
@@ -851,6 +851,111 @@ async function testRoutes() {
     assert.deepEqual(opened, ["/Users/apple/CreatorStudio/deliver/out.mp4"], "the delivered path opens once");
     const missing = await route.fetch(new Request(`http://x${ROUTES.open}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session: SESSION }) }));
     assert.equal(missing.status, 400, "a request without a path is rejected");
+  });
+
+  test("rounds: a saved round never repeats a raw tool failure as its summary", () => {
+    const state = folded([
+      ...userTurn(0, "改一下页面"),
+      ev(2, "tool/call", { callId: "c1", name: "edit", arguments: JSON.stringify({ path: "/w/page.js" }) }),
+      ev(3, "tool/result", {
+        message: { toolCallId: "c1", isError: true, content: [{ type: "text", text: 'Error: cannot edit "/w/page.js": permission denied' }] }
+      })
+    ]);
+    const failure = [...state.round.facts.values()].find((fact) => fact.kind === "failure");
+    assert.ok(failure !== undefined, "the failure is still evidence");
+    assert.ok(failure.statement.startsWith("失败"), "and reads as a failure");
+    assert.equal(summarizeRound(state.round).outcome, "", "but the one-line summary says nothing it cannot stand behind");
+  });
+
+  test("rounds: a goal's state survives a clear and never invents an objective", () => {
+    const cleared = folded([
+      ...userTurn(0, "做点事"),
+      ev(3, "goal/change", { operation: "clear" })
+    ]);
+    assert.equal(cleared.goal.state, "none");
+    assert.equal(cleared.goal.objective, "");
+  });
+
+  test("snapshot: an archived session is readable without its switch and says it is saved", async () => {
+    const archivedState = folded([
+      ...userTurn(0, "跑测试"),
+      ...checkCall(2, "c1", "pnpm test"),
+      finalMessage(4, "做完了"),
+      ev(5, "turn/end", { turn: 1, reason: { kind: "completed" } }),
+      ...userTurn(10, "再跑一次")
+    ]);
+    const archivedSession = { ...session, archived: true };
+    const routes = createRoutes({
+      ...runtime,
+      isEnabled: () => false,
+      session: async () => archivedSession,
+      stateOf: () => archivedState,
+      store: Object.assign(Object.create(store), { count: () => 0, recent: () => [] })
+    });
+    const answer = await routes.find((entry) => entry.path === ROUTES.snapshot)
+      .fetch(new Request(`http://x${ROUTES.snapshot}?session=${SESSION}`));
+    const body = await answer.json();
+    assert.equal(answer.status, 200, "no switch is needed to read history");
+    assert.equal(body.coverage.readOnly, true);
+    assert.equal(body.round.statusKey, "archived");
+    assert.equal(body.round.statusLine, "已保存");
+    assert.equal(body.round.roundState, "archived", "a saved round is not running");
+    assert.equal(body.round.runtimeState, "idle");
+    const history = await routes.find((entry) => entry.path === ROUTES.history)
+      .fetch(new Request(`http://x${ROUTES.history}?session=${SESSION}&exclude=${body.round.roundId}`));
+    const page = await history.json();
+    assert.equal(history.status, 200);
+    assert.equal(page.items.length, 1, "the finished round comes from the folded log when the store is empty");
+    assert.ok(page.items[0].archivedAt > 0, "the saved round keeps when it was saved");
+  });
+
+  await testAsync("round: an archived round never claims to be running", async () => {
+    const archivedState = folded([
+      ...userTurn(0, "跑测试"),
+      ...checkCall(2, "c1", "pnpm test"),
+      finalMessage(4, "做完了"),
+      ev(5, "turn/end", { turn: 1, reason: { kind: "completed" } })
+    ]);
+    const archivedSession = { ...session, archived: true };
+    const routes = createRoutes({
+      ...runtime,
+      isEnabled: () => false,
+      session: async () => archivedSession,
+      stateOf: () => archivedState,
+      store: Object.assign(Object.create(store), { count: () => 0, get: () => undefined })
+    });
+    const answer = await routes.find((entry) => entry.path === ROUTES.round)
+      .fetch(new Request(`http://x${ROUTES.round}?session=${SESSION}&round=${archivedState.settled.roundId}`));
+    const body = await answer.json();
+    assert.equal(answer.status, 200);
+    assert.equal(body.round.roundState, "archived");
+    assert.equal(body.round.runtimeState, "idle");
+    assert.equal(body.round.statusLine, "已保存");
+    assert.ok(body.round.archivedAt > 0, "a saved round carries the time it was saved");
+  });
+
+  await testAsync("enable and summary: a saved session refuses both instead of recording", async () => {
+    const archivedSession = { ...session, archived: true };
+    let asked = 0;
+    const routes = createRoutes({
+      ...runtime,
+      session: async () => archivedSession,
+      setEnabled: async () => { asked += 1; return { enabled: true, generation: 1 }; },
+      requestSummary: async () => { asked += 1; return { kind: "queued" }; }
+    });
+    const post = (path, payload) => routes.find((entry) => entry.path === path)
+      .fetch(new Request(`http://x${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ session: SESSION, ...payload })
+      }));
+    const on = await post(ROUTES.enable, { enabled: true });
+    const summary = await post(ROUTES.summaryRequest, {});
+    assert.equal(on.status, 409);
+    assert.equal(summary.status, 409);
+    assert.equal((await on.json()).error.code, "read-only");
+    assert.equal((await summary.json()).error.code, "read-only");
+    assert.equal(asked, 0, "nothing was switched or sent to the model");
   });
 
   test("routes: exactly the documented seven paths, no duplicates", () => {

@@ -10,7 +10,7 @@ Every response carries `cache-control: no-store`.
 Failures are one small envelope, never a log tail:
 
 ```json
-{ "error": { "code": "session/not-found" | "session/unavailable" | "bad-request" | "internal", "message": "<short, no secrets>" } }
+{ "error": { "code": "session/not-found" | "session/unavailable" | "read-only" | "bad-request" | "internal", "message": "<short, no secrets>" } }
 ```
 
 | method | path | purpose |
@@ -20,6 +20,7 @@ Failures are one small envelope, never a log tail:
 | GET | `/api/dsh-vantage/round?session=S&round=ID` | one round with its facts, open or archived |
 | GET | `/api/dsh-vantage/evidence?session=S&round=ID&fact=F` | one fact plus its raw excerpts |
 | POST | `/api/dsh-vantage/enable` | `{session, enabled}` → the new switch state |
+| POST | `/api/dsh-vantage/summary/request` | `{session}` → ask the host for one summary pass |
 | POST | `/api/dsh-vantage/open` | `{session, path}` → hand a delivered file to the system viewer |
 
 `revision` is opaque. While it still matches the stored revision the snapshot answers
@@ -36,7 +37,7 @@ one. A change is never shown as `已修改 <file>`.
 ```jsonc
 {
   "kind": "snapshot",
-  "schemaVersion": 1,
+  "schemaVersion": 3,
   "revision": "812:S:12:open:9:3:on",   // opaque; changes when anything rendered changes
   "sessionId": "…",
   "generatedAt": 1749000030000,
@@ -48,6 +49,7 @@ one. A change is never shown as `已修改 <file>`.
     "summaryCoveredSeq": 640,
     "summaryFresh": false,              // false means the lines below are rule-built
     "enabled": true,                    // the switch the header shows; the only authority
+    "readOnly": false,                  // true while this session is saved, not live
     "historyAvailable": true            // false while nothing archived is readable
   },
   "round": {                            // null before any task activity
@@ -159,6 +161,15 @@ At most 3 refs, each excerpt clipped to 600 chars. Unknown round or fact answers
 Brief rows no longer use this route: their `evidence` arrives inside the brief. It stays for
 archived rounds, whose items are rebuilt from `facts` and only carry `factIds`; the client asks
 once per row on first open and caches the answer for that view.
+
+## Saved sessions
+
+A session that is no longer live still answers `snapshot`, `history`, `round`, and
+`evidence`: the overview reads it from the saved log, overrides its round to
+`roundState: "archived"` / `runtimeState: "idle"`, and sends `coverage.readOnly: true`.
+`POST /enable` and `POST /summary/request` answer `409 read-only` for such a session,
+so an archived preview can never flip a switch, record a round, or start a model call.
+The header shows `已保存` and hides the switch.
 
 ## Enable
 

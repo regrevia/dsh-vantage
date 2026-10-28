@@ -19,6 +19,9 @@ the evidence behind each one, and a bounded history of earlier rounds.
   A passing check is evidence, not a topic.
 - **History** — earlier rounds that ended with a real reply, newest first. The
   list and the round detail never appear at the same time.
+- **Saved sessions** — a session that is no longer live opens read-only: its
+  last round, delivered items, and history come from the saved log, and the
+  switch is hidden so viewing it cannot start recording or a model call.
 - **Per-session switch** — off by default. While it is off the plugin neither
   folds events, nor builds snapshots, nor sends anything to a model. Turning it
   on starts recording from that moment; saved rounds stay readable in history.

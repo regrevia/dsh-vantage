@@ -30,6 +30,7 @@ node scripts/accept-installed.mjs # booted profile: module listed, bundle served
 | A13 | A fork of an enabled session starts disabled | `switch: enabling one session never enables another, and a fork starts off` | covered |
 | A14 | No hourly token or request quota can pause the plugin or show a countdown | `schema: the documented statuses no longer include a spent budget` | covered |
 | A15 | 360 px, desktop, light and dark stay readable with no horizontal overflow and keyboard controls | `.ov-` styles and `@media (max-width:560px)` in `client.js`; no committed check | code |
+| A16 | A saved session opens read-only: real title, agent, last round and history, with no switch, record, or model call | `snapshot: an archived session is readable without its switch and says it is saved`, `round: an archived round never claims to be running`, `enable and summary: a saved session refuses both instead of recording` | covered |
 
 ## Installed-artifact proof (D1)
 

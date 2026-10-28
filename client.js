@@ -25,6 +25,13 @@ window.__ModuleLoader__.load({
         history: '历史', // ui-copy-ignore
         historyHeading: '历史', // ui-copy-ignore
         pendingLabel: '待办', // ui-copy-ignore
+        goalLabel: '目标', // ui-copy-ignore
+        milestones: '本轮已推进', // ui-copy-ignore
+        artifacts: '关键产物', // ui-copy-ignore
+        archived: '已保存', // ui-copy-ignore
+        currentRound: '当前轮', // ui-copy-ignore
+        lastRound: '最后一轮', // ui-copy-ignore
+        nothingYet: '这一轮没有留下可展示的结论', // ui-copy-ignore
         roundCountLabel: '历史', // ui-copy-ignore
         roundUnit: '轮', // ui-copy-ignore
         none: '无', // ui-copy-ignore
@@ -33,6 +40,11 @@ window.__ModuleLoader__.load({
         historyFailed: '历史记录没能读取', // ui-copy-ignore
         historyBack: '返回当前', // ui-copy-ignore
         historyMore: '查看全部', // ui-copy-ignore
+        unanswered: '未作答复', // ui-copy-ignore
+        archivedRound: '已保存的一轮', // ui-copy-ignore
+        goalDone: '已达成', // ui-copy-ignore
+        goalPaused: '已暂停', // ui-copy-ignore
+        goalBlocked: '受阻', // ui-copy-ignore
         detailFailed: '这一轮的记录没能读取', // ui-copy-ignore
         back: '返回当前', // ui-copy-ignore
         loading: '正在读取', // ui-copy-ignore
@@ -63,6 +75,7 @@ window.__ModuleLoader__.load({
           disconnected: '已断开', // ui-copy-ignore
           'answered-unverified': '待核验', // ui-copy-ignore
           verified: '已完成', // ui-copy-ignore
+          archived: '已保存', // ui-copy-ignore
           unknown: '' // ui-copy-ignore
         },
         verify: {
@@ -84,6 +97,13 @@ window.__ModuleLoader__.load({
         history: 'History', // ui-copy-ignore
         historyHeading: 'History', // ui-copy-ignore
         pendingLabel: 'Todo', // ui-copy-ignore
+        goalLabel: 'Goal', // ui-copy-ignore
+        milestones: 'Progress this round', // ui-copy-ignore
+        artifacts: 'Key outputs', // ui-copy-ignore
+        archived: 'Saved', // ui-copy-ignore
+        currentRound: 'Current round', // ui-copy-ignore
+        lastRound: 'Last round', // ui-copy-ignore
+        nothingYet: 'This round left no conclusion to show', // ui-copy-ignore
         roundCountLabel: 'History', // ui-copy-ignore
         roundUnit: 'rounds', // ui-copy-ignore
         none: 'None', // ui-copy-ignore
@@ -92,6 +112,11 @@ window.__ModuleLoader__.load({
         historyFailed: 'History could not be read', // ui-copy-ignore
         historyBack: 'Back to current', // ui-copy-ignore
         historyMore: 'Show all', // ui-copy-ignore
+        unanswered: 'No reply', // ui-copy-ignore
+        archivedRound: 'Saved round', // ui-copy-ignore
+        goalDone: 'Achieved', // ui-copy-ignore
+        goalPaused: 'Paused', // ui-copy-ignore
+        goalBlocked: 'Blocked', // ui-copy-ignore
         detailFailed: 'This round could not be read', // ui-copy-ignore
         back: 'Back to current', // ui-copy-ignore
         loading: 'Reading', // ui-copy-ignore
@@ -121,6 +146,7 @@ window.__ModuleLoader__.load({
           disconnected: 'Disconnected', // ui-copy-ignore
           'answered-unverified': 'Unverified', // ui-copy-ignore
           verified: 'Done', // ui-copy-ignore
+          archived: 'Saved', // ui-copy-ignore
           unknown: '' // ui-copy-ignore
         },
         verify: {
@@ -188,11 +214,63 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-panel summary::-webkit-details-marker { display: none; }
 .dsv-panel .ov-panel { width: 100%; max-width: 720px; margin-inline: auto; }
 .dsv-panel .ov-toolbar {
-  display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px;
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px;
 }
+.dsv-panel .ov-head { min-width: 0; }
 .dsv-panel .ov-context {
   color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px; white-space: nowrap;
 }
+.dsv-panel .ov-identity { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.dsv-panel .ov-avatar {
+  display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 10px;
+  background: var(--dsw-alias-bg-l2); color: var(--dsw-alias-label-primary);
+  font-size: 14px; line-height: 20px; font-weight: 600; letter-spacing: 0;
+}
+.dsv-panel .ov-name { font-size: 15px; line-height: 24px; font-weight: 600; white-space: nowrap; }
+.dsv-panel .ov-state {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 0 8px;
+  border-radius: 6px; background: var(--dsw-alias-bg-l2); color: var(--dsw-alias-label-secondary);
+  font-size: 12px; line-height: 18px; white-space: nowrap;
+}
+.dsv-panel .ov-state::before {
+  content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.7;
+}
+.dsv-panel .ov-state[data-tone="active"] { color: var(--dsw-alias-brand-primary); }
+.dsv-panel .ov-state[data-tone="warn"] { color: var(--dsw-alias-state-warn-primary); }
+.dsv-panel .ov-state[data-tone="error"] { color: var(--dsw-alias-state-error-primary); }
+.dsv-panel .ov-session-title {
+  margin-top: 12px; font-size: 20px; line-height: 32px; font-weight: 600; overflow-wrap: anywhere;
+}
+.dsv-panel .ov-roundbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 24px;
+}
+.dsv-panel .ov-round-label { color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px; }
+.dsv-panel .ov-round-label:last-child { font-variant-numeric: tabular-nums; }
+.dsv-panel .ov-goal {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 20px; margin-top: 10px;
+  font-size: 14px; line-height: 24px;
+}
+.dsv-panel .ov-goal-label { flex: none; color: var(--dsw-alias-label-secondary); }
+.dsv-panel .ov-goal-text {
+  min-width: 0; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; flex: 1;
+}
+.dsv-panel .ov-goal-state { flex: none; color: var(--dsw-alias-label-secondary); font-size: 13px; }
+.dsv-panel .ov-headline { margin-top: 14px; font-size: 22px; line-height: 30px; font-weight: 600; letter-spacing: 0; }
+.dsv-panel .ov-summary { margin-top: 10px; font-size: 15px; line-height: 26px; overflow-wrap: anywhere; }
+.dsv-panel .ov-section-label {
+  margin: 24px 0 2px; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px;
+}
+.dsv-panel .ov-section-label + .ov-brief { margin-top: 0; }
+.dsv-panel .ov-brief > .ov-output-row { border-bottom: 1px solid var(--dsw-alias-border-l1); }
+.dsv-panel .ov-brief > .ov-output-row:last-child { border-bottom: 0; }
+.dsv-panel .ov-output-row {
+  display: flex; align-items: baseline; gap: 10px; width: 100%; padding: 12px 0;
+  text-align: left; font-size: 15px; line-height: 23px;
+}
+.dsv-panel button.ov-output-row:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.dsv-panel .ov-output-text { min-width: 0; overflow-wrap: anywhere; }
+.dsv-panel .ov-output-arrow { margin-left: auto; flex: none; color: var(--dsw-alias-label-secondary); }
 .dsv-panel .ov-controls { display: flex; align-items: center; gap: 18px; }
 .dsv-panel .ov-switch {
   display: inline-flex; align-items: center; gap: 8px; min-height: 32px; padding: 0;
@@ -226,25 +304,25 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
   margin-top: 16px; color: var(--dsw-alias-state-warn-primary); font-size: 13px; line-height: 20px;
 }
 .dsv-panel .ov-sub { margin-top: 8px; color: var(--dsw-alias-label-secondary); font-size: 14px; line-height: 24px; }
-.dsv-panel .ov-brief { margin-top: 28px; }
+.dsv-panel .ov-brief { margin-top: 0; }
 .dsv-panel .ov-item { border-bottom: 1px solid var(--dsw-alias-border-l1); }
 .dsv-panel .ov-item:last-child { border-bottom: 0; }
 .dsv-panel .ov-item > summary {
-  display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 16px; align-items: start;
-  width: 100%; padding: 20px 0 24px;
+  display: grid; grid-template-columns: minmax(0, 1fr) 17px; gap: 12px; align-items: start;
+  width: 100%; padding: 12px 0;
 }
 .dsv-panel .ov-item > summary:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .dsv-panel .ov-chevron {
-  display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 26px;
-  color: var(--dsw-alias-label-primary); font-size: 24px;
-  font-weight: 400; line-height: 26px; transform-origin: 50% 50%;
+  display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 23px;
+  color: var(--dsw-alias-label-secondary); font-size: 15px;
+  font-weight: 400; line-height: 23px; transform-origin: 50% 50%;
 }
 .dsv-panel .ov-item[open] > summary .ov-chevron { transform: rotate(90deg); }
-.dsv-panel .ov-item-title { display: block; font-size: 17px; line-height: 26px; font-weight: 600; overflow-wrap: anywhere; }
-.dsv-panel .ov-item-static > .ov-item-static-title { display: block; padding: 20px 0 24px; }
-.dsv-panel .ov-item-flat { padding: 20px 0 24px; }
+.dsv-panel .ov-item-title { display: block; font-size: 15px; line-height: 23px; font-weight: 500; overflow-wrap: anywhere; }
+.dsv-panel .ov-item-static > .ov-item-static-title { display: block; padding: 12px 0; }
+.dsv-panel .ov-item-flat { padding: 12px 0; }
 .dsv-panel .ov-fact {
-  display: flex; align-items: baseline; gap: 16px; padding: 20px 0 24px;
+  display: flex; align-items: baseline; gap: 16px; padding: 12px 0;
   border-bottom: 1px solid var(--dsw-alias-border-l1);
 }
 .dsv-panel .ov-fact-label { flex: none; min-width: 48px; color: var(--dsw-alias-label-secondary); font-size: 14px; line-height: 26px; }
@@ -266,7 +344,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 }
 .dsv-panel .ov-item-qualifier[data-tone="error"] { color: var(--dsw-alias-state-error-primary); }
 .dsv-panel .ov-item-qualifier[data-tone="warn"] { color: var(--dsw-alias-state-warn-primary); }
-.dsv-panel .ov-item-body { padding: 0 0 24px 32px; font-size: 15px; line-height: 24px; }
+.dsv-panel .ov-item-body { padding: 0 0 12px 29px; font-size: 15px; line-height: 24px; }
 .dsv-panel .ov-item-body p { margin: 0 0 10px; overflow-wrap: anywhere; }
 .dsv-panel .ov-item-body p:last-child { margin-bottom: 0; }
 .dsv-panel .ov-evidence { margin-top: 14px; }
@@ -290,12 +368,21 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 }
 .dsv-panel .ov-history-list { margin-top: 28px; }
 .dsv-panel .ov-history-row {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto 16px; align-items: start; gap: 16px;
-  width: 100%; padding: 20px 0; border-bottom: 1px solid var(--dsw-alias-border-l1);
+  display: grid; grid-template-columns: minmax(0, 1fr) auto 16px; align-items: baseline; gap: 16px;
+  width: 100%; padding: 12px 0; border-bottom: 1px solid var(--dsw-alias-border-l1);
 }
 .dsv-panel .ov-history-row:last-child { border-bottom: 0; }
 .dsv-panel .ov-history-row:hover { background: var(--dsw-alias-interactive-bg-hover); }
-.dsv-panel .ov-history-title { display: block; font-size: 17px; line-height: 26px; font-weight: 500; overflow-wrap: anywhere; }
+.dsv-panel .ov-history-row > span:first-child { min-width: 0; }
+.dsv-panel .ov-history-title {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden;
+  font-size: 15px; line-height: 23px; font-weight: 500; overflow-wrap: anywhere;
+}
+.dsv-panel .ov-history-more {
+  display: inline-flex; align-items: center; gap: 6px; margin-top: 24px; padding: 0;
+  color: var(--dsw-alias-brand-primary); font-size: 13px; line-height: 20px;
+}
+.dsv-panel .ov-history-more:hover { text-decoration: underline; text-underline-offset: 3px; }
 .dsv-panel .ov-history-sub { display: block; margin-top: 4px; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px; }
 .dsv-panel .ov-history-time {
   color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 25px; white-space: nowrap;
@@ -311,7 +398,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-panel .ov-quiet p { margin: 8px 0 0; color: var(--dsw-alias-label-secondary); font-size: 14px; line-height: 24px; }
 @media (max-width: 560px) {
   .dsv-panel { padding: 24px 20px 36px; }
-  .dsv-panel .ov-toolbar { align-items: center; flex-wrap: wrap; gap: 8px 16px; }
+  .dsv-panel .ov-toolbar { align-items: flex-start; flex-wrap: wrap; gap: 8px 16px; }
   .dsv-panel .ov-controls { gap: 16px; }
   .dsv-panel .ov-switch,
   .dsv-panel .ov-control-link { min-height: 44px; }
@@ -390,6 +477,14 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       if (typeof key === 'string' && Object.prototype.hasOwnProperty.call(words.status, key)) return words.status[key]
       const line = round.statusLine
       return typeof line === 'string' && line !== '' ? line : words.status.unknown
+    }
+
+    // State pill colour follows the chosen status, not the elapsed time.
+    function toneOfStatus(key) {
+      if (key === 'running' || key === 'checking' || key === 'waiting') return 'active'
+      if (key === 'needs-input' || key === 'failing') return 'warn'
+      if (key === 'disconnected') return 'error'
+      return 'neutral'
     }
 
     function verifyTextOf(round) {
@@ -475,7 +570,10 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       const status = statusTextOf(round)
       if (status !== '') parts.push(status)
       if (typeof round.elapsedMs === 'number') parts.push(`${words.elapsed} ${durationOf(round.elapsedMs)}`)
-      if (typeof round.contentAt === 'number' && round.contentAt > 0) parts.push(`${words.updated} ${timeOf(round.contentAt, now)}`)
+      const at = typeof round.contentAt === 'number' && round.contentAt > 0
+        ? round.contentAt
+        : typeof round.archivedAt === 'number' && round.archivedAt > 0 ? round.archivedAt : 0
+      if (at > 0) parts.push(`${words.updated} ${timeOf(at, now)}`)
       const verify = verifyTextOf(round)
       if (verify !== '') parts.push(verify)
       return parts
@@ -550,8 +648,8 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         onToggle: (event) => props.onToggle(props.itemKey, event.currentTarget.open)
       }, [
         h('summary', { key: 's' }, [
-          h('span', { key: 'c', className: 'ov-chevron', 'aria-hidden': 'true' }, '›'),
-          title
+          title,
+          h('span', { key: 'c', className: 'ov-chevron', 'aria-hidden': 'true' }, '›')
         ]),
         h('div', { key: 'b', className: 'ov-item-body' }, bodyChildren)
       ])
@@ -863,6 +961,11 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           }
           return
         }
+        if (action === 'open-path') {
+          event.preventDefault()
+          openLink({ path: control.getAttribute('data-path') })
+          return
+        }
         if (action === 'retry') {
           event.preventDefault()
           setFailed(false)
@@ -877,14 +980,25 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       const words = copy()
       const mode = view.mode
 
-      let contextText = words.contextCurrent
-      if (mode === 'list') contextText = words.contextHistory
-      else if (mode === 'detail') contextText = round !== null ? statusTextOf(round) : words.contextHistory
-      else if (snapshot !== null && coverageEnabled !== true) contextText = words.contextDisabled
-      else if (snapshot !== null && (snapshot.round === null || snapshot.round === undefined)) contextText = words.contextResumed
+      const readOnly = snapshot !== null && snapshot.coverage !== null && snapshot.coverage !== undefined && snapshot.coverage.readOnly === true
+      const agent = snapshot !== null && snapshot.agent !== null && snapshot.agent !== undefined ? snapshot.agent : null
+      const sessionTitle = snapshot !== null && typeof snapshot.sessionTitle === 'string' ? snapshot.sessionTitle : ''
+      const liveRound = snapshot !== null && snapshot.round !== null && snapshot.round !== undefined ? snapshot.round : null
+      const pill = readOnly === true
+        ? { text: words.archived, tone: 'neutral' }
+        : mode === 'current' && liveRound !== null
+          ? { text: statusTextOf(liveRound), tone: toneOfStatus(liveRound.statusKey) }
+          : { text: '', tone: 'neutral' }
+      const identity = agent === null
+        ? h('span', { key: 'c', className: 'ov-context' }, words.contextCurrent)
+        : h('div', { key: 'i', className: 'ov-identity' }, [
+            h('span', { key: 'a', className: 'ov-avatar', 'aria-hidden': 'true' }, agent.initial),
+            h('span', { key: 'n', className: 'ov-name' }, agent.name),
+            pill.text === '' ? null : h('span', { key: 'p', className: 'ov-state', 'data-tone': pill.tone }, pill.text)
+          ])
 
       const controls = [
-        h('button', {
+        readOnly === true ? null : h('button', {
           key: 'switch', type: 'button', role: 'switch', className: 'ov-switch',
           'aria-checked': coverageEnabled === true ? 'true' : 'false', 'aria-label': words.switchLabel,
           'data-action': 'toggle-switch', disabled: pending === true || snapshot === null
@@ -896,11 +1010,16 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         ]),
         mode === 'list' || mode === 'detail'
           ? h('button', { key: 'link', type: 'button', className: 'ov-control-link', 'data-action': 'current' }, words.back)
-          : h('button', { key: 'link', type: 'button', className: 'ov-control-link', 'data-action': 'history' }, words.history)
+          : snapshot !== null && (snapshot.history?.count ?? 0) > 0
+            ? h('button', { key: 'link', type: 'button', className: 'ov-control-link', 'data-action': 'history' }, words.history)
+            : null
       ]
 
       const header = h('header', { key: 'h', className: 'ov-toolbar' }, [
-        h('span', { key: 'c', className: 'ov-context' }, contextText),
+        h('div', { key: 'm', className: 'ov-head' }, [
+          identity,
+          sessionTitle === '' ? null : h('div', { key: 't', className: 'ov-session-title' }, sessionTitle)
+        ]),
         h('div', { key: 's', className: 'ov-controls' }, controls)
       ])
 
@@ -926,7 +1045,15 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           parts.push(h('div', { key: 'e', className: 'ov-sub' }, words.historyEmpty))
         } else {
           parts.push(h('div', { key: 'r', className: 'ov-history-list' }, rows.map((row, index) => {
-            const subtitle = String(row.statusLine === undefined || row.statusLine === null ? '' : row.statusLine)
+            const saved = String(row.statusLine === undefined || row.statusLine === null ? '' : row.statusLine)
+            const outcome = String(row.outcome === undefined || row.outcome === null ? '' : row.outcome)
+            const rowTitle = titleOf(row)
+            const distinct = rowTitle !== sessionTitle
+            const unanswered = row.hasReply === false
+            const primary = distinct
+              ? rowTitle
+              : outcome !== '' ? outcome : unanswered ? words.unanswered : words.archivedRound
+            const subtitle = distinct && outcome !== '' ? outcome : saved
             const key = row.roundId === undefined || row.roundId === null ? `r${index}` : String(row.roundId)
             return h('button', {
               key,
@@ -936,7 +1063,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
               'data-round': row.roundId
             }, [
               h('span', { key: 'm' }, [
-                h('span', { key: 't', className: 'ov-history-title' }, titleOf(row)),
+                h('span', { key: 't', className: 'ov-history-title' }, primary),
                 subtitle === '' ? null : h('span', { key: 's', className: 'ov-history-sub' }, subtitle)
               ]),
               h('span', { key: 'a', className: 'ov-history-time' }, timeOf(row.archivedAt, now)),
@@ -957,16 +1084,15 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           main.push(h('div', { key: 'q', className: 'ov-quiet' }, [h('p', { key: 'p' }, words.loading)]))
         } else {
           const sealedBrief = round.brief !== null && round.brief !== undefined && Array.isArray(round.brief.items) ? round.brief.items : []
-          const items = sealedBrief
+          const items = sealedBrief.filter((item) => item !== null && item !== undefined && item.id !== 'no-facts')
           publishItems(round.roundId, items)
           const meta = metaOf(round, now)
-          const parts = [h('h1', { key: 't' }, titleOf(round))]
+          const detailTitle = titleOf(round)
+          const parts = []
+          if (detailTitle !== sessionTitle) parts.push(h('h1', { key: 't' }, detailTitle))
           if (meta.length > 0) parts.push(h('div', { key: 'm', className: 'ov-meta' }, meta.join(' · ')))
           parts.push(h('div', { key: 'b', className: 'ov-brief' }, items.length === 0
-            ? [h('div', { key: 'e', className: 'ov-item ov-fact' }, [
-              h('span', { key: 'l', className: 'ov-fact-label' }, words.pendingLabel),
-              h('span', { key: 'v', className: 'ov-fact-value' }, words.none)
-            ])]
+            ? [h('div', { key: 'e', className: 'ov-sub' }, words.nothingYet)]
             : items.map((item, index) => {
               const key = itemKeyOf(round.roundId, item)
               return h(BriefItem, {
@@ -987,49 +1113,92 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         ]))
       } else {
         const roundOfSnapshot = snapshot !== null && snapshot.round !== undefined ? snapshot.round : null
+        const goal = snapshot !== null && snapshot.goal !== null && snapshot.goal !== undefined ? snapshot.goal : null
+        const objective = goal !== null && typeof goal.objective === 'string' ? goal.objective : ''
+        const past = snapshot !== null && snapshot.history !== null && snapshot.history !== undefined ? snapshot.history : null
+        const pastCount = past !== null && typeof past.count === 'number' ? past.count : 0
+        const body = []
         if (roundOfSnapshot === null) {
-          const rows = [
-            h('div', { key: 'f', className: 'ov-item ov-fact' }, [
-              h('span', { key: 'l', className: 'ov-fact-label' }, words.pendingLabel),
-              h('span', { key: 'v', className: 'ov-fact-value' }, words.none)
-            ])
-          ]
-          const past = snapshot !== null && snapshot.history !== null && snapshot.history !== undefined ? snapshot.history : null
-          const pastCount = past !== null && typeof past.count === 'number' ? past.count : 0
-          if (pastCount > 0) {
-            rows.push(h('div', { key: 'h', className: 'ov-item ov-fact' }, [
-              h('span', { key: 'l', className: 'ov-fact-label' }, words.roundCountLabel),
-              h('span', { key: 'v', className: 'ov-fact-value' }, `${pastCount} ${words.roundUnit}`)
-            ]))
-          }
-          main.push(h('div', { key: 'body' }, [
-            h('h1', { key: 't' }, words.untitled),
-            h('div', { key: 'b', className: 'ov-brief' }, rows)
-          ]))
+          body.push(h('h1', { key: 't', className: 'ov-headline' }, words.untitled))
+          body.push(h('div', { key: 'e', className: 'ov-summary' }, words.nothingYet))
         } else {
           const brief = snapshot.brief !== null && snapshot.brief !== undefined ? snapshot.brief : null
-          const items = brief !== null && Array.isArray(brief.items) ? brief.items : []
+          const rawItems = brief !== null && Array.isArray(brief.items) ? brief.items : []
+          const items = rawItems.filter((item) => item !== null && item !== undefined && item.id !== 'no-facts')
           publishItems(roundOfSnapshot.roundId, items)
-          const meta = metaOf(roundOfSnapshot, now)
-          const parts = [h('h1', { key: 't' }, titleOf(roundOfSnapshot))]
-          if (meta.length > 0) parts.push(h('div', { key: 'm', className: 'ov-meta' }, meta.join(' · ')))
+          const updated = timeOf(roundOfSnapshot.contentAt, now)
+          body.push(h('div', { key: 'rb', className: 'ov-roundbar' }, [
+            h('span', { key: 'l', className: 'ov-round-label' }, readOnly === true ? words.lastRound : words.currentRound),
+            updated === '' ? null : h('span', { key: 'u', className: 'ov-round-label' }, `${words.updated} ${updated}`)
+          ]))
+          if (objective !== '') {
+            const goalState = goal !== null && typeof goal.state === 'string' ? goal.state : ''
+            const goalNote = goalState === 'complete' ? words.goalDone
+              : goalState === 'paused' ? words.goalPaused
+                : goalState === 'blocked' ? words.goalBlocked : ''
+            body.push(h('div', { key: 'g', className: 'ov-goal' }, [
+              h('span', { key: 'l', className: 'ov-goal-label' }, words.goalLabel),
+              h('span', { key: 't', className: 'ov-goal-text' }, objective),
+              goalNote === '' ? null : h('span', { key: 's', className: 'ov-goal-state' }, goalNote)
+            ]))
+          }
+          const roundTitle = titleOf(roundOfSnapshot)
+          if (roundTitle !== sessionTitle) body.push(h('h1', { key: 't', className: 'ov-headline' }, roundTitle))
           const notices = Array.isArray(snapshot.notices) ? snapshot.notices : []
           notices.forEach((entry, index) => {
-            parts.push(h(Notice, { key: `n${index}`, text: entry === null || entry === undefined ? '' : entry.text }))
+            body.push(h(Notice, { key: `n${index}`, text: entry === null || entry === undefined ? '' : entry.text }))
           })
-          parts.push(h('div', { key: 'b', className: 'ov-brief' }, items.map((item, index) => {
-            const key = itemKeyOf(roundOfSnapshot.roundId, item)
-            return h(BriefItem, {
-              key: `${key}:${index}`, item, itemKey: key, roundId: roundOfSnapshot.roundId,
-              tone: toneOfItem(item, snapshot), open: expandedRef.current.has(key),
-              evidenceOpen: evidenceOpenRef.current[key] === true,
-              onToggle: applyExpanded, onEvidence: applyEvidenceOpen, onOpenLink: openLink
+          if (items.length > 0) {
+            body.push(h('div', { key: 'ml', className: 'ov-section-label' }, words.milestones))
+            body.push(h('div', { key: 'b', className: 'ov-brief' }, items.map((item, index) => {
+              const key = itemKeyOf(roundOfSnapshot.roundId, item)
+              return h(BriefItem, {
+                key: `${key}:${index}`, item, itemKey: key, roundId: roundOfSnapshot.roundId,
+                tone: toneOfItem(item, snapshot), open: expandedRef.current.has(key),
+                evidenceOpen: evidenceOpenRef.current[key] === true,
+                onToggle: applyExpanded, onEvidence: applyEvidenceOpen, onOpenLink: openLink
+              })
+            })))
+          }
+          const seen = new Set(items.map((item) => String(item.text === undefined || item.text === null ? '' : item.text)))
+          const outputs = snapshot.outcomes !== null && snapshot.outcomes !== undefined && Array.isArray(snapshot.outcomes.items)
+            ? snapshot.outcomes.items.filter((item) => {
+              if (item === null || item === undefined) return false
+              const text = String(item.text ?? '')
+              if (text === '' || seen.has(text)) return false
+              seen.add(text)
+              return true
             })
-          })))
-          main.push(h('div', { key: 'body' }, parts))
+            : []
+          if (outputs.length > 0) {
+            body.push(h('div', { key: 'al', className: 'ov-section-label' }, words.artifacts))
+            body.push(h('div', { key: 'o', className: 'ov-brief' }, outputs.map((item, index) => {
+              const text = String(item.text)
+              const link = item.link !== null && item.link !== undefined && typeof item.link.path === 'string' ? item.link : null
+              return h(link === null ? 'div' : 'button', {
+                key: `out:${index}`,
+                type: link === null ? undefined : 'button',
+                className: 'ov-output-row',
+                'data-action': link === null ? undefined : 'open-path',
+                'data-path': link === null ? undefined : link.path
+              }, [
+                h('span', { key: 't', className: 'ov-output-text' }, text),
+                link === null ? null : h('span', { key: 'a', className: 'ov-output-arrow', 'aria-hidden': 'true' }, '›')
+              ])
+            })))
+          }
+          if (items.length === 0 && outputs.length === 0) {
+            body.push(h('div', { key: 'e', className: 'ov-summary' }, words.nothingYet))
+          }
+          if (pastCount > 0) {
+            body.push(h('button', { key: 'h', type: 'button', className: 'ov-history-more', 'data-action': 'history' }, [
+              h('span', { key: 't' }, `${words.historyHeading} · ${pastCount} ${words.roundUnit}`),
+              h('span', { key: 'a', className: 'ov-output-arrow', 'aria-hidden': 'true' }, '›')
+            ]))
+          }
         }
+        main.push(h('div', { key: 'body' }, body))
       }
-
       if (notice !== '') main.push(h(Notice, { key: 'notice', text: notice }))
 
       return h('section', { className: 'dsv-panel', onClick: onPanelClick }, [
