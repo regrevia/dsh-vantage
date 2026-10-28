@@ -825,6 +825,51 @@ async function testRoutes() {
     assert.equal(folded, 0, "the disabled read never folded the session log");
   });
 
+  test("snapshot: the round that just finished stays on screen after the reply seals it", () => {
+    const sealed = folded([
+      ...userTurn(0, "修一下概览页"),
+      ...changeCall(2, "c1", "client.js"),
+      ...checkCall(4, "c2", "pnpm test"),
+      finalMessage(6, "已经修好了，测试通过。"),
+      ev(7, "turn/end", { turn: 1, reason: { kind: "completed" } })
+    ]);
+    assert.equal(sealed.round, null, "a reply seals the open round");
+    assert.ok(sealed.settled?.round !== undefined, "the finished round waits in settled");
+    const body = buildSnapshot(runtime, session, sealed, "rev-sealed");
+    assert.equal(body.round?.roundId, sealed.settled.roundId, "the panel shows the round that just finished");
+    assert.equal(body.round.runtimeState, "idle", "nothing is running once the reply landed");
+    assert.equal(body.round.elapsedMs, sealed.settled.round.archivedAt - sealed.settled.round.startedAt, "a finished round stops its clock");
+    assert.ok(body.brief.items.some((item) => item.id !== "no-facts"), "the result is shown instead of a wait line");
+  });
+
+  test("snapshot: 历史 lists the rounds before the one on screen", () => {
+    const sealed = folded([
+      ...userTurn(0, "跑测试"),
+      ...checkCall(2, "c1", "pnpm test"),
+      finalMessage(4, "做完了"),
+      ev(5, "turn/end", { turn: 1, reason: { kind: "completed" } })
+    ]);
+    const shown = sealed.settled.roundId;
+    const older = { roundId: `${SESSION}:1`, title: "更早的一轮", statusLine: "", at: 1 };
+    const archived = [{ roundId: shown, title: "刚刚这一轮", statusLine: "", at: 2 }, older];
+    const withStore = { ...runtime, store: { count: () => archived.length, recent: () => archived } };
+    const body = buildSnapshot(withStore, session, sealed, "rev-history");
+    assert.deepEqual(body.history.items.map((item) => item.roundId), [older.roundId], "the shown round is not a previous round");
+    assert.equal(body.history.count, 1, "the count matches what 历史 can open");
+    assert.equal(body.history.hasMore, false);
+  });
+
+  await testAsync("history: the round on screen can be asked out of a page", async () => {
+    const shown = "session:9";
+    const page = { items: [{ roundId: shown }, { roundId: "session:8" }], nextCursor: "next" };
+    const withStore = { ...runtime, store: { ...store, page: () => page } };
+    const route = createRoutes(withStore).find((entry) => entry.path === ROUTES.history);
+    const answer = await route.fetch(new Request(`http://local${ROUTES.history}?session=${SESSION}&exclude=${shown}`));
+    const body = await answer.json();
+    assert.deepEqual(body.items.map((item) => item.roundId), ["session:8"]);
+    assert.equal(body.nextCursor, "next", "paging still works after the shown round is dropped");
+  });
+
   test("snapshot: a fresh summary replaces the fact lines without losing their evidence", () => {
     const fact = [...state.round.facts.values()][0];
     assert.ok(fact !== undefined, "the round recorded a fact");

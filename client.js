@@ -595,6 +595,9 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       const expandedRef = React.useRef(new Set())
       const evidenceRef = React.useRef({})
       const itemRef = React.useRef({})
+      // 历史 means the rounds before the one on screen, so the shown round is
+      // asked out of every page, including pages loaded later.
+      const shownRoundRef = React.useRef('')
 
       // One monotonic counter per channel: an answer to an older question must
       // never overwrite a newer one, and nothing lands after unmount.
@@ -661,6 +664,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         setLoading(false)
         if (answer.body.kind === 'unchanged') return
         revisionRef.current = answer.body.revision
+        shownRoundRef.current = typeof answer.body.round?.roundId === 'string' ? answer.body.round.roundId : ''
         setSnapshot(answer.body)
       }, [claim, sessionId])
 
@@ -739,6 +743,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         setHistoryFailed(false)
         const query = new URLSearchParams({ session: sessionId, limit: String(HISTORY_PAGE) })
         if (typeof cursor === 'string' && cursor !== '') query.set('cursor', cursor)
+        if (shownRoundRef.current !== '') query.set('exclude', shownRoundRef.current)
         const answer = await callHost(`/history?${query.toString()}`)
         if (fresh() !== true) return
         setHistoryLoading(false)
