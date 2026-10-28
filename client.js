@@ -1042,26 +1042,40 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       } catch (error) {}
     }
 
+    // The Cordis context proxy throws on a property that the plugin did not
+    // declare in `inject`, and `effect` is a built-in, not an injectable
+    // service. Probe it defensively: reading it is what throws.
+    function contextEffect(ctx) {
+      try {
+        const effect = ctx === null || ctx === undefined ? undefined : ctx.effect
+        return typeof effect === 'function' ? effect : null
+      } catch (error) {
+        return null
+      }
+    }
+
     function apply(ctx) {
       registerLocale(ctx)
       LANG = langOf(ctx)
       const locale = ctx === null || ctx === undefined ? undefined : ctx.locale
-      if (locale !== null && locale !== undefined && typeof locale.subscribe === 'function' && typeof ctx.effect === 'function') {
+      const effect = contextEffect(ctx)
+      if (locale !== null && locale !== undefined && typeof locale.subscribe === 'function' && effect !== null) {
         try {
-          ctx.effect(() => locale.subscribe(() => {
+          effect.call(ctx, () => locale.subscribe(() => {
             LANG = langOf(ctx)
             notifyLocale()
           }), 'dsh-vantage-locale')
         } catch (error) {}
       }
       LANG = langOf(ctx)
-      ctx.slots.register({
+      // `conversation.view` passes `sessionId` as a standard prop, so the View
+      // reads it directly. Registration is declared through `slots.inject` so
+      // the loader's entry graph accepts this plugin as a contributor.
+      ctx.slots.inject('conversation.view', () => ctx.slots.register({
+        name: 'conversation.view',
         id: VIEW_ID, order: 20,
-        title: () => copy().overview, label: () => copy().overview,
-        inject: (session) => ({
-          sessionId: typeof session === 'string' ? session : session === null || session === undefined ? '' : session.id
-        })
-      }, View)
+        label: () => copy().overview
+      }, View))
       return { inject: ['slots', 'locale'] }
     }
 

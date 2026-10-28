@@ -2,7 +2,7 @@
  * Contract tests for dsh-vantage.
  *
  * Run with `node test/run.mjs`. Everything here is deterministic and offline:
- * the reducer, the bounded store, the budget/lease accounting, and the HTTP
+ * the reducer, the bounded store, the switch/summary lifecycle, and the HTTP
  * payload shapes are exercised without a harness process, a model, or a
  * privileged connection.
  */
@@ -1117,10 +1117,14 @@ function testClient() {
   // at boot and leaves the shell entry stuck on loading.
   assert.deepEqual(plugin.inject, ["slots", "locale"]); // ui-copy-ignore
   let registration;
+  let injectedSlot = "";
   const ctx = {
     locale: { getSnapshot: () => ({ active: "zh" }) },
     slots: {
-      inject: (name, run) => run(),
+      inject: (name, run) => {
+        injectedSlot = name;
+        return run();
+      },
       register: (definition, Component) => {
         registration = definition;
         return Component;
@@ -1128,12 +1132,18 @@ function testClient() {
     }
   };
   plugin.apply(ctx);
+  // The slot graph only accepts a contribution declared through slots.inject;
+  // a bare register() fails boot with "slot ... is not declared".
+  assert.equal(injectedSlot, "conversation.view");
+  assert.equal(registration.name, "conversation.view");
   assert.equal(registration.id, "vantage");
   assert.equal(registration.label(), "概览");
-  assert.deepEqual(registration.inject("session-1"), { sessionId: "session-1" });
+  // conversation.view passes sessionId as a standard prop, not an injected view prop.
+  assert.equal(registration.inject, undefined);
 
   const en = { locale: { getSnapshot: () => ({ active: "en" }) }, slots: ctx.slots };
   plugin.apply(en);
+  assert.equal(registration.name, "conversation.view");
   assert.equal(registration.label(), "Overview");
 }
 
