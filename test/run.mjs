@@ -675,6 +675,18 @@ await testAsync("store: a broken storage domain degrades to memory", async () =>
   assert.equal(store.abandoned, false);
 });
 
+// --- client module ----------------------------------------------------------
+
+test("client: registers exactly one view and stays inside the panel", () => {
+  const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
+  assert.equal(source.match(/ctx\.slots\.register\(/gu)?.length, 1, "one registration, never two");
+  assert.ok(source.includes("const VIEW_ID = 'vantage'"), "the view keeps its documented id");
+  assert.ok(source.includes("id: VIEW_ID"), "the registration uses that id");
+  assert.ok(source.includes("inject: ['slots', 'locale']"), "the module declares what it needs");
+  assert.ok(!source.includes("document.body.appendChild"), "no overlay is mounted on the page");
+  assert.equal(source.match(/createPortal/gu), null, "the panel is not teleported out of its slot");
+});
+
 // --- session switches -------------------------------------------------------
 
 const fakeSession = (id, extra = {}) => ({ id, header: { createdAt: 1, cwd: "/w" }, ...extra });

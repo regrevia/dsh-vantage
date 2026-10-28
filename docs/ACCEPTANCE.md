@@ -40,7 +40,9 @@ template, installs this checkout the way a user does, boots it, and asserts:
 - the served bundle is this checkout's `client.js` plus the source-map trailer;
 - `/api/dsh-vantage/snapshot` answers `401` anonymously and a structured
   refusal for a session the reader does not own;
-- no entry reported a failed activation during boot.
+- no entry reported a failed activation during boot;
+- exactly one `conversation.view` registration exists and it keeps the id
+  `vantage` (`client: registers exactly one view and stays inside the panel`).
 
 ## Known gaps
 
