@@ -21,6 +21,23 @@ returns the moment you switch back to the conversation. That is a scoped
 attribute plus one CSS rule on the host’s own seat, not a DOM rewrite — the
 host keeps ownership of its chrome.
 
+### When the first read fails
+
+The view reads one `GET /snapshot` when it mounts and then polls. A cold plugin
+load, a Host route that is still mounting, or a dropped request used to leave the
+panel on 「正在读取」 until someone pressed the retry button — that is the
+intermittent blank panel users hit after a refresh. The client now retries by
+itself: four attempts at 400 ms, 1.6 s, 3.6 s and 6.4 s, reset on the first
+success and on a session switch, and cleaned up when the view unmounts. After the
+fourth failure it stays on the manual retry state instead of spinning forever.
+
+Buttons follow the host's own button language rather than bare browser defaults:
+28 px tall pills (`border-radius: 999px`), a 1 px `--dsw-alias-border-l1` hairline
+on the secondary and a filled `--dsw-alias-brand-primary` with
+`--dsw-alias-bg-base` text on the primary, 120 ms colour transitions, an
+`aria-pressed` outline state for the follow toggle, and a visible focus ring. All
+four values come from host tokens, so dark mode needs no separate rule.
+
 A round is a product-level unit, not a turn or a step. A reply closes a round, but
 "replied" never means "verified". An empty verification list reads 「尚未明确」 and
 never passes by default.
@@ -78,7 +95,7 @@ never takes part in scheduling or completion decisions.
 ## Development
 
 ```bash
-node test/run.mjs      # 57 tests: reducer, budget, storage, routes
+node test/run.mjs      # 58 tests: reducer, budget, storage, routes
 node scripts/lint.mjs  # tests, zh-lint, style-lint, ui-copy-lint
 ```
 
@@ -89,8 +106,9 @@ from the repository, so a clean checkout needs no files outside itself.
 `zh-ellipsis` is waived in `.zh-lint.json` because the rule fires on JavaScript
 spread syntax, not on prose.
 
-Design constraints live in the source: the panel uses only the 14 host theme
-tokens, a single column, scoped `.dsv-` classes, and no remote fonts.
+Design constraints live in the source: the panel uses only host `--dsw-*`
+tokens, a single column (760 px, 28–32 px padding), scoped `.dsv-` classes, no
+remote fonts, at most two radii (`999px` and `0`), no shadows, and no gradients.
 
 ## License
 

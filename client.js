@@ -225,7 +225,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-meta {
   display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-secondary); font-variant-numeric: tabular-nums;
 }
-.dsv-head-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; min-height: 24px; }
+.dsv-head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 28px; }
 .dsv-head-state { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .dsv-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--dsw-alias-label-secondary); }
 .dsv-dot[data-tone="info"] { background: var(--dsw-alias-brand-primary); }
@@ -240,7 +240,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 }
 .dsv-brief-head:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
 .dsv-brief-text { overflow-wrap: anywhere; }
-.dsv-qual { align-self: start; padding: 0 8px; border-radius: 6px; border: 1px solid var(--dsw-alias-border-l2); color: var(--dsw-alias-state-warn-primary); font-size: 12px; line-height: 20px; white-space: nowrap; }
+.dsv-qual { align-self: start; padding: 0 8px; border-radius: 999px; border: 1px solid var(--dsw-alias-border-l2); color: var(--dsw-alias-state-warn-primary); font-size: 12px; line-height: 20px; white-space: nowrap; }
 .dsv-chevron { color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 22px; }
 .dsv-detail { display: flex; flex-direction: column; gap: 8px; padding: 0 0 16px 26px; }
 .dsv-detail-row { display: flex; gap: 8px; min-width: 0; font-size: 14px; line-height: 22px; }
@@ -268,9 +268,22 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-text { overflow-wrap: anywhere; }
 .dsv-sub { font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
 .dsv-link {
-  align-self: flex-start; min-height: 32px; padding: 4px 0; border: 0; background: transparent; color: var(--dsw-alias-brand-primary); font: inherit; font-size: 12px; line-height: 20px; cursor: pointer;
+  align-self: flex-start; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 28px; padding: 0 12px; margin: 0; border-radius: 999px; box-sizing: border-box;
+  border: 1px solid var(--dsw-alias-border-l1); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-secondary);
+  font: inherit; font-size: 12px; line-height: 20px; font-weight: 500; white-space: nowrap; cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }
-.dsv-link:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+.dsv-link:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.dsv-link:active:not(:disabled) { border-color: var(--dsw-alias-border-l2); }
+.dsv-link:disabled { opacity: 0.45; cursor: default; }
+.dsv-link:focus-visible { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-brand-primary)); outline-offset: 2px; }
+.dsv-link[data-variant="primary"] {
+  border-color: transparent; background: var(--dsw-alias-brand-primary); color: var(--dsw-alias-bg-base);
+}
+.dsv-link[data-variant="primary"]:hover:not(:disabled) { background: var(--dsw-alias-label-secondary); color: var(--dsw-alias-bg-base); }
+.dsv-link[aria-pressed="true"] { border-color: var(--dsw-alias-brand-primary); background: transparent; color: var(--dsw-alias-brand-primary); }
+.dsv-count { font-variant-numeric: tabular-nums; }
 .dsv-evidence { display: flex; flex-direction: column; gap: 8px; }
 .dsv-evidence-item {
   padding: 10px 12px; border-radius: 6px; background: var(--dsw-alias-bg-layer-1); border: 1px solid var(--dsw-alias-border-l1);
@@ -295,12 +308,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-foot {
   display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-top: 16px; border-top: 1px solid var(--dsw-alias-border-l1);
 }
-.dsv-button {
-  min-height: 36px; padding: 0 14px; border-radius: 6px; border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); font: inherit; font-size: 14px; cursor: pointer;
-}
-.dsv-button[aria-pressed="true"] { border-color: var(--dsw-alias-brand-primary); color: var(--dsw-alias-brand-primary); }
-.dsv-button:disabled { color: var(--dsw-alias-label-secondary); cursor: default; }
-.dsv-button:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
 .dsv-empty {
   display: flex; flex-direction: column; gap: 6px; padding: 48px 0; color: var(--dsw-alias-label-secondary);
 }
@@ -476,7 +483,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       if (props.state === 'unreadable') {
         return h('div', { className: 'dsv-evidence' }, [
           h('div', { key: 'm', className: 'dsv-sub' }, copy().evidenceUnreadable),
-          h('button', { key: 'r', type: 'button', className: 'dsv-link', onClick: props.onRetry }, copy().retry)
+          h('button', { key: 'r', type: 'button', className: 'dsv-link', 'data-variant': 'primary', onClick: props.onRetry }, copy().retry)
         ])
       }
       if (!Array.isArray(props.refs) || props.refs.length === 0) return h('div', { className: 'dsv-sub' }, copy().evidenceEmpty)
@@ -504,7 +511,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         return h('section', { className: 'dsv-viewing' }, [
           head,
           h('div', { key: 'f', className: 'dsv-sub' }, copy().historyFailed),
-          h('button', { key: 'r', type: 'button', className: 'dsv-link', onClick: props.onRetry }, copy().retry)
+          h('button', { key: 'r', type: 'button', className: 'dsv-link', 'data-variant': 'primary', onClick: props.onRetry }, copy().retry)
         ])
       }
       const conditions = round.verification !== null && round.verification !== undefined && Array.isArray(round.verification.conditions)
@@ -558,6 +565,9 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       const revisionRef = React.useRef(null)
       const aliveRef = React.useRef(true)
       const seqRef = React.useRef({})
+      const retryRef = React.useRef(0) // ui-copy-ignore
+      const retryTimer = React.useRef(null) // ui-copy-ignore
+      const loadHolder = React.useRef(null) // ui-copy-ignore
 
       // One monotonic counter per channel: a late answer to an older question
       // must never overwrite a newer one, and nothing lands after unmount.
@@ -580,9 +590,27 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         })
       }, [])
 
+      const scheduleRetry = () => {
+        if (retryRef.current >= 4) return
+        retryRef.current += 1
+        if (retryTimer.current !== null) clearTimeout(retryTimer.current)
+        retryTimer.current = setTimeout(() => {
+          retryTimer.current = null
+          if (aliveRef.current !== true) return
+          const again = loadHolder.current
+          if (typeof again === 'function') again(true)
+        }, 400 * retryRef.current * retryRef.current)
+      }
+
       const load = React.useCallback(async (force) => {
         const fresh = claim('snapshot')
         if (fresh === null) return
+        if (typeof sessionId !== 'string' || sessionId === '') {
+          setLoading(true)
+          setFailed(false)
+          scheduleRetry()
+          return
+        }
         const query = new URLSearchParams({ session: sessionId })
         if (!force && revisionRef.current !== null) query.set('revision', revisionRef.current)
         const answer = await callHost(`/snapshot?${query.toString()}`) // ui-copy-ignore
@@ -595,8 +623,12 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         if (answer.failed === true || answer.body === null) {
           setFailed(true)
           setLoading(false)
+          scheduleRetry()
           return
         }
+        if (retryTimer.current !== null) clearTimeout(retryTimer.current)
+        retryTimer.current = null
+        retryRef.current = 0
         setBlocked(false)
         setFailed(false)
         setLoading(false)
@@ -613,7 +645,18 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         setViewing(null)
         setEvidence(null)
         setOpenHistory(false)
+        retryRef.current = 0
+        if (retryTimer.current !== null) clearTimeout(retryTimer.current)
+        retryTimer.current = null
         load(true)
+      }, [load])
+
+      React.useEffect(() => {
+        loadHolder.current = load
+        return () => {
+          if (retryTimer.current !== null) clearTimeout(retryTimer.current)
+          retryTimer.current = null
+        }
       }, [load])
 
       React.useEffect(() => {
@@ -769,7 +812,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         return h('div', { className: 'dsv-root' }, h('div', { className: 'dsv-panel' },
           h('div', { className: 'dsv-empty' }, [
             h('div', { key: 't', className: 'dsv-empty-title' }, copy().failedTitle),
-            h('button', { key: 'r', type: 'button', className: 'dsv-link', onClick: () => load(true) }, copy().retry)
+            h('button', { key: 'r', type: 'button', className: 'dsv-link', 'data-variant': 'primary', onClick: () => load(true) }, copy().retry)
           ])))
       }
       if (snapshot === null || snapshot.round === null) {
@@ -813,7 +856,10 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
             ]),
             snapshot.history.count === 0 ? null : h('button', {
               key: 'h', type: 'button', className: 'dsv-link', onClick: expandHistory, 'aria-expanded': openHistory
-            }, `${copy().history} ${snapshot.history.count}`)
+            }, [
+              h('span', { key: 'l' }, copy().history),
+              h('span', { key: 'n', className: 'dsv-count' }, snapshot.history.count)
+            ])
           ]),
           h('h2', { key: 't', className: 'dsv-title' }, round.title),
           h('div', { key: 'm', className: 'dsv-meta' }, [
@@ -880,7 +926,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           }, copy().historyAll) : null
         ]) : null,
         h('div', { key: 'foot', className: 'dsv-foot' }, [
-          h('button', { key: 'req', type: 'button', className: 'dsv-link', onClick: requestSummary, disabled: busy },
+          h('button', { key: 'req', type: 'button', className: 'dsv-link', 'data-variant': 'primary', onClick: requestSummary, disabled: busy },
             busy ? copy().requesting : copy().request),
           h('button', {
             key: 'auto', type: 'button', className: 'dsv-link', 'aria-pressed': snapshot.coverage.summaryAuto,
