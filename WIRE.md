@@ -109,7 +109,9 @@ ones do — so a quiet round may hold a single change row and a status line. Whe
 confirmed the host sends one `no-facts` row with `label: "待办"` and `value: "无"`; the client
 renders it as a plain label and value, never as a control, and adds no placeholder of its own.
 A round title never carries machine markup: a goal objective such as `<goal_round>` is dropped
-and the round keeps the human's opening request.
+and the round keeps the human's opening request. When neither source is readable the host sends
+`title: ""` and the client shows its own 「本次任务」 heading — an unknown title is never invented
+from a payload tag.
 
 ## History
 
