@@ -7,6 +7,15 @@ Nothing in this view schedules, stops, or completes work. It observes session
 events that already happened and renders them: the current round's work topics,
 the evidence behind each one, and a bounded history of earlier rounds.
 
+## Preview
+
+| Live session | Saved session | Saved history |
+| --- | --- | --- |
+| ![Fresh live overview](docs/preview/live-fresh-overview.png) | ![Saved Envoy overview](docs/preview/archived-envoy-overview.png) | ![Saved session history](docs/preview/archived-envoy-history.png) |
+
+Captured from a real installed profile: the live session is a fresh turn, the
+saved sessions are existing archives opened without turning the switch on.
+
 ## What it shows
 
 - **One to three work topics** — what changed, what is still being checked, what

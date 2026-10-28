@@ -26,7 +26,7 @@ window.__ModuleLoader__.load({
         historyHeading: '历史', // ui-copy-ignore
         pendingLabel: '待办', // ui-copy-ignore
         goalLabel: '目标', // ui-copy-ignore
-        milestones: '本轮已推进', // ui-copy-ignore
+        milestones: '里程碑', // ui-copy-ignore
         artifacts: '关键产物', // ui-copy-ignore
         archived: '已保存', // ui-copy-ignore
         currentRound: '当前轮', // ui-copy-ignore
@@ -98,7 +98,7 @@ window.__ModuleLoader__.load({
         historyHeading: 'History', // ui-copy-ignore
         pendingLabel: 'Todo', // ui-copy-ignore
         goalLabel: 'Goal', // ui-copy-ignore
-        milestones: 'Progress this round', // ui-copy-ignore
+        milestones: 'Milestones', // ui-copy-ignore
         artifacts: 'Key outputs', // ui-copy-ignore
         archived: 'Saved', // ui-copy-ignore
         currentRound: 'Current round', // ui-copy-ignore
