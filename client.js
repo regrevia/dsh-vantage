@@ -454,10 +454,14 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       return `${round}:${id}`
     }
 
+    // A title is checked again here so one missed path can never put
+    // `<goal_round>` on screen.
     function titleOf(round) {
       const title = round === null || round === undefined ? undefined : round.title
-      const text = typeof title === 'string' ? title.trim() : ''
-      return text === '' ? copy().untitled : text
+      const raw = typeof title === 'string' ? title : ''
+      const text = raw.replace(/<[^<>\n]{0,80}>/gu, ' ').replace(/\s+/gu, ' ').trim()
+      const clean = /[<>]/u.test(text) ? '' : text
+      return clean === '' ? copy().untitled : clean
     }
 
     function metaOf(round, now) {

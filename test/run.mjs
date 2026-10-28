@@ -738,6 +738,14 @@ test("client: only a row with more to show is a control", () => {
   assert.ok(source.includes("'ov-fact-label'"), "a pending row renders as label and value");
 });
 
+test("client: a heading can never carry payload markup", () => {
+  const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
+  const titleOf = source.slice(source.indexOf("function titleOf"), source.indexOf("function titleOf") + 600);
+  assert.ok(titleOf.includes("replace(/<"), "the panel strips a tag-shaped title");
+  assert.ok(titleOf.includes("[<>]"), "and refuses one it cannot strip");
+  assert.ok(titleOf.includes("untitled"), "falling back to a plain heading instead");
+});
+
 test("locale: every dictionary line is one the panel really renders", () => {
   const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
   for (const lang of ["zh", "en"]) {
