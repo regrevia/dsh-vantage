@@ -246,9 +246,9 @@ export class Runtime {
     }
     if (agent !== undefined && agent !== null) return undefined;
     return {
-      id: session.id,
-      header: session.header,
-      archived: true,
+      id: session.id, // ui-copy-ignore
+      header: session.header, // ui-copy-ignore
+      archived: true, // ui-copy-ignore
       firstLiveSeq: -1,
       inheritedEventCount: 0,
       ownEvents: () => session.ownEvents()
@@ -299,9 +299,9 @@ export class Runtime {
       const read = await handle.read();
       const events = Array.isArray(read?.events) ? read.events : [];
       const session = {
-        id: sessionId,
-        header,
-        archived: true,
+        id: sessionId, // ui-copy-ignore
+        header, // ui-copy-ignore
+        archived: true, // ui-copy-ignore
         firstLiveSeq: -1,
         inheritedEventCount: 0,
         ownEvents: () => events

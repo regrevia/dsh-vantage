@@ -30,7 +30,7 @@ node scripts/accept-installed.mjs # booted profile: module listed, bundle served
 | A13 | A fork of an enabled session starts disabled | `switch: enabling one session never enables another, and a fork starts off` | covered |
 | A14 | No hourly token or request quota can pause the plugin or show a countdown | `schema: the documented statuses no longer include a spent budget` | covered |
 | A15 | 360 px, desktop, light and dark stay readable with no horizontal overflow and keyboard controls | `.ov-` styles and `@media (max-width:560px)` in `client.js`; no committed check | code |
-| A16 | A saved session opens read-only: real title, agent, last round and history, with no switch, record, or model call | `snapshot: an archived session is readable without its switch and says it is saved`, `round: an archived round never claims to be running`, `enable and summary: a saved session refuses both instead of recording` | covered |
+| A16 | A saved session opens read-only: real title, agent, last round and history, with no switch, record, or model call | `snapshot: an archived session is readable without its switch and says it is saved`, `round: an archived round never claims to be running`, `enable and summary: a saved session refuses both instead of recording`; a transcript with no tool facts shows its closing reply (`snapshot: a saved transcript with no tool facts shows its closing reply`, `…unfinished saved round…`, `…aborted saved turn…`) | covered |
 
 ## Installed-artifact proof (D1)
 
@@ -45,6 +45,23 @@ template, installs this checkout the way a user does, boots it, and asserts:
 - exactly one `conversation.view` registration exists and it keeps the id
   `vantage` (`client: registers exactly one view and stays inside the panel`).
 
+## Real restart check (2026-10-29 06:37)
+
+The desktop app was quit and reopened while this checkout was installed. The
+host came back on a new port (`57282` → `57911`, host pid `34072`) with the plugin
+already active; no reinstall or re-enable was needed. In the new window:
+
+- `session-fcc6fb36-…` (`DSH的APP开发`) answers `200` with `coverage.archived: true`,
+  `readOnly: true`, `enabled: false` and status `已保存`; the switch is gone.
+- `session-74575c14-…` (`DeepSeek 随身宠物语音硬件调研`) answers `200` with
+  `readOnly: true`, `已保存`, and renders its quoted last reply
+  (`最近回复`) instead of an empty line. Screenshot:
+  `docs/preview/saved-session-reply.png`.
+
+Reproduce by opening a saved session in the Overview tab after relaunching the
+app; the view must not offer a switch and must show the last round without a
+request being sent.
+
 ## Known gaps
 
 - Live mounting in the installed desktop profile is proven by the throwaway
@@ -53,4 +70,4 @@ template, installs this checkout the way a user does, boots it, and asserts:
 - A15 and A03 have no machine check; a future screenshot pass has to supply
   them.
 
-- **A16b — existing saved session in the running window.** `session-cf5330e1-…` opened from the Envoy workspace after reloading `dsh-vantage`; the overview shows Cordis, 已保存, the real title, 里程碑, 关键产物, and 历史 · 8 轮. Screenshot: `docs/preview/main-gui-archived.png`.
+- **A16b — existing saved session in the running window.** `session-74575c14-…` opened after a real app restart on 2026-10-29 06:37; the overview shows Cordis, 已保存, the real title, the paused goal, and a quoted `最近回复`. Screenshot: `docs/preview/saved-session-reply.png`.
