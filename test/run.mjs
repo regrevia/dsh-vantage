@@ -837,6 +837,25 @@ await testAsync("history: a cold tab is read-only even while the session registr
   assert.equal(unknown.hasHistory({ id: "empty", archived: false, ownEvents: () => [] }), false, "a blank session has nothing to read");
 });
 
+await testAsync("history: opening a stored session keeps its projection, not its events", async () => {
+  const events = [...userTurn(0, "跑测试"), ...checkCall(2, "c1", "pnpm test")];
+  let closed = 0;
+  const persistence = {
+    stat: async () => ({ header: { createdAt: 1, cwd: "/w" } }),
+    open: async () => ({
+      read: async () => ({ events }),
+      close: async () => { closed += 1; }
+    })
+  };
+  const runtime = new Runtime({ get: (name) => (name === "sessionPersistence" ? persistence : undefined) }, DEFAULT_CONFIG, () => {});
+  const session = await runtime.archivedSession("old");
+  assert.equal(closed, 1, "the read handle is closed");
+  assert.deepEqual(session.ownEvents(), [], "no event array is retained by the adapter");
+  const state = runtime.stateOf(session);
+  assert.equal(state?.round?.title, "跑测试", "the projection was folded once from the stored log");
+  assert.equal(runtime.stateOf(session), state, "later reads reuse that projection");
+});
+
 // --- http payloads ----------------------------------------------------------
 
 async function testRoutes() {

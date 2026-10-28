@@ -304,8 +304,15 @@ export class Runtime {
         archived: true, // ui-copy-ignore
         firstLiveSeq: -1,
         inheritedEventCount: 0,
-        ownEvents: () => events
+        ownEvents: () => []
       };
+      // Fold once here and cache the small projection. Keeping the event array
+      // for the cache TTL used to pin a whole transcript (tens of MB) per open
+      // historical session, and three of those were enough to OOM the host.
+      const state = initState(sessionId);
+      for (const event of events) foldEvent(state, event);
+      this.cache.set(sessionId, { state, key: identityOf(session), seen: 0, at: this.now() });
+      this.trimCache(sessionId);
       this.archivedLogs.set(sessionId, { at: this.now(), session });
       if (this.archivedLogs.size > 3) {
         const oldest = [...this.archivedLogs.entries()].sort((left, right) => left[1].at - right[1].at)[0];
