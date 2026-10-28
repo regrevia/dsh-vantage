@@ -25,6 +25,8 @@ window.__ModuleLoader__.load({
         history: '历史', // ui-copy-ignore
         historyHeading: '历史', // ui-copy-ignore
         pendingLabel: '待办', // ui-copy-ignore
+        roundCountLabel: '历史', // ui-copy-ignore
+        roundUnit: '轮', // ui-copy-ignore
         none: '无', // ui-copy-ignore
         historyEmpty: '还没有更早的轮次', // ui-copy-ignore
         historyLoading: '正在读取历史', // ui-copy-ignore
@@ -82,6 +84,8 @@ window.__ModuleLoader__.load({
         history: 'History', // ui-copy-ignore
         historyHeading: 'History', // ui-copy-ignore
         pendingLabel: 'Todo', // ui-copy-ignore
+        roundCountLabel: 'History', // ui-copy-ignore
+        roundUnit: 'rounds', // ui-copy-ignore
         none: 'None', // ui-copy-ignore
         historyEmpty: 'No earlier rounds yet', // ui-copy-ignore
         historyLoading: 'Reading history', // ui-copy-ignore
@@ -468,6 +472,8 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       const words = copy()
       if (round === null || round === undefined) return []
       const parts = []
+      const status = statusTextOf(round)
+      if (status !== '') parts.push(status)
       if (typeof round.elapsedMs === 'number') parts.push(`${words.elapsed} ${durationOf(round.elapsedMs)}`)
       if (typeof round.contentAt === 'number' && round.contentAt > 0) parts.push(`${words.updated} ${timeOf(round.contentAt, now)}`)
       const verify = verifyTextOf(round)
@@ -957,7 +963,10 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           const parts = [h('h1', { key: 't' }, titleOf(round))]
           if (meta.length > 0) parts.push(h('div', { key: 'm', className: 'ov-meta' }, meta.join(' · ')))
           parts.push(h('div', { key: 'b', className: 'ov-brief' }, items.length === 0
-            ? [h('div', { key: 'e', className: 'ov-sub' }, words.historyEmpty)]
+            ? [h('div', { key: 'e', className: 'ov-item ov-fact' }, [
+              h('span', { key: 'l', className: 'ov-fact-label' }, words.pendingLabel),
+              h('span', { key: 'v', className: 'ov-fact-value' }, words.none)
+            ])]
             : items.map((item, index) => {
               const key = itemKeyOf(round.roundId, item)
               return h(BriefItem, {
@@ -979,14 +988,23 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       } else {
         const roundOfSnapshot = snapshot !== null && snapshot.round !== undefined ? snapshot.round : null
         if (roundOfSnapshot === null) {
+          const rows = [
+            h('div', { key: 'f', className: 'ov-item ov-fact' }, [
+              h('span', { key: 'l', className: 'ov-fact-label' }, words.pendingLabel),
+              h('span', { key: 'v', className: 'ov-fact-value' }, words.none)
+            ])
+          ]
+          const past = snapshot !== null && snapshot.history !== null && snapshot.history !== undefined ? snapshot.history : null
+          const pastCount = past !== null && typeof past.count === 'number' ? past.count : 0
+          if (pastCount > 0) {
+            rows.push(h('div', { key: 'h', className: 'ov-item ov-fact' }, [
+              h('span', { key: 'l', className: 'ov-fact-label' }, words.roundCountLabel),
+              h('span', { key: 'v', className: 'ov-fact-value' }, `${pastCount} ${words.roundUnit}`)
+            ]))
+          }
           main.push(h('div', { key: 'body' }, [
             h('h1', { key: 't' }, words.untitled),
-            h('div', { key: 'b', className: 'ov-brief' }, [
-              h('div', { key: 'f', className: 'ov-item ov-fact' }, [
-                h('span', { key: 'l', className: 'ov-fact-label' }, words.pendingLabel),
-                h('span', { key: 'v', className: 'ov-fact-value' }, words.none)
-              ])
-            ])
+            h('div', { key: 'b', className: 'ov-brief' }, rows)
           ]))
         } else {
           const brief = snapshot.brief !== null && snapshot.brief !== undefined ? snapshot.brief : null

@@ -48,5 +48,7 @@
   "verify.na": "",
   "untitled": "Current task",
   "pendingLabel": "Todo",
-  "none": "None"
+  "none": "None",
+  "roundCountLabel": "History",
+  "roundUnit": "rounds"
 }

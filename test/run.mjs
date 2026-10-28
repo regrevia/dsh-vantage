@@ -908,9 +908,10 @@ async function testRoutes() {
     assert.equal(body.round.runtimeState, "idle", "nothing is running once the reply landed");
     assert.equal(body.round.elapsedMs, sealed.settled.round.archivedAt - sealed.settled.round.startedAt, "a finished round stops its clock");
     assert.equal(body.brief.items.length, 1, JSON.stringify(body.brief.items.map((item) => item.text)));
-    assert.equal(body.brief.items[0].id, "no-facts", "a reply with nothing actionable says so plainly");
-    assert.equal(body.brief.items[0].label, "待办", "the row names what is pending");
-    assert.equal(body.brief.items[0].value, "无", "and says there is none");
+    assert.notEqual(body.brief.items[0].id, "no-facts", "a sealed round keeps its one real line");
+    assert.ok(body.brief.items[0].text.includes("已修改"), "the line says what the round changed");
+    assert.equal(body.brief.items[0].label, undefined, "a change is a sentence, not a label row");
+    assert.equal(body.brief.items[0].link, undefined, "and it promises no file that it cannot open");
   });
 
   test("snapshot: the heading falls back to a readable goal, never a payload tag", () => {
@@ -999,7 +1000,7 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
     assert.equal(body.brief.items[0].link.path, "/Users/apple/CreatorStudio/deliver/out.mp4", "the row still opens the file");
   });
 
-  test("snapshot: an edit is work, never a finding of its own", () => {
+  test("snapshot: an edit alone still says what changed", () => {
     const edited = folded([
       ...userTurn(0, "重构首页"),
       ...changeCall(2, "w1", "site/a.md"),
@@ -1008,8 +1009,9 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
     const body = buildSnapshot(runtime, session, edited, "rev-edits");
     const rows = body.brief.items;
     assert.equal(rows.length, 1, JSON.stringify(rows.map((row) => row.text)));
-    assert.equal(rows[0].id, "no-facts", "with nothing actionable there is one plain line");
-    assert.equal(JSON.stringify(body).includes("site/a.md"), false, "file names stay off the brief");
+    assert.equal(rows[0].source, "rule", "the line is read from the round, not written by a model");
+    assert.ok(rows[0].text.startsWith("已修改 "), "it names the work in progress");
+    assert.equal(JSON.stringify(body).includes("site/a.md"), false, "full paths stay off the brief; basenames are enough");
   });
 
   test("snapshot: a delivered file opens from the line that names it", () => {
@@ -1033,7 +1035,7 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
     const body = buildSnapshot(runtime, session, round, "rev-stale");
     const texts = body.brief.items.map((item) => item.text);
     assert.equal(texts.some((text) => text.includes("通过")), false, JSON.stringify(texts));
-    assert.equal(body.brief.items[0].id, "no-facts", "an edit with a spent check is not a result either");
+    assert.ok(body.brief.items[0].text.includes("已修改"), "the edit is the one line the reader gets");
   });
 
   test("snapshot: the same headline from two topics is shown once", () => {

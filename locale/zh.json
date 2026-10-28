@@ -48,5 +48,7 @@
   "verify.na": "",
   "untitled": "本次任务",
   "pendingLabel": "待办",
-  "none": "无"
+  "none": "无",
+  "roundCountLabel": "历史",
+  "roundUnit": "轮"
 }
