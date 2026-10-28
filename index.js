@@ -308,7 +308,7 @@ export class Runtime {
       };
       // Fold once here and cache the small projection. Keeping the event array
       // for the cache TTL used to pin a whole transcript (tens of MB) per open
-      // historical session, and three of those were enough to OOM the host.
+      // historical session, and three of those could exhaust the process heap.
       const state = initState(sessionId);
       for (const event of events) foldEvent(state, event);
       this.cache.set(sessionId, { state, key: identityOf(session), seen: 0, at: this.now() });
