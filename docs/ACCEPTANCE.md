@@ -26,7 +26,7 @@ node scripts/accept-installed.mjs # booted profile: module listed, bundle served
 | A09 | A failed summary keeps the last valid brief and its true time | `summaries` is written only after `publishVerdict`; `snapshot: a fresh summary replaces the fact lines without losing their evidence` | code |
 | A10 | Contradicting evidence invalidates an older success without waiting for a summary | `rounds: a file written after a pass puts the check back to recheck`, `rounds: a non-zero tool result is evidence, never a task failure` | covered |
 | A11 | A historical round and the current view never render together | pager state in `client.js`, `store.page` | code |
-| A12 | Opening one topic shows only its own evidence, not the whole round | `snapshot: every brief item carries clean inline evidence`, `evidence: excerpts are plain text, never payloads` | covered |
+| A12 | Opening one topic shows only its own evidence, not the whole round | `snapshot: rule rows carry no raw command or tool material`, `evidence: excerpts are plain text, never payloads`, `open route: only a delivered file is handed to the system viewer` | covered |
 | A13 | A fork of an enabled session starts disabled | `switch: enabling one session never enables another, and a fork starts off` | covered |
 | A14 | No hourly token or request quota can pause the plugin or show a countdown | `schema: the documented statuses no longer include a spent budget` | covered |
 | A15 | 360 px, desktop, light and dark stay readable with no horizontal overflow and keyboard controls | `.ov-` styles and `@media (max-width:560px)` in `client.js`; no committed check | code |
@@ -38,7 +38,7 @@ template, installs this checkout the way a user does, boots it, and asserts:
 
 - the shell lists `dsh-vantage/client.js` in its module set;
 - the served bundle is this checkout's `client.js` plus the source-map trailer;
-- all six documented paths answer `401` anonymously and a structured `403`
+- all seven documented paths answer `401` anonymously and a structured `403`
   for a session the reader does not own;
 - no entry reported a failed activation during boot;
 - exactly one `conversation.view` registration exists and it keeps the id

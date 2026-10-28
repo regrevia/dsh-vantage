@@ -130,7 +130,8 @@ try {
       ["GET", "/round?session=session-accept&round=session-accept%3A1"],
       ["GET", "/evidence?session=session-accept&fact=session-accept%3A1"],
       ["POST", "/enable", { session: "session-accept", enabled: true }],
-      ["POST", "/summary/request", { session: "session-accept" }]
+      ["POST", "/summary/request", { session: "session-accept" }],
+      ["POST", "/open", { session: "session-accept", path: "/tmp/never-delivered" }]
     ];
     for (const [method, path, payload] of wire) {
       const anonymousCall = await fetch(`${origin}/api/dsh-vantage${path}`, {

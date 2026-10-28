@@ -51,7 +51,7 @@ never passes by default.
 ## Install
 
 The plugin is a single package; a Host half (`index.js`) folds session events and
-serves six exact routes, and a client half (`client.js`) registers the `vantage`
+serves seven exact routes, and a client half (`client.js`) registers the `vantage`
 view in the conversation's view switcher.
 
 Install the folder with the plugin manager (`install_bundle`), which links it
@@ -87,9 +87,10 @@ it never falls back to a checklist of commands.
 
 ## Wire
 
-The Host serves four `GET` reads and two `POST` control calls under
+The Host serves four `GET` reads and three `POST` calls under
 `/api/dsh-vantage`: `snapshot`, `history`, `round`, `evidence`; then
-`summaryRequest` and `enable`. Envelopes, codes, watermarks and the switch state
+`summaryRequest`, `enable`, and `open`, which hands a delivered file to the
+system viewer and refuses every path no round delivered. Envelopes, codes, watermarks and the switch state
 are documented in [WIRE.md](./WIRE.md). Every route is owner-only: a caller that
 is not the session owner receives `403 forbidden`; a request without the Harness
 auth cookie is rejected with `401` before the plugin runs.
@@ -105,7 +106,7 @@ session causes no model call and no stored round.
 ## Development
 
 ```bash
-node test/run.mjs      # 76 tests: reducer, summaries, storage, routes
+node test/run.mjs      # 78 tests: reducer, summaries, storage, routes
 node scripts/lint.mjs  # tests, zh-lint, style-lint, ui-copy-lint
 
 # Boot a throwaway profile with this checkout installed, then check that the

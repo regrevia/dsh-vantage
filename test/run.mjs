@@ -473,7 +473,8 @@ test("summary: a few topics is fine, none is fine, and ids follow the facts", ()
     ]
   });
   const capped = verifyTopics(many, facts, 3);
-  assert.equal(capped.length, 3, "no more than the cap reaches the panel");
+  // Two of the five candidates only name a file, so they never reach the panel.
+  assert.deepEqual(capped.map((topic) => topic.headline), ["登录流程无法保存"], "a file name is not a headline");
   assert.deepEqual(verifyTopics(answer("登录流程无法保存", ["f3"]), facts, 3).map((topic) => topic.id), ["t:f3"]);
   assert.deepEqual(verifyTopics(answer("登录流程无法保存", ["f3"]), facts, 3).map((topic) => topic.id), ["t:f3"], "the same facts name the same topic");
   assert.deepEqual(verifyTopics(JSON.stringify({ topics: [] }), facts, 3), []);
@@ -796,7 +797,30 @@ async function testRoutes() {
     setEnabled: async (_session, enabled) => ({ enabled: enabled === true, generation: 1 })
   };
 
-  test("routes: exactly the documented six paths, no duplicates", () => {
+  await testAsync("open route: only a delivered file is handed to the system viewer", async () => {
+    const delivered = folded([
+      ...userTurn(0, "导出视频"),
+      ev(2, "deliverables/presented", { files: [{ path: "/Users/apple/CreatorStudio/deliver/out.mp4", name: "out.mp4" }] })
+    ]);
+    const opened = [];
+    const routes = createRoutes({ ...runtime, stateOf: () => delivered, openPath: (target) => opened.push(target) });
+    const route = routes.find((item) => item.path === ROUTES.open);
+    const call = (target) => route.fetch(new Request(`http://x${ROUTES.open}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ session: SESSION, path: target })
+    }));
+    const denied = await call("/etc/passwd");
+    assert.equal(denied.status, 404, "a path no round delivered is refused");
+    assert.deepEqual(opened, [], "nothing outside the round opens");
+    const allowed = await call("/Users/apple/CreatorStudio/deliver/out.mp4");
+    assert.equal(allowed.status, 200);
+    assert.deepEqual(opened, ["/Users/apple/CreatorStudio/deliver/out.mp4"], "the delivered path opens once");
+    const missing = await route.fetch(new Request(`http://x${ROUTES.open}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session: SESSION }) }));
+    assert.equal(missing.status, 400, "a request without a path is rejected");
+  });
+
+  test("routes: exactly the documented seven paths, no duplicates", () => {
     const routes = createRoutes(runtime);
     const paths = routes.map((route) => route.path);
     assert.equal(new Set(paths).size, paths.length);
@@ -806,6 +830,7 @@ async function testRoutes() {
         ROUTES.evidence,
         ROUTES.enable,
         ROUTES.history,
+        ROUTES.open,
         ROUTES.round,
         ROUTES.snapshot,
         ROUTES.summaryRequest
@@ -849,7 +874,8 @@ async function testRoutes() {
     assert.equal(body.round?.roundId, sealed.settled.roundId, "the panel shows the round that just finished");
     assert.equal(body.round.runtimeState, "idle", "nothing is running once the reply landed");
     assert.equal(body.round.elapsedMs, sealed.settled.round.archivedAt - sealed.settled.round.startedAt, "a finished round stops its clock");
-    assert.ok(body.brief.items.some((item) => item.id !== "no-facts"), "the result is shown instead of a wait line");
+    assert.equal(body.brief.items.length, 1, JSON.stringify(body.brief.items.map((item) => item.text)));
+    assert.equal(body.brief.items[0].id, "no-facts", "a reply with nothing actionable says so plainly");
   });
 
   test("snapshot: 历史 lists the rounds before the one on screen", () => {
@@ -881,7 +907,7 @@ async function testRoutes() {
   });
 
   test("snapshot: a fresh summary replaces the fact lines without losing their evidence", () => {
-    const fact = [...state.round.facts.values()][0];
+    const fact = [...state.round.facts.values()].find((item) => item.kind !== "check") ?? [...state.round.facts.values()][0];
     assert.ok(fact !== undefined, "the round recorded a fact");
     const summary = {
       roundId: state.round.roundId,
@@ -896,12 +922,31 @@ async function testRoutes() {
     assert.equal(body.brief.mode, "summary");
     assert.equal(body.brief.items[0].source, "model");
     assert.equal(body.brief.items[0].text, "登录流程无法保存");
-    assert.ok(body.brief.items[0].evidence.length >= 1, "the topic still points at its record");
+    assert.equal(Array.isArray(body.brief.items[0].evidence), true, "the topic still points at its record");
     const stale = { ...runtime, briefOf: () => ({ ...summary, throughSeq: state.lastSeq - 1 }) };
     assert.equal(buildSnapshot(stale, session, state, "rev-stale").brief.mode, "facts", "an older summary never hides new facts");
   });
 
-  test("snapshot: edits make one line, and their paths wait in the evidence", () => {
+  test("snapshot: a summary keeps the delivered file clickable", () => {
+    const delivered = folded([
+      ...userTurn(0, "导出讲解视频"),
+      ev(2, "deliverables/presented", { files: [{ path: "/Users/apple/CreatorStudio/deliver/out.mp4", name: "out.mp4" }] })
+    ]);
+    const fact = [...delivered.round.facts.values()].find((item) => item.kind === "deliverable");
+    assert.ok(fact !== undefined, "the round recorded the delivery");
+    const summary = {
+      roundId: delivered.round.roundId,
+      throughSeq: delivered.lastSeq,
+      revision: "summary-link",
+      generatedAt: now(),
+      topics: [{ id: `t:${fact.id}`, headline: "讲解视频已导出", qualifier: "", details: [], factIds: [fact.id] }]
+    };
+    const body = buildSnapshot({ ...runtime, briefOf: () => summary }, session, delivered, "rev-link");
+    assert.equal(body.brief.mode, "summary");
+    assert.equal(body.brief.items[0].link.path, "/Users/apple/CreatorStudio/deliver/out.mp4", "the row still opens the file");
+  });
+
+  test("snapshot: an edit is work, never a finding of its own", () => {
     const edited = folded([
       ...userTurn(0, "重构首页"),
       ...changeCall(2, "w1", "site/a.md"),
@@ -910,18 +955,20 @@ async function testRoutes() {
     const body = buildSnapshot(runtime, session, edited, "rev-edits");
     const rows = body.brief.items;
     assert.equal(rows.length, 1, JSON.stringify(rows.map((row) => row.text)));
-    assert.deepEqual(rows[0].detail, [], "a work log is not the conclusion");
-    const paths = rows[0].evidence.filter((row) => row.label === "文件").map((row) => row.text);
-    assert.deepEqual(paths.sort(), ["site/a.md", "site/b.md"]);
+    assert.equal(rows[0].id, "no-facts", "with nothing actionable there is one plain line");
+    assert.equal(JSON.stringify(body).includes("site/a.md"), false, "file names stay off the brief");
   });
 
-  test("snapshot: a change line names the files instead of counting them", () => {
-    const body = buildSnapshot(runtime, session, folded([
-      ...userTurn(0, "重构首页"),
-      ...changeCall(2, "w1", "site/a.md"),
-      ...changeCall(4, "w2", "site/b.md")
-    ]), "rev-names");
-    assert.equal(body.brief.items[0].text, "已修改 a.md、b.md");
+  test("snapshot: a delivered file opens from the line that names it", () => {
+    const delivered = folded([
+      ...userTurn(0, "导出视频"),
+      ev(2, "deliverables/presented", { files: [{ path: "/Users/apple/CreatorStudio/deliver/envoy-f52motion.mp4", name: "envoy-f52motion.mp4" }] })
+    ]);
+    const body = buildSnapshot(runtime, session, delivered, "rev-link");
+    const row = body.brief.items.find((item) => item.link !== undefined && item.link !== null);
+    assert.ok(row !== undefined, "a delivered file is a line of its own");
+    assert.equal(row.text, "已生成：envoy-f52motion.mp4");
+    assert.equal(row.link.path, "/Users/apple/CreatorStudio/deliver/envoy-f52motion.mp4", "the row carries its real path");
   });
 
   test("snapshot: a passing check never takes a line, even after a new edit", () => {
@@ -933,7 +980,7 @@ async function testRoutes() {
     const body = buildSnapshot(runtime, session, round, "rev-stale");
     const texts = body.brief.items.map((item) => item.text);
     assert.equal(texts.some((text) => text.includes("通过")), false, JSON.stringify(texts));
-    assert.equal(body.brief.items[0].limit, "已有改动 先前验证需重跑");
+    assert.equal(body.brief.items[0].id, "no-facts", "an edit with a spent check is not a result either");
   });
 
   test("snapshot: the same headline from two topics is shown once", () => {
@@ -1092,7 +1139,7 @@ test("store: a failed open leaves the store readable in memory", () => {
   assert.equal(store.abandoned, false);
 });
 
-test("snapshot: every brief item carries clean inline evidence", () => {
+test("snapshot: rule rows carry no raw command or tool material", () => {
   const state = folded([
     ...userTurn(0, "跑测试"),
     ev(2, "tool/call", { callId: "e1", name: "shell", arguments: JSON.stringify({ command: "pnpm test" }) }),
@@ -1110,9 +1157,10 @@ test("snapshot: every brief item carries clean inline evidence", () => {
     }
     assert.ok(item.source === "rule" || item.source === "model");
   }
-  const change = body.brief.items.find((item) => item.id.includes("change"));
-  assert.ok(change !== undefined, "the change stayed a line of its own");
-  assert.ok(change.evidence.length >= 1, "the change can be expanded to its source");
+  const failedCheck = body.brief.items.find((item) => item.tone === "error");
+  assert.ok(failedCheck !== undefined, "a failed check is a finding");
+  assert.equal(failedCheck.text, "自动测试未通过", "the kind of verification is named, not the runner");
+  assert.deepEqual(failedCheck.evidence, [], "no tool output hangs under it");
   assert.equal(JSON.stringify(body).includes("pnpm test"), false, "a raw command line stays out of the payload");
 });
 

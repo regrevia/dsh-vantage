@@ -20,9 +20,16 @@ Failures are one small envelope, never a log tail:
 | GET | `/api/dsh-vantage/round?session=S&round=ID` | one round with its facts, open or archived |
 | GET | `/api/dsh-vantage/evidence?session=S&round=ID&fact=F` | one fact plus its raw excerpts |
 | POST | `/api/dsh-vantage/enable` | `{session, enabled}` → the new switch state |
+| POST | `/api/dsh-vantage/open` | `{session, path}` → hand a delivered file to the system viewer |
 
 `revision` is opaque. While it still matches the stored revision the snapshot answers
 `{"kind":"unchanged","revision":R}` and the client redraws nothing.
+
+`open` accepts only a path some round actually delivered; any other path answers
+`404` and nothing reaches the system viewer. Two kinds of row exist and only one is
+a finding: work that produced a result (a deliverable, a blocker, a failed check)
+takes a line; edits and checks that passed are how the work happened and never take
+one. A change is never shown as `已修改 <file>`.
 
 ## Snapshot
 
@@ -67,10 +74,11 @@ Failures are one small envelope, never a log tail:
         "id": "f:…",
         "factIds": ["f:…"],             // empty means no evidence to open
         "source": "rule" | "model",
-        "text": "已修改 api.js、client.js",   // names the work, never a file count
-        "limit": "已有改动 先前验证需重跑",  // qualifier line, "" when none
-        "detail": [{ "label": "文件", "value": "client.js" }],
-        "evidence": [{ "label": "npm test", "text": "3 passing" }],  // ready to render, may be []
+        "text": "已生成：讲解视频",       // what was done, in plain words
+        "limit": "",                     // qualifier line, "" when none
+        "detail": [],                    // sentences, never a path
+        "evidence": [{ "label": "记录", "text": "…" }],  // plain text, may be []
+        "link": { "path": "/Users/me/deliver/talk.mp4", "label": "已生成：讲解视频" }, // present only when the row opens a delivered file
         "tone": "neutral" | "warn" | "error" | "success",
         "urgent": false
       }

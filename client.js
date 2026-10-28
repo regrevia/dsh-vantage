@@ -42,7 +42,7 @@ window.__ModuleLoader__.load({
         waitTitle: '等待新的任务活动', // ui-copy-ignore
         waitBody: '从本次开启开始记录。收到新的任务活动后，这里会出现简报。', // ui-copy-ignore
         evidence: '查看依据', // ui-copy-ignore
-        evidenceEmpty: '这一项依据当前不可读', // ui-copy-ignore
+        openFailed: '没能打开这个文件', // ui-copy-ignore
         switchFailed: '没能切换概览，已回到原来的状态', // ui-copy-ignore
         elapsed: '本轮历时', // ui-copy-ignore
         updated: '摘要更新于', // ui-copy-ignore
@@ -100,7 +100,6 @@ window.__ModuleLoader__.load({
         waitTitle: 'Waiting for new activity', // ui-copy-ignore
         waitBody: 'Recording starts from this point. A brief appears once there is new activity.', // ui-copy-ignore
         evidence: 'Show basis', // ui-copy-ignore
-        evidenceEmpty: 'This basis cannot be read right now', // ui-copy-ignore
         switchFailed: 'The overview did not switch and is back where it was', // ui-copy-ignore
         elapsed: 'Elapsed', // ui-copy-ignore
         updated: 'Summary updated', // ui-copy-ignore
@@ -241,6 +240,10 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-panel .ov-item[open] > summary .ov-chevron { transform: rotate(90deg); }
 .dsv-panel .ov-item[data-static] > summary { grid-template-columns: minmax(0, 1fr); cursor: default; }
 .dsv-panel .ov-item-title { display: block; font-size: 17px; line-height: 26px; font-weight: 600; overflow-wrap: anywhere; }
+.dsv-panel .ov-item-flat { display: flex; align-items: baseline; gap: 8px; padding: 10px 0; }
+.dsv-panel .ov-item-flat .ov-item-title { flex: none; }
+.dsv-panel .ov-item-link { display: block; padding: 0; border: 0; background: none; color: var(--dsw-alias-text-link, inherit); font: inherit; font-size: 17px; line-height: 26px; font-weight: 600; text-align: left; text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; cursor: pointer; }
+.dsv-panel .ov-item-link:hover { text-decoration-thickness: 2px; }
 .dsv-panel .ov-item-qualifier {
   display: block; margin-top: 4px; color: var(--dsw-alias-label-secondary); font-size: 13px;
   line-height: 20px; font-weight: 400; overflow-wrap: anywhere;
@@ -433,31 +436,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       return `${round}:${id}`
     }
 
-    // Conclusions of a sealed round; command output stays reachable as evidence.
-    const CONCLUDING_KINDS = new Set(['check', 'change', 'deliverable', 'blocker', 'failure', 'interruption'])
-
-    function itemsOfSealedRound(round) {
-      const facts = Array.isArray(round.facts) ? round.facts : []
-      const items = []
-      for (const fact of facts) {
-        if (fact === null || fact === undefined) continue
-        if (!CONCLUDING_KINDS.has(fact.kind)) continue
-        const tone = fact.kind === 'failure'
-          ? 'error'
-          : fact.kind === 'blocker'
-            ? 'warn'
-            : fact.kind === 'deliverable' || fact.kind === 'check'
-              ? 'success'
-              : 'neutral'
-        const factIds = fact.id === undefined || fact.id === null ? [] : [fact.id]
-        items.push({
-          id: fact.id, factIds, text: fact.statement, detail: [], tone,
-          limit: fact.validity === 'needsRecheck' ? copy().verify.recheck : ''
-        })
-      }
-      return items
-    }
-
     function metaOf(round, now) {
       const words = copy()
       if (round === null || round === undefined) return []
@@ -467,29 +445,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       return parts
     }
 
-    function Evidence(props) {
-      const words = copy()
-      const state = props.state
-      if (state === null || state === undefined || state.state === 'loading') {
-        return h('div', { className: 'ov-source' }, [h('p', { key: 'p' }, words.loading)])
-      }
-      if (state.state !== 'ready') {
-        return h('div', { className: 'ov-source' }, [h('p', { key: 'p' }, words.evidenceEmpty)])
-      }
-      const refs = Array.isArray(state.refs) ? state.refs : []
-      if (refs.length === 0) {
-        return h('div', { className: 'ov-source' }, [h('p', { key: 'p' }, words.evidenceEmpty)])
-      }
-      return h('div', { className: 'ov-source' }, refs.map((ref, index) => {
-        const label = ref === null || ref === undefined || ref.label === undefined || ref.label === null ? '' : String(ref.label)
-        const excerpt = ref === null || ref === undefined || ref.excerpt === undefined || ref.excerpt === null ? '' : String(ref.excerpt)
-        return h('div', { key: `r${index}` }, [
-          label === '' ? null : h('p', { key: 'l' }, label),
-          excerpt === '' ? null : h('pre', { key: 'x' }, excerpt)
-        ])
-      }))
-    }
-
     function BriefItem(props) {
       const words = copy()
       const item = props.item
@@ -497,9 +452,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       const paragraphs = paragraphsOf(item)
       const qualifier = qualifierOf(item)
       const inline = inlineEvidenceOf(item)
-      const factIds = Array.isArray(item.factIds) ? item.factIds : []
       const hasInline = inline.length > 0
-      const hasLazy = hasInline !== true && factIds.length > 0 && typeof props.roundId === 'string' && props.roundId !== ''
       const bodyChildren = []
       paragraphs.forEach((line, index) => {
         bodyChildren.push(h('p', { key: `p${index}` }, line))
@@ -514,24 +467,21 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           h('summary', { key: 's' }, words.evidence),
           h('div', { key: 'b', className: 'ov-source' }, inline.map((row, index) => h('div', { key: `r${index}` }, [
             row.label === '' ? null : h('p', { key: 'l' }, row.label),
-            row.text === '' ? null : h('pre', { key: 'x' }, row.text)
+            row.text === '' ? null : h('p', { key: 'x' }, row.text)
           ])))
         ]))
-      } else if (hasLazy) {
-        bodyChildren.push(h('details', {
-          key: 'ev',
-          className: 'ov-evidence',
-          open: props.evidenceOpen === true,
-          onToggle: (event) => props.onEvidence(props.itemKey, event.currentTarget.open)
-        }, [
-          h('summary', { key: 's' }, words.evidence),
-          h(Evidence, { key: 'b', state: props.evidence })
-        ]))
       }
+      const link = item.link !== null && typeof item.link === 'object' ? item.link : null
       const title = h('span', { key: 't' }, [
-        h('span', { key: 'h', className: 'ov-item-title' }, item.text),
+        link === null
+          ? h('span', { key: 'h', className: 'ov-item-title' }, item.text)
+          : h('button', { key: 'h', className: 'ov-item-link', type: 'button', onClick: () => props.onOpenLink(link) }, item.text),
         qualifier === '' ? null : h('span', { key: 'q', className: 'ov-item-qualifier', 'data-tone': tone }, qualifier)
       ])
+      if (bodyChildren.length === 0 && link !== null) {
+        // A row that opens a delivered file is a control, not a disclosure.
+        return h('div', { className: 'ov-item ov-item-flat', 'data-item-key': props.itemKey }, title)
+      }
       if (bodyChildren.length === 0) {
         // A conclusion with nothing under it still states itself: no chevron, no promise of more.
         return h('details', {
@@ -593,7 +543,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       const retryTimer = React.useRef(null)
       const loadHolder = React.useRef(null)
       const expandedRef = React.useRef(new Set())
-      const evidenceRef = React.useRef({})
+      const evidenceOpenRef = React.useRef({})
       const itemRef = React.useRef({})
       // 历史 means the rounds before the one on screen, so the shown round is
       // asked out of every page, including pages loaded later.
@@ -676,7 +626,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         setHistoryLoading(false)
         setRound(null)
         setRoundFailed(false)
-        evidenceRef.current = {}
+        evidenceOpenRef.current = {}
         expandedRef.current = new Set()
         itemRef.current = {}
         setView({ mode: 'current', roundId: '' })
@@ -755,38 +705,26 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         setHistory({ items: answer.body.items, nextCursor, append: append === true })
       }
 
-      const fetchEvidence = async (itemKey) => {
-        const known = itemRef.current[itemKey]
-        if (known === null || known === undefined) return
-        const factIds = Array.isArray(known.factIds) ? known.factIds : []
-        const factId = factIds.length > 0 ? String(factIds[0]) : ''
-        const roundId = known.roundId
-        if (factId === '' || roundId === '') return
-        evidenceRef.current[itemKey] = { open: true, state: { state: 'loading', refs: [] } }
-        setTick((value) => value + 1)
-        const fresh = claim('evidence')
-        if (fresh === null) return
-        const query = new URLSearchParams({ session: sessionId, round: roundId, fact: factId })
-        const answer = await callHost(`/evidence?${query.toString()}`)
-        if (fresh() !== true) return
-        const refs = answer.failed === true || answer.body === null || !Array.isArray(answer.body.refs) ? [] : answer.body.refs
-        const kept = evidenceRef.current[itemKey]
-        evidenceRef.current[itemKey] = { open: kept === undefined || kept.open !== false, state: { state: refs.length === 0 ? 'unreadable' : 'ready', refs } }
-        setTick((value) => value + 1)
-      }
-
       const applyExpanded = (itemKey, open) => {
         if (open === true) expandedRef.current.add(itemKey)
         else expandedRef.current.delete(itemKey)
       }
 
       const applyEvidenceOpen = (itemKey, open) => {
-        const kept = evidenceRef.current[itemKey]
-        evidenceRef.current[itemKey] = { open: open === true, state: kept === undefined ? null : kept.state }
-        const known = itemRef.current[itemKey]
-        const inline = known !== null && known !== undefined && known.inline === true
-        if (open === true && inline !== true && (kept === undefined || kept.state === null)) fetchEvidence(itemKey)
+        // Whether a reader opened one basis survives redraws; the rows themselves
+        // arrive with the brief, so there is nothing else to keep.
+        evidenceOpenRef.current[itemKey] = open === true
         setTick((value) => value + 1)
+      }
+
+      const openLink = async (link) => {
+        if (link === null || link === undefined || typeof link.path !== 'string' || link.path === '') return
+        const answer = await callHost('/open', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ session: sessionId, path: link.path })
+        })
+        if (answer.failed === true || answer.blocked === true) setNotice(copy().openFailed)
       }
 
       const publishItems = (roundId, items) => {
@@ -967,7 +905,8 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         } else if (round === null) {
           main.push(h('div', { key: 'q', className: 'ov-quiet' }, [h('p', { key: 'p' }, words.loading)]))
         } else {
-          const items = itemsOfSealedRound(round)
+          const sealedBrief = round.brief !== null && round.brief !== undefined && Array.isArray(round.brief.items) ? round.brief.items : []
+          const items = sealedBrief
           publishItems(round.roundId, items)
           const meta = metaOf(round, now)
           const parts = [
@@ -982,12 +921,11 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
             ? [h('div', { key: 'e', className: 'ov-sub' }, words.historyEmpty)]
             : items.map((item, index) => {
               const key = itemKeyOf(round.roundId, item)
-              const seen = evidenceRef.current[key] === undefined ? { open: false, state: null } : evidenceRef.current[key]
               return h(BriefItem, {
                 key: `${key}:${index}`, item, itemKey: key, roundId: round.roundId,
                 tone: toneOfItem(item, round), open: expandedRef.current.has(key),
-                evidenceOpen: seen.open === true, evidence: seen.state,
-                onToggle: applyExpanded, onEvidence: applyEvidenceOpen
+                evidenceOpen: evidenceOpenRef.current[key] === true,
+                onToggle: applyExpanded, onEvidence: applyEvidenceOpen, onOpenLink: openLink
               })
             })))
           main.push(h('div', { key: 'body' }, parts))
@@ -1020,12 +958,11 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           })
           parts.push(h('div', { key: 'b', className: 'ov-brief' }, items.map((item, index) => {
             const key = itemKeyOf(roundOfSnapshot.roundId, item)
-            const seen = evidenceRef.current[key] === undefined ? { open: false, state: null } : evidenceRef.current[key]
             return h(BriefItem, {
               key: `${key}:${index}`, item, itemKey: key, roundId: roundOfSnapshot.roundId,
               tone: toneOfItem(item, snapshot), open: expandedRef.current.has(key),
-              evidenceOpen: seen.open === true, evidence: seen.state,
-              onToggle: applyExpanded, onEvidence: applyEvidenceOpen
+              evidenceOpen: evidenceOpenRef.current[key] === true,
+              onToggle: applyExpanded, onEvidence: applyEvidenceOpen, onOpenLink: openLink
             })
           })))
           main.push(h('div', { key: 'body' }, parts))
