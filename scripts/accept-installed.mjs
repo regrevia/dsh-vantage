@@ -123,6 +123,31 @@ try {
     );
     note(`note ${JSON.stringify(body).slice(0, 160)}`);
 
+    // Every documented path must exist behind the same fence, not just the one
+    // the panel happens to open first.
+    const wire = [
+      ["GET", "/history?session=session-accept&limit=5"],
+      ["GET", "/round?session=session-accept&round=session-accept%3A1"],
+      ["GET", "/evidence?session=session-accept&fact=session-accept%3A1"],
+      ["POST", "/enable", { session: "session-accept", enabled: true }],
+      ["POST", "/summary/request", { session: "session-accept" }]
+    ];
+    for (const [method, path, payload] of wire) {
+      const anonymousCall = await fetch(`${origin}/api/dsh-vantage${path}`, {
+        method,
+        body: payload === undefined ? undefined : JSON.stringify(payload)
+      });
+      check(anonymousCall.status === 401, `${method} ${path.split("?")[0]} sits behind the fence`);
+      const ownerCall = await fetch(`${origin}/api/dsh-vantage${path}`, {
+        method,
+        headers: cookie === "" ? {} : { ...(payload === undefined ? {} : { "content-type": "application/json" }), cookie },
+        body: payload === undefined ? undefined : JSON.stringify(payload)
+      });
+      const reply = await ownerCall.json().catch(() => null);
+      check(ownerCall.status === 403, `${method} ${path.split("?")[0]} answers a foreign session (${ownerCall.status})`);
+      check(typeof reply?.error?.code === "string", `${method} ${path.split("?")[0]} refuses in the documented shape`);
+    }
+
     // The shell may load our module alone or inside a concatenated group; only the
     // single-module URL is byte-comparable to the checkout.
     const src = /["'](plugins\/\?\?dsh-vantage\/client\.js[^"']*)["']/u.exec(html)?.[1]
