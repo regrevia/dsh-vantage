@@ -730,6 +730,14 @@ test("client: registers exactly one view and stays inside the panel", () => {
   assert.equal(source.match(/createPortal/gu), null, "the panel is not teleported out of its slot");
 });
 
+test("client: only a row with more to show is a control", () => {
+  const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
+  assert.ok(!source.includes("'data-static': 'true'"), "a bare conclusion is no longer a disclosure");
+  assert.ok(source.includes("'ov-item ov-item-static'"), "it renders as plain text instead");
+  assert.ok(source.includes("'ov-item-link-arrow'"), "a delivered file carries an open affordance");
+  assert.ok(source.includes("'ov-fact-label'"), "a pending row renders as label and value");
+});
+
 // --- session switches -------------------------------------------------------
 
 const fakeSession = (id, extra = {}) => ({ id, header: { createdAt: 1, cwd: "/w" }, ...extra });
@@ -876,6 +884,16 @@ async function testRoutes() {
     assert.equal(body.round.elapsedMs, sealed.settled.round.archivedAt - sealed.settled.round.startedAt, "a finished round stops its clock");
     assert.equal(body.brief.items.length, 1, JSON.stringify(body.brief.items.map((item) => item.text)));
     assert.equal(body.brief.items[0].id, "no-facts", "a reply with nothing actionable says so plainly");
+    assert.equal(body.brief.items[0].label, "待办", "the row names what is pending");
+    assert.equal(body.brief.items[0].value, "无", "and says there is none");
+  });
+
+  test("rounds: machine markup in a goal never becomes the heading", () => {
+    const state = folded([
+      ...userTurn(0, "把这个页面整理一下"),
+      ev(3, "goal/update", { goal: { phase: "active", objective: "<goal_round>" } })
+    ]);
+    assert.equal(state.round.title, "把这个页面整理一下", "the opening request is readable; the tag is not");
   });
 
   test("snapshot: 历史 lists the rounds before the one on screen", () => {

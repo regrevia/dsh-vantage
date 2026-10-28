@@ -75,6 +75,8 @@ one. A change is never shown as `已修改 <file>`.
         "factIds": ["f:…"],             // empty means no evidence to open
         "source": "rule" | "model",
         "text": "已生成：讲解视频",       // what was done, in plain words
+        "label": "",                     // set instead of `text` when the row is a plain label
+        "value": "",                     // the value that goes with `label` (e.g. 待办 / 无)
         "limit": "",                     // qualifier line, "" when none
         "detail": [],                    // sentences, never a path
         "evidence": [{ "label": "记录", "text": "…" }],  // plain text, may be []
@@ -104,8 +106,10 @@ one. A change is never shown as `已修改 <file>`.
 A brief carries at most 3 item rows; each row owns its own short evidence, so rendering one
 costs no further request. Passing checks do not become rows of their own — only failed or stale
 ones do — so a quiet round may hold a single change row and a status line. When nothing can be
-confirmed the host sends one `no-facts` row («尚未形成可确认的结果») with `evidence: []`; the
-client renders it like any other row and adds no placeholder of its own.
+confirmed the host sends one `no-facts` row with `label: "待办"` and `value: "无"`; the client
+renders it as a plain label and value, never as a control, and adds no placeholder of its own.
+A round title never carries machine markup: a goal objective such as `<goal_round>` is dropped
+and the round keeps the human's opening request.
 
 ## History
 

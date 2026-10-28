@@ -23,8 +23,7 @@ window.__ModuleLoader__.load({
         contextResumed: '本会话 · 已开启', // ui-copy-ignore
         contextHistory: '历史记录', // ui-copy-ignore
         history: '历史', // ui-copy-ignore
-        historyHeading: '之前的轮次', // ui-copy-ignore
-        historySub: '查看当时记录的工作进展', // ui-copy-ignore
+        historyHeading: '历史', // ui-copy-ignore
         historyEmpty: '还没有更早的轮次', // ui-copy-ignore
         historyLoading: '正在读取历史', // ui-copy-ignore
         historyFailed: '历史记录没能读取', // ui-copy-ignore
@@ -37,15 +36,16 @@ window.__ModuleLoader__.load({
         retry: '重试', // ui-copy-ignore
         blocked: '这个会话只能在自己的窗口里查看', // ui-copy-ignore
         disabledTitle: '概览已关闭', // ui-copy-ignore
-        disabledBody: '开启后，从此刻开始记录本会话的进展', // ui-copy-ignore
-        disabledNote: '已保存的轮次仍可在历史中查看。', // ui-copy-ignore
+        disabledBody: '开启后从现在开始记录', // ui-copy-ignore
+        disabledNote: '已有轮次仍在历史里', // ui-copy-ignore
         waitTitle: '等待新的任务活动', // ui-copy-ignore
-        waitBody: '从本次开启开始记录。收到新的任务活动后，这里会出现简报。', // ui-copy-ignore
+        waitBody: '收到新任务后，这里会出现结果', // ui-copy-ignore
         evidence: '查看依据', // ui-copy-ignore
         openFailed: '没能打开这个文件', // ui-copy-ignore
         switchFailed: '没能切换概览，已回到原来的状态', // ui-copy-ignore
-        elapsed: '本轮历时', // ui-copy-ignore
-        updated: '摘要更新于', // ui-copy-ignore
+        elapsed: '已运行', // ui-copy-ignore
+        updated: '更新于', // ui-copy-ignore
+        untitled: '本次任务', // ui-copy-ignore
         justNow: '刚刚', // ui-copy-ignore
         minuteUnit: '分钟前', // ui-copy-ignore
         underMinute: '不到 1 分钟', // ui-copy-ignore
@@ -53,24 +53,24 @@ window.__ModuleLoader__.load({
         hourUnit: '小时', // ui-copy-ignore
         shortMinuteUnit: '分', // ui-copy-ignore
         status: {
-          checking: '正在核对相关工作', // ui-copy-ignore
-          running: '正在处理', // ui-copy-ignore
-          waiting: '等待后台结果', // ui-copy-ignore
+          checking: '核对中', // ui-copy-ignore
+          running: '进行中', // ui-copy-ignore
+          waiting: '等待结果', // ui-copy-ignore
           'needs-input': '需要你处理', // ui-copy-ignore
-          failing: '当前验证未通过', // ui-copy-ignore
+          failing: '验证未通过', // ui-copy-ignore
           'no-news': '暂无新进展', // ui-copy-ignore
-          disconnected: '连接已断开', // ui-copy-ignore
-          'answered-unverified': '本轮已回复，仍有待验证', // ui-copy-ignore
-          verified: '本轮已回复，核验通过', // ui-copy-ignore
-          unknown: '本轮状态暂不可知' // ui-copy-ignore
+          disconnected: '已断开', // ui-copy-ignore
+          'answered-unverified': '待核验', // ui-copy-ignore
+          verified: '已完成', // ui-copy-ignore
+          unknown: '' // ui-copy-ignore
         },
         verify: {
-          passed: '核验已通过', // ui-copy-ignore
-          failed: '验证未通过', // ui-copy-ignore
-          recheck: '需要重新核对', // ui-copy-ignore
-          pending: '验证还没有开始', // ui-copy-ignore
-          unknown: '核验状态暂不可知', // ui-copy-ignore
-          na: '没有可核验项' // ui-copy-ignore
+          passed: '已核验', // ui-copy-ignore
+          failed: '核验未通过', // ui-copy-ignore
+          recheck: '待重新核验', // ui-copy-ignore
+          pending: '待核验', // ui-copy-ignore
+          unknown: '', // ui-copy-ignore
+          na: '' // ui-copy-ignore
         }
       },
       en: {
@@ -81,8 +81,7 @@ window.__ModuleLoader__.load({
         contextResumed: 'This session · on', // ui-copy-ignore
         contextHistory: 'History', // ui-copy-ignore
         history: 'History', // ui-copy-ignore
-        historyHeading: 'Earlier rounds', // ui-copy-ignore
-        historySub: 'What the work looked like then', // ui-copy-ignore
+        historyHeading: 'History', // ui-copy-ignore
         historyEmpty: 'No earlier rounds yet', // ui-copy-ignore
         historyLoading: 'Reading history', // ui-copy-ignore
         historyFailed: 'History could not be read', // ui-copy-ignore
@@ -95,14 +94,15 @@ window.__ModuleLoader__.load({
         retry: 'Retry', // ui-copy-ignore
         blocked: 'This session can only be viewed in its own window', // ui-copy-ignore
         disabledTitle: 'Overview off', // ui-copy-ignore
-        disabledBody: 'Turn it on to start recording this session from now on', // ui-copy-ignore
-        disabledNote: 'Saved rounds stay readable under history.', // ui-copy-ignore
+        disabledBody: 'Recording starts from now', // ui-copy-ignore
+        disabledNote: 'Earlier rounds stay in history', // ui-copy-ignore
         waitTitle: 'Waiting for new activity', // ui-copy-ignore
-        waitBody: 'Recording starts from this point. A brief appears once there is new activity.', // ui-copy-ignore
+        waitBody: 'A brief appears once there is new activity', // ui-copy-ignore
         evidence: 'Show basis', // ui-copy-ignore
         switchFailed: 'The overview did not switch and is back where it was', // ui-copy-ignore
-        elapsed: 'Elapsed', // ui-copy-ignore
-        updated: 'Summary updated', // ui-copy-ignore
+        elapsed: 'Running for', // ui-copy-ignore
+        updated: 'Updated', // ui-copy-ignore
+        untitled: 'Current task', // ui-copy-ignore
         justNow: 'just now', // ui-copy-ignore
         minuteUnit: 'min ago', // ui-copy-ignore
         underMinute: 'under 1 min', // ui-copy-ignore
@@ -110,24 +110,24 @@ window.__ModuleLoader__.load({
         hourUnit: 'h', // ui-copy-ignore
         shortMinuteUnit: 'min', // ui-copy-ignore
         status: {
-          checking: 'Checking related work', // ui-copy-ignore
-          running: 'Working', // ui-copy-ignore
-          waiting: 'Waiting for a background result', // ui-copy-ignore
+          checking: 'Checking', // ui-copy-ignore
+          running: 'In progress', // ui-copy-ignore
+          waiting: 'Waiting', // ui-copy-ignore
           'needs-input': 'Needs your input', // ui-copy-ignore
-          failing: 'Checks currently fail', // ui-copy-ignore
+          failing: 'Checks fail', // ui-copy-ignore
           'no-news': 'No new progress', // ui-copy-ignore
           disconnected: 'Disconnected', // ui-copy-ignore
-          'answered-unverified': 'Replied, still unverified', // ui-copy-ignore
-          verified: 'Replied, checks pass', // ui-copy-ignore
-          unknown: 'Round state unavailable' // ui-copy-ignore
+          'answered-unverified': 'Unverified', // ui-copy-ignore
+          verified: 'Done', // ui-copy-ignore
+          unknown: '' // ui-copy-ignore
         },
         verify: {
-          passed: 'Checks pass', // ui-copy-ignore
-          failed: 'Checks fail', // ui-copy-ignore
-          recheck: 'Needs re-checking', // ui-copy-ignore
-          pending: 'Checks not started', // ui-copy-ignore
-          unknown: 'Check state unavailable', // ui-copy-ignore
-          na: 'Nothing to check' // ui-copy-ignore
+          passed: 'Verified', // ui-copy-ignore
+          failed: 'Check failed', // ui-copy-ignore
+          recheck: 'Re-check needed', // ui-copy-ignore
+          pending: 'Not verified', // ui-copy-ignore
+          unknown: '', // ui-copy-ignore
+          na: '' // ui-copy-ignore
         }
       }
     }
@@ -238,12 +238,26 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
   font-weight: 400; line-height: 26px; transform-origin: 50% 50%;
 }
 .dsv-panel .ov-item[open] > summary .ov-chevron { transform: rotate(90deg); }
-.dsv-panel .ov-item[data-static] > summary { grid-template-columns: minmax(0, 1fr); cursor: default; }
 .dsv-panel .ov-item-title { display: block; font-size: 17px; line-height: 26px; font-weight: 600; overflow-wrap: anywhere; }
-.dsv-panel .ov-item-flat { display: flex; align-items: baseline; gap: 8px; padding: 10px 0; }
-.dsv-panel .ov-item-flat .ov-item-title { flex: none; }
-.dsv-panel .ov-item-link { display: block; padding: 0; border: 0; background: none; color: var(--dsw-alias-text-link, inherit); font: inherit; font-size: 17px; line-height: 26px; font-weight: 600; text-align: left; text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; cursor: pointer; }
-.dsv-panel .ov-item-link:hover { text-decoration-thickness: 2px; }
+.dsv-panel .ov-item-static > .ov-item-static-title { display: block; padding: 20px 0 24px; }
+.dsv-panel .ov-item-flat { padding: 20px 0 24px; }
+.dsv-panel .ov-fact {
+  display: flex; align-items: baseline; gap: 16px; padding: 20px 0 24px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+.dsv-panel .ov-fact-label { flex: none; min-width: 48px; color: var(--dsw-alias-label-secondary); font-size: 14px; line-height: 26px; }
+.dsv-panel .ov-fact-value { font-size: 15px; line-height: 26px; }
+.dsv-panel .ov-item-link {
+  display: inline-flex; align-items: baseline; gap: 8px; max-width: 100%;
+  padding: 0; border: 0; background: none; color: var(--dsw-alias-brand-primary);
+  font: inherit; font-size: 17px; line-height: 26px; font-weight: 500;
+  text-align: left; overflow-wrap: anywhere; cursor: pointer;
+}
+.dsv-panel .ov-item-link-text { text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; transition: text-decoration-color 120ms ease; }
+.dsv-panel .ov-item-link:hover .ov-item-link-text { text-decoration-color: currentColor; }
+.dsv-panel .ov-file-icon { flex: none; align-self: center; }
+.dsv-panel .ov-item-link-arrow { flex: none; font-size: 15px; line-height: 26px; transition: transform 120ms ease; }
+.dsv-panel .ov-item-link:hover .ov-item-link-arrow { transform: translate(1px, -1px); }
 .dsv-panel .ov-item-qualifier {
   display: block; margin-top: 4px; color: var(--dsw-alias-label-secondary); font-size: 13px;
   line-height: 20px; font-weight: 400; overflow-wrap: anywhere;
@@ -258,8 +272,9 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
   display: inline-flex; align-items: center; min-height: 28px; padding: 0;
   color: var(--dsw-alias-brand-primary); font-size: 14px; line-height: 22px;
 }
-.dsv-panel .ov-evidence > summary::after { content: '›'; margin-left: 6px; transform: rotate(0deg); }
-.dsv-panel .ov-evidence[open] > summary::after { transform: rotate(90deg); }
+.dsv-panel .ov-evidence > summary { text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; }
+.dsv-panel .ov-evidence > summary:hover { text-decoration-color: currentColor; }
+.dsv-panel .ov-evidence > summary::after { content: '↗'; margin-left: 6px; }
 .dsv-panel .ov-source { margin-top: 10px; padding-left: 12px; border-left: 2px solid var(--dsw-alias-border-l1); }
 .dsv-panel .ov-source p {
   margin-bottom: 6px; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 21px;
@@ -272,7 +287,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 }
 .dsv-panel .ov-history-list { margin-top: 28px; }
 .dsv-panel .ov-history-row {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 16px;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto 16px; align-items: start; gap: 16px;
   width: 100%; padding: 20px 0; border-bottom: 1px solid var(--dsw-alias-border-l1);
 }
 .dsv-panel .ov-history-row:last-child { border-bottom: 0; }
@@ -282,6 +297,10 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-panel .ov-history-time {
   color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 25px; white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+.dsv-panel .ov-row-chevron {
+  display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 25px;
+  color: var(--dsw-alias-label-secondary); font-size: 20px; line-height: 25px;
 }
 .dsv-panel .ov-more { display: inline-flex; margin-top: 16px; }
 .dsv-panel .ov-quiet { padding-top: 24px; }
@@ -436,12 +455,20 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       return `${round}:${id}`
     }
 
+    function titleOf(round) {
+      const title = round === null || round === undefined ? undefined : round.title
+      const text = typeof title === 'string' ? title.trim() : ''
+      return text === '' ? copy().untitled : text
+    }
+
     function metaOf(round, now) {
       const words = copy()
       if (round === null || round === undefined) return []
       const parts = []
       if (typeof round.elapsedMs === 'number') parts.push(`${words.elapsed} ${durationOf(round.elapsedMs)}`)
       if (typeof round.contentAt === 'number' && round.contentAt > 0) parts.push(`${words.updated} ${timeOf(round.contentAt, now)}`)
+      const verify = verifyTextOf(round)
+      if (verify !== '') parts.push(verify)
       return parts
     }
 
@@ -449,6 +476,14 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       const words = copy()
       const item = props.item
       const tone = props.tone
+      const label = typeof item.label === 'string' ? item.label.trim() : ''
+      const value = typeof item.value === 'string' ? item.value : ''
+      if (label !== '') {
+        return h('div', { className: 'ov-item ov-fact', 'data-item-key': props.itemKey }, [
+          h('span', { key: 'l', className: 'ov-fact-label' }, label),
+          h('span', { key: 'v', className: 'ov-fact-value' }, value)
+        ])
+      }
       const paragraphs = paragraphsOf(item)
       const qualifier = qualifierOf(item)
       const inline = inlineEvidenceOf(item)
@@ -472,10 +507,21 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         ]))
       }
       const link = item.link !== null && typeof item.link === 'object' ? item.link : null
+      const fileIcon = h('svg', {
+        key: 'i', className: 'ov-file-icon', viewBox: '0 0 16 16', width: 16, height: 16,
+        fill: 'none', stroke: 'currentColor', strokeWidth: 1.4, 'aria-hidden': 'true'
+      }, [
+        h('path', { key: 'p', d: 'M4 1.75h5L13 5.75v8.5H4z' }),
+        h('path', { key: 'f', d: 'M9 1.75v4h4' })
+      ])
       const title = h('span', { key: 't' }, [
         link === null
           ? h('span', { key: 'h', className: 'ov-item-title' }, item.text)
-          : h('button', { key: 'h', className: 'ov-item-link', type: 'button', onClick: () => props.onOpenLink(link) }, item.text),
+          : h('button', { key: 'h', className: 'ov-item-link', type: 'button', onClick: () => props.onOpenLink(link) }, [
+            fileIcon,
+            h('span', { key: 'x', className: 'ov-item-link-text' }, item.text),
+            h('span', { key: 'a', className: 'ov-item-link-arrow', 'aria-hidden': 'true' }, '↗')
+          ]),
         qualifier === '' ? null : h('span', { key: 'q', className: 'ov-item-qualifier', 'data-tone': tone }, qualifier)
       ])
       if (bodyChildren.length === 0 && link !== null) {
@@ -483,12 +529,10 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         return h('div', { className: 'ov-item ov-item-flat', 'data-item-key': props.itemKey }, title)
       }
       if (bodyChildren.length === 0) {
-        // A conclusion with nothing under it still states itself: no chevron, no promise of more.
-        return h('details', {
-          className: 'ov-item',
-          'data-item-key': props.itemKey,
-          'data-static': 'true'
-        }, h('summary', { key: 's' }, title))
+        // A conclusion with nothing under it states itself and promises no more.
+        return h('div', { className: 'ov-item ov-item-static', 'data-item-key': props.itemKey }, [
+          h('span', { key: 's', className: 'ov-item-static-title' }, title)
+        ])
       }
       return h('details', {
         className: 'ov-item',
@@ -863,10 +907,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           h('button', { key: 'r', type: 'button', className: 'ov-control-link ov-back', 'data-action': 'retry' }, words.retry)
         ]))
       } else if (mode === 'list') {
-        const parts = [
-          h('h1', { key: 't' }, words.historyHeading),
-          h('div', { key: 's', className: 'ov-sub' }, words.historySub)
-        ]
+        const parts = [h('h1', { key: 't' }, words.historyHeading)]
         const rows = history !== null && Array.isArray(history.items) ? history.items : []
         if (historyLoading === true && rows.length === 0) {
           parts.push(h('div', { key: 'l', className: 'ov-sub' }, words.historyLoading))
@@ -886,10 +927,11 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
               'data-round': row.roundId
             }, [
               h('span', { key: 'm' }, [
-                h('span', { key: 't', className: 'ov-history-title' }, row.title),
+                h('span', { key: 't', className: 'ov-history-title' }, titleOf(row)),
                 subtitle === '' ? null : h('span', { key: 's', className: 'ov-history-sub' }, subtitle)
               ]),
-              h('span', { key: 'a', className: 'ov-history-time' }, timeOf(row.archivedAt, now))
+              h('span', { key: 'a', className: 'ov-history-time' }, timeOf(row.archivedAt, now)),
+              h('span', { key: 'c', className: 'ov-row-chevron', 'aria-hidden': 'true' }, '›')
             ])
           })))
           if (history.nextCursor !== undefined && history.nextCursor !== null && history.nextCursor !== '') {
@@ -909,14 +951,8 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           const items = sealedBrief
           publishItems(round.roundId, items)
           const meta = metaOf(round, now)
-          const parts = [
-            h('h1', { key: 't' }, round.title),
-            h('div', { key: 'm', className: 'ov-meta' }, [
-              meta.length === 0 ? null : h('span', { key: 'e' }, meta.join(' · ')),
-              meta.length === 0 ? null : h('span', { key: 'd' }, ' · '),
-              h('span', { key: 'v' }, verifyTextOf(round))
-            ])
-          ]
+          const parts = [h('h1', { key: 't' }, titleOf(round))]
+          if (meta.length > 0) parts.push(h('div', { key: 'm', className: 'ov-meta' }, meta.join(' · ')))
           parts.push(h('div', { key: 'b', className: 'ov-brief' }, items.length === 0
             ? [h('div', { key: 'e', className: 'ov-sub' }, words.historyEmpty)]
             : items.map((item, index) => {
@@ -950,7 +986,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           const items = brief !== null && Array.isArray(brief.items) ? brief.items : []
           publishItems(roundOfSnapshot.roundId, items)
           const meta = metaOf(roundOfSnapshot, now)
-          const parts = [h('h1', { key: 't' }, roundOfSnapshot.title)]
+          const parts = [h('h1', { key: 't' }, titleOf(roundOfSnapshot))]
           if (meta.length > 0) parts.push(h('div', { key: 'm', className: 'ov-meta' }, meta.join(' · ')))
           const notices = Array.isArray(snapshot.notices) ? snapshot.notices : []
           notices.forEach((entry, index) => {
