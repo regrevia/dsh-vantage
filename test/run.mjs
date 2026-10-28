@@ -480,6 +480,38 @@ test("summary: a few topics is fine, none is fine, and ids follow the facts", ()
   assert.deepEqual(verifyTopics("not json", facts, 3), []);
 });
 
+test("summary: the packet carries the goal and the previous topics as delta", () => {
+  const state = folded([...userTurn(0, "把登录修好"), ...changeCall(2, "c1", "src/login.js")]);
+  const round = state.round;
+  const packet = buildPacket(round, {
+    goal: "把登录修好，让会话能在刷新后恢复",
+    previousTopics: ["登录表单无法保存", "src/login.js 已改动", "第三个旧主题", "第四个旧主题"]
+  });
+  assert.ok(packet.text.includes("goal: 把登录修好"), packet.text);
+  assert.ok(packet.text.includes("previous: 登录表单无法保存 / src/login.js 已改动"), "only the last topics ride along");
+  assert.equal((packet.text.match(/^previous:/gmu) ?? []).length, 1, "one delta line, never a history dump");
+  const long = buildPacket(round, { goal: "长".repeat(300) });
+  const goalLine = long.text.split("\n").find((line) => line.startsWith("goal:"));
+  assert.ok(Array.from(goalLine).length <= "goal: ".length + 121, "the goal is clipped, not shipped whole");
+});
+
+test("summary: one topic can restate facts from several events", () => {
+  const facts = new Map([
+    ["f1", { id: "f1", statement: "把登录修好", kind: "intent" }],
+    ["f2", { id: "f2", statement: "登录表单无法保存", kind: "blocker" }],
+    ["f3", { id: "f3", statement: "src/login.js 已改动", kind: "change" }]
+  ]);
+  const answer = JSON.stringify({
+    topics: [{ headline: "登录流程无法保存", factIds: ["f1", "f2", "f3"], details: ["已改动 src/login.js"] }]
+  });
+  const topics = verifyTopics(answer, facts, 3);
+  assert.equal(topics.length, 1);
+  assert.deepEqual(topics[0].factIds, ["f1", "f2", "f3"], "every cited fact survives");
+  assert.equal(topics[0].id, "t:f1+f2+f3", "the id names the whole group");
+  const partial = verifyTopics(JSON.stringify({ topics: [{ headline: "登录流程无法保存", factIds: ["f2", "ghost"] }] }), facts, 3);
+  assert.deepEqual(partial[0].factIds, ["f2"], "a cited fact that does not exist is dropped");
+});
+
 test("summary: passing checks never become headroom for a topic", () => {
   const onlyChecks = folded([...userTurn(0, "跑测试"), ...checkCall(2, "c1", "pnpm test")]);
   assert.equal(buildPacket(onlyChecks.round, { maxFacts: 8 }).text.length, 0, "a pass alone is not a summary topic");
