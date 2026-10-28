@@ -16,6 +16,12 @@ the evidence behind each one, and a bounded history of earlier rounds.
 Captured from a real installed profile: the live session is a fresh turn, the
 saved sessions are existing archives opened without turning the switch on.
 
+The last image below is the same saved session opened inside the user's own
+running Harness window (`localhost:62741`), not a fixture:
+
+![Saved session in the running Harness window](docs/preview/main-gui-archived.png)
+
+
 ## What it shows
 
 - **One to three work topics** — what changed, what is still being checked, what

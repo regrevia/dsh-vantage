@@ -52,3 +52,5 @@ template, installs this checkout the way a user does, boots it, and asserts:
   is re-enabled before the view exists in that page.
 - A15 and A03 have no machine check; a future screenshot pass has to supply
   them.
+
+- **A16b — existing saved session in the running window.** `session-cf5330e1-…` opened from the Envoy workspace after reloading `dsh-vantage`; the overview shows Cordis, 已保存, the real title, 里程碑, 关键产物, and 历史 · 8 轮. Screenshot: `docs/preview/main-gui-archived.png`.
