@@ -598,6 +598,8 @@ function roundRecord(index, sessionId = SESSION) {
     runtimeState: "idle",
     goalState: "none",
     verificationState: "unknown",
+    turnEndKind: "completed",
+    replyText: `第 ${index} 轮把页面收拾干净了。`,
     statusLine: "已记录",
     facts: [],
     verification: { state: "unknown", truncated: false, conditions: [] },
@@ -696,6 +698,8 @@ await testAsync("store: a cold session reads its rounds back from the domain", a
   assert.equal(second.count(SESSION), 3);
   assert.equal(second.recent(SESSION, 1)[0].title, "第 2 轮");
   assert.equal(second.get(SESSION, roundIdOf(SESSION, 1)).title, "第 1 轮");
+  assert.equal(second.get(SESSION, roundIdOf(SESSION, 1)).replyText, "第 1 轮把页面收拾干净了。");
+  assert.equal(summarizeRound(second.get(SESSION, roundIdOf(SESSION, 1))).outcome, "第 1 轮把页面收拾干净了");
   assert.equal(second.page(SESSION, { limit: 2 }).items.length, 2);
   await second.close();
 });
@@ -956,15 +960,35 @@ async function testRoutes() {
     assert.equal(summarizeRound(state.round).outcome, "", "but the one-line summary says nothing it cannot stand behind");
   });
 
-  test("rounds: a history row says what was verified, not which file ran", () => {
+  test("rounds: a history row names the work, not the file that ran", () => {
     const state = folded([
       ...userTurn(0, "跑一遍检查"),
       ...checkCall(2, "c1", "node test/run.mjs"),
-      finalMessage(4, "检查过了"),
+      finalMessage(4, "把轮次条从目标改成对话回合。"),
       ev(5, "turn/end", { turn: 1, reason: { kind: "completed" } })
     ]);
     const summary = summarizeRound(state.settled.round);
-    assert.equal(summary.outcome, "验证通过，未改动实现", "the reader gets the result, never the command");
+    assert.equal(summary.outcome, "把轮次条从目标改成对话回合", "the reply says which task the turn settled");
+  });
+
+  test("rounds: an interrupted turn never claims a result it did not reach", () => {
+    const state = folded([
+      ...userTurn(0, "改一下页面"),
+      ...checkCall(2, "c1", "node test/run.mjs"),
+      ev(4, "turn/end", { turn: 1, reason: { kind: "interrupted" } }),
+      ...userTurn(6, "继续")
+    ]);
+    assert.equal(summarizeRound(state.settled.round).outcome, "被打断，没有结论");
+  });
+
+  test("rounds: a check-only round says it changed nothing", () => {
+    const state = folded([
+      ...userTurn(0, "跑一遍检查"),
+      ...checkCall(2, "c1", "node test/run.mjs"),
+      ev(4, "turn/end", { turn: 1, reason: { kind: "completed" } }),
+      ...userTurn(6, "继续")
+    ]);
+    assert.equal(summarizeRound(state.settled.round).outcome, "只做了检查，没有改动");
   });
 
   test("rounds: a goal's state survives a clear and never invents an objective", () => {
