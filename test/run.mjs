@@ -971,14 +971,46 @@ async function testRoutes() {
     assert.equal(summary.outcome, "把轮次条从目标改成对话回合", "the reply says which task the turn settled");
   });
 
-  test("rounds: an interrupted turn never claims a result it did not reach", () => {
-    const state = folded([
+  test("rounds: an interrupted turn says what ended it, not what it failed to conclude", () => {
+    const continued = folded([
       ...userTurn(0, "改一下页面"),
       ...checkCall(2, "c1", "node test/run.mjs"),
       ev(4, "turn/end", { turn: 1, reason: { kind: "interrupted" } }),
       ...userTurn(6, "继续")
     ]);
-    assert.equal(summarizeRound(state.settled.round).outcome, "被打断，没有结论");
+    assert.equal(summarizeRound(continued.settled.round).outcome, "你发来新消息，这一轮中断");
+
+    const restarted = folded([
+      ...userTurn(0, "改一下页面"),
+      ev(4, "turn/end", { turn: 1, reason: { kind: "interrupted" } }),
+      ev(5, "session/end-seed", {}),
+      ...userTurn(6, "继续")
+    ]);
+    assert.equal(summarizeRound(restarted.settled.round).outcome, "桌面端重启，这一轮中断");
+
+    const unknown = folded([
+      ...userTurn(0, "改一下页面"),
+      ev(4, "turn/end", { turn: 1, reason: { kind: "interrupted" } })
+    ]);
+    assert.equal(summarizeRound(unknown.round).outcome, "原因未知，这一轮中断");
+  });
+
+  test("rounds: a terminated turn names who terminated it", () => {
+    const state = folded([
+      ...userTurn(0, "改一下页面"),
+      ev(4, "turn/end", { turn: 1, reason: { kind: "aborted", reason: { kind: "user" } } }),
+      ...userTurn(6, "继续")
+    ]);
+    assert.equal(summarizeRound(state.settled.round).outcome, "你终止了这一轮");
+  });
+
+  test("rounds: an upstream timeout is the interruption, not a silent stop", () => {
+    const state = folded([
+      ...userTurn(0, "改一下页面"),
+      ev(4, "turn/end", { turn: 1, reason: { kind: "error", error: { code: "ETIMEDOUT", message: "request timed out" } } }),
+      ...userTurn(6, "继续")
+    ]);
+    assert.equal(summarizeRound(state.settled.round).outcome, "上游超时，这一轮中断");
   });
 
   test("rounds: a check-only round says it changed nothing", () => {
