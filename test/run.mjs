@@ -768,8 +768,9 @@ test("client: a history row states the outcome, never its storage state", () => 
   const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
   assert.ok(!source.includes("archivedRound"), "no saved-round placeholder exists");
   const start = source.indexOf("const primaryOf = (row");
-  const row = source.slice(start, start + 420);
-  assert.ok(row.includes("outcome !== ''"), "the work the round did comes first");
+  const row = source.slice(start, start + 900);
+  assert.ok(row.includes("titleSource === 'user'"), "a round that knows its request leads with the request");
+  assert.ok(row.includes("outcome !== ''"), "without one, the work the round did speaks");
   assert.ok(row.includes("words.noSummary"), "a silent round says so instead of naming storage");
 });
 
