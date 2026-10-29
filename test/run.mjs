@@ -738,6 +738,16 @@ test("client: only a row with more to show is a control", () => {
   assert.ok(source.includes("'ov-fact-label'"), "a pending row renders as label and value");
 });
 
+test("client: a hidden page stops polling and a narrow one keeps its controls", () => {
+  const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
+  assert.ok(source.includes("document.visibilityState !== 'visible'"), "a hidden tab skips the request");
+  assert.ok(source.includes("setInterval(tickOnce, POLL_MS)"), "polling has one fixed timer");
+  assert.ok(source.includes("@media (max-width: 560px)"), "a 360px viewport has its own layout");
+  assert.ok(source.includes(":focus-visible"), "keyboard focus stays visible");
+  assert.ok(source.includes("'aria-checked'"), "the recording switch reports its state");
+  assert.ok(source.includes("'aria-label': words.switchLabel"), "the switch has a name");
+});
+
 test("client: a heading can never carry payload markup", () => {
   const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
   const titleOf = source.slice(source.indexOf("function titleOf"), source.indexOf("function titleOf") + 600);
