@@ -24,9 +24,10 @@
 import { readFileSync } from "node:fs";
 
 import { LIMITS, OverviewError, ROUTES, ROUTE_PREFIX, clip } from "./lib/schema.js";
-import { PROJECTION_VERSION, apply as foldEvent, chooseStatus, evaluateVerification, initState, materialKeyOf, roundStateOf } from "./lib/rounds.js?v=20";
+import { PROJECTION_VERSION, apply as foldEvent, chooseStatus, evaluateVerification, initState, materialKeyOf, rankFacts, roundStateOf } from "./lib/rounds.js?v=22";
 import { HistoryStore } from "./lib/store.js";
-import { createRoutes } from "./lib/api.js";
+import { createRoutes } from "./lib/api.js?v=25";
+import { answerQuestion } from "./lib/ask.js?v=22";
 import {
   SummaryScheduler,
   buildPacket,
@@ -57,8 +58,8 @@ export const DEFAULT_CONFIG = Object.freeze({
     // Recording is per session and starts off; this switch can only forbid every
     // model call, never enable a session behind the reader's back.
     enabled: true, // ui-copy-ignore
-    cadenceMs: 180000,
-    firstEligibleMs: 60000,
+    cadenceMs: 60000,
+    firstEligibleMs: 0,
     maxInputTokens: 12000,
     maxOutputTokens: 1200,
     maxTopics: 3,
@@ -81,7 +82,12 @@ export const DEFAULT_CONFIG = Object.freeze({
 const STORE_SPEC = Object.freeze({ version: 2, compatibleVersions: [1] });
 
 /** How often the scheduler wakes up to check a visible session. */
-const TICK_MS = 30000;
+const TICK_MS = 10000;
+/** Rounds of recap a side question may read; read only when someone asks. */
+const RECAP_ROUNDS = 10;
+
+/** How long a read session keeps being summarised after the panel last looked. */
+const CACHE_IDLE_MS = 600000;
 /** How many folded sessions stay in memory before the oldest is dropped. */
 const CACHE_LIMIT = 24;
 
@@ -186,6 +192,10 @@ export class Runtime {
      * @type {Map<string, {at: number, session: object}>}
      */
     this.archivedLogs = new Map();
+    /** @type {Map<string, object[]>} sessionId|roundId -> side questions. */
+    this.askThreads = new Map();
+    /** @type {Set<string>} one question at a time per round. */
+    this.askInflight = new Set();
     this.connection = "online";
     this.now = () => Date.now();
     this.timer = null;
@@ -353,7 +363,12 @@ export class Runtime {
     const key = identityOf(session);
     const cached = this.cache.get(session.id);
     const fresh = cached !== undefined && cached.key === key && cached.state.v === PROJECTION_VERSION;
-    if (fresh) return cached.state;
+    if (fresh) {
+      // Touching the entry is what keeps a watched session warm: the scheduler
+      // only summarises sessions somebody is actually looking at.
+      cached.at = this.now();
+      return cached.state;
+    }
     try {
       const state = initState(session.id);
       const events = session.ownEvents();
@@ -563,6 +578,9 @@ export class Runtime {
       this.lastSummaryAt.delete(session.id);
       this.requests.delete(session.id);
       this.cache.delete(session.id);
+      for (const key of [...this.askThreads.keys()]) {
+        if (key.startsWith(`${session.id}|`)) this.askThreads.delete(key);
+      }
     }
     // The switch is a runtime fact and must survive a restart in both directions.
     this.store.saveSwitches(Object.fromEntries(this.switches)).catch(() => {});
@@ -647,8 +665,8 @@ export class Runtime {
     try {
       const result = await summarise(this.owner ?? this.ctx, {
         sessionId: session.id,
-        provider: route.provider,
-        model: route.model,
+        provider: route.provider, // ui-copy-ignore
+        model: route.model, // ui-copy-ignore
         maxOutputTokens: this.config.summary.maxOutputTokens,
         deadlineMs: this.config.summary.requestDeadlineMs,
         maxTopics: this.config.summary.maxTopics,
@@ -733,6 +751,131 @@ export class Runtime {
 
 
   /**
+   * The side questions already answered about one round.
+   *
+   * @param {string} sessionId - runtime session id.
+   * @param {string} roundId - round the questions are about.
+   * @returns {object[]} thread items, oldest first.
+   */
+  threadOf(sessionId, roundId) {
+    return this.askThreads.get(`${sessionId}|${roundId}`) ?? [];
+  }
+
+  /**
+   * One line per earlier round of the same session, read only when asked.
+   *
+   * The ask box sits under the current round, but a question is allowed to be
+   * about the whole session. The recap is assembled from the folded rounds and
+   * the stored records at question time, capped, so an idle page reads nothing.
+   *
+   * @param {object} session - runtime session.
+   * @param {string} excludeRoundId - round already described in full.
+   * @returns {string[]} bullet lines, newest first, bounded.
+   */
+  sessionRecapOf(session, excludeRoundId) {
+    const rounds = [];
+    const seen = new Set([excludeRoundId]);
+    try {
+      for (const row of this.stateOf(session)?.recentRounds ?? []) {
+        if (typeof row?.roundId !== "string" || seen.has(row.roundId)) continue;
+        seen.add(row.roundId);
+        rounds.push(row);
+        if (rounds.length >= RECAP_ROUNDS) break;
+      }
+    } catch {
+      // No live state: stored rounds still make a usable recap.
+    }
+    if (rounds.length < RECAP_ROUNDS) {
+      for (const row of this.store.recent(session.id, RECAP_ROUNDS)) {
+        if (typeof row?.roundId !== "string" || seen.has(row.roundId)) continue;
+        seen.add(row.roundId);
+        const record = this.store.get(session.id, row.roundId);
+        if (record !== undefined) rounds.push(record);
+        if (rounds.length >= RECAP_ROUNDS) break;
+      }
+    }
+    const lines = [];
+    for (const round of rounds) {
+      const title = String(round.title ?? round.summaryText ?? "").replace(/\s+/gu, " ").trim();
+      const body = String(round.reply?.text ?? round.replyText ?? "").replace(/\s+/gu, " ").trim();
+      const line = [title, clip(body, 120)].filter((part) => part !== "").join("：");
+      if (line !== "") lines.push(`- ${line}`);
+    }
+    return lines;
+  }
+
+  /**
+   * Ask one question about a round without touching the conversation itself.
+   *
+   * Nothing here writes a round, opens a round, or enqueues a message: the
+   * question is answered from the round's own record, so the main task keeps
+   * running exactly as it was.
+   *
+   * @param {object} session - runtime session.
+   * @param {string} roundId - round to ask about; empty means the current one.
+   * @param {string} question - the reader's question.
+   * @returns {Promise<object>} verdict plus the resulting thread.
+   */
+  async askRound(session, roundId, question) {
+    if (!this.config.summary.enabled) return { kind: "skipped", reason: "disabled", text: "概览已关闭", items: [] };
+    const state = this.stateOf(session);
+    const live = state?.round ?? state?.settled?.round ?? null;
+    const wanted = roundId === "" ? live?.roundId ?? "" : roundId;
+    let round = live !== null && live.roundId === wanted ? live : undefined;
+    if (round === undefined) round = this.store.get(session.id, wanted);
+    if (round === undefined || round === null) return { kind: "skipped", reason: "no-round", text: "这一轮的记录已不在本机", items: [] };
+    const key = `${session.id}|${wanted}`;
+    if (this.askInflight.has(key)) return { kind: "skipped", reason: "busy", text: "上一个问题还在回答", items: this.threadOf(session.id, wanted) };
+    const route = this.routeOf(session);
+    if (route === null) return { kind: "skipped", reason: "no-model", text: "当前没有可用的模型", items: this.threadOf(session.id, wanted) };
+    const previous = this.threadOf(session.id, wanted);
+    const lines = [];
+    lines.push(`本轮请求：${round.title ?? ""}`.trim());
+    const reply = String(round.reply?.text ?? round.replyText ?? "").trim();
+    if (reply !== "") lines.push(`本轮回复：${clip(reply, LIMITS.replyExcerpt)}`);
+    const facts = rankFacts(round).slice(0, 24).map((fact) => `- ${fact.statement ?? ""}`).filter((line) => line.length > 4);
+    if (facts.length > 0) lines.push("已记录的事实：", ...facts);
+    // Earlier rounds travel as a recap built here, when a question is actually
+    // asked: nothing is read, embedded or kept warm while the page is idle.
+    const recap = this.sessionRecapOf(session, wanted);
+    if (recap.length > 0) lines.push("会话里更早的轮次：", ...recap);
+    if (previous.length > 0) {
+      lines.push("此前的追问：");
+      for (const item of previous.slice(-4)) lines.push(`问：${item.question}`, `答：${item.answer}`);
+    }
+    lines.push(`用户的追问：${question}`);
+    this.askInflight.add(key);
+    try {
+      const result = await answerQuestion(this.owner ?? this.ctx, {
+        sessionId: session.id,
+        provider: route.provider,
+        model: route.model,
+        maxOutputTokens: this.config.summary.maxOutputTokens,
+        deadlineMs: this.config.summary.requestDeadlineMs,
+        packet: lines.join("\n") // ui-copy-ignore
+      });
+      if (result === null) return { kind: "skipped", reason: "no-model", text: "模型没有给出答案", items: previous };
+      const items = previous.concat([{ question, answer: clip(result.answer, LIMITS.answer), at: this.now() }]).slice(-LIMITS.askThread);
+      this.askThreads.set(key, items);
+      // Side questions are a convenience, not a record: the oldest thread goes
+      // when the map reaches its cap so a long-lived panel cannot grow forever.
+      while (this.askThreads.size > LIMITS.askThreads) {
+        const oldest = this.askThreads.keys().next().value;
+        if (oldest === undefined) break;
+        this.askThreads.delete(oldest);
+      }
+      return { kind: "answer", text: "", items, answer: clip(result.answer, LIMITS.answer) };
+    } catch (error) {
+      // A side question is never allowed to become a failed request: the page
+      // shows the miss and keeps the thread it already has.
+      this.warn(`side question failed: ${messageOf(error)}`);
+      return { kind: "skipped", reason: "failed", text: "没能回答这个问题", items: previous };
+    } finally {
+      this.askInflight.delete(key);
+    }
+  }
+
+  /**
    * One scheduler pass. An enabled session keeps recording and summarising even
    * while nobody is looking at the panel; the view only stops polling itself.
    *
@@ -751,6 +894,10 @@ export class Runtime {
         continue;
       }
       if (!this.isEnabled(session)) continue;
+      // Only a session somebody read recently keeps being summarised. A panel
+      // that was closed minutes ago must not keep costing model calls.
+      const cached = this.cache.get(sessionId);
+      if (cached === undefined || this.now() - (cached.at ?? 0) > CACHE_IDLE_MS) continue;
       const state = this.stateOf(session);
       const round = state?.round;
       if (round === null || round === undefined) continue;

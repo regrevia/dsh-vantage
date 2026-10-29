@@ -48,6 +48,12 @@ window.__ModuleLoader__.load({
         goalPaused: '已暂停', // ui-copy-ignore
         goalBlocked: '受阻', // ui-copy-ignore
         detailFailed: '这一轮的记录没能读取', // ui-copy-ignore
+        replyExcerpt: '回复摘录', // ui-copy-ignore
+        askPlaceholder: '问这一轮里的事',
+        pending: '这一轮还没有回复', // ui-copy-ignore
+        askSend: '提问', // ui-copy-ignore
+        askBusy: '正在回答', // ui-copy-ignore
+        askFailed: '没能回答这个问题', // ui-copy-ignore
         back: '返回当前', // ui-copy-ignore
         loading: '正在读取', // ui-copy-ignore
         failed: '概览没能显示', // ui-copy-ignore
@@ -122,6 +128,12 @@ window.__ModuleLoader__.load({
         goalPaused: 'Paused', // ui-copy-ignore
         goalBlocked: 'Blocked', // ui-copy-ignore
         detailFailed: 'This round could not be read', // ui-copy-ignore
+        replyExcerpt: 'Reply excerpt', // ui-copy-ignore
+        askPlaceholder: 'Ask about this round', // ui-copy-ignore
+        pending: 'No reply to this round yet', // ui-copy-ignore
+        askSend: 'Ask', // ui-copy-ignore
+        askBusy: 'Answering', // ui-copy-ignore
+        askFailed: 'The question was not answered', // ui-copy-ignore
         back: 'Back to current', // ui-copy-ignore
         loading: 'Reading', // ui-copy-ignore
         failed: 'Overview could not be shown', // ui-copy-ignore
@@ -353,6 +365,33 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-panel .ov-item-body { padding: 0 0 12px 29px; font-size: 15px; line-height: 24px; }
 .dsv-panel .ov-item-body p { margin: 0 0 10px; overflow-wrap: anywhere; }
 .dsv-panel .ov-item-body p:last-child { margin-bottom: 0; }
+.dsv-panel .ov-rich { margin: 10px 0 0; }
+.dsv-panel .ov-rich > *:first-child { margin-top: 0; }
+.dsv-panel .ov-rich-p { margin: 8px 0 0; font-size: 14px; line-height: 24px; color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; }
+.dsv-panel .ov-rich-head { margin: 12px 0 0; font-size: 14px; line-height: 24px; font-weight: 500; color: var(--dsw-alias-label-primary); }
+.dsv-panel .ov-rich-list { margin: 8px 0 0; padding-left: 20px; list-style: disc; font-size: 14px; line-height: 24px; overflow-wrap: anywhere; }
+.dsv-panel .ov-rich-list li { margin-top: 4px; }
+.dsv-panel .ov-rich code { font-family: var(--dsw-alias-font-mono, ui-monospace, monospace); font-size: 13px; }
+.dsv-panel .ov-table { margin-top: 10px; }
+.dsv-panel .ov-tr { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--dsw-alias-border-l1); font-size: 13px; line-height: 20px; }
+.dsv-panel .ov-tr-head { color: var(--dsw-alias-label-secondary); }
+.dsv-panel .ov-td { overflow-wrap: anywhere; }
+.dsv-panel .ov-quote { margin-top: 12px; }
+.dsv-panel .ov-quote-label { font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-secondary); cursor: pointer; }
+.dsv-panel .ov-quote[open] .ov-quote-label { margin-bottom: 2px; }
+.dsv-panel .ov-quote .ov-rich { margin-top: 6px; }
+.dsv-panel .ov-quote .ov-rich-p, .dsv-panel .ov-quote .ov-rich-list, .dsv-panel .ov-quote .ov-rich-list li { color: var(--dsw-alias-label-secondary); }
+.dsv-panel .ov-ask { margin: 14px 0 0; }
+.dsv-panel .ov-ask-item + .ov-ask-item { margin-top: 10px; }
+.dsv-panel .ov-ask-q { margin: 0; font-size: 14px; line-height: 24px; font-weight: 500; }
+.dsv-panel .ov-ask-a { margin: 2px 0 0; }
+.dsv-panel .ov-ask-a .ov-rich-p { color: var(--dsw-alias-label-secondary); }
+.dsv-panel .ov-ask-notice { margin: 8px 0 0; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
+.dsv-panel .ov-ask-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.dsv-panel .ov-ask-input { flex: 1; min-width: 0; padding: 6px 10px; font: inherit; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-l2); border: 1px solid var(--dsw-alias-border-l1); border-radius: 6px; }
+.dsv-panel .ov-ask-input:focus { outline: none; border-color: var(--dsw-alias-brand-primary); }
+.dsv-panel .ov-ask-send { flex: none; padding: 5px 12px; font: inherit; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-l2); border: 1px solid var(--dsw-alias-border-l1); border-radius: 6px; cursor: pointer; }
+.dsv-panel .ov-ask-send:disabled { color: var(--dsw-alias-label-secondary); cursor: default; }
 .dsv-panel .ov-evidence { margin-top: 14px; }
 .dsv-panel .ov-evidence > summary {
   display: inline-flex; align-items: center; min-height: 28px; padding: 0;
@@ -374,7 +413,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 }
 .dsv-panel .ov-history-list { margin-top: 16px; }
 .dsv-panel .ov-recent { margin-top: 18px; border-top: 1px solid var(--dsw-alias-border-l1); }
-.dsv-panel .ov-history-detail { margin: 0; font-size: 13px; line-height: 1.7; color: var(--dsw-alias-label-secondary); }
 .dsv-panel .ov-recent-row { padding: 10px 0; }
 .dsv-panel .ov-recent .ov-history-row:last-child { border-bottom: 0; }
 .dsv-panel .ov-history-item { border-bottom: 1px solid var(--dsw-alias-border-l1); }
@@ -488,6 +526,150 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       } finally {
         clearTimeout(timer)
       }
+    }
+
+    // A reply is written in Markdown. Printing it as one paragraph turned
+    // "## 本轮改动" and "1. …" into literal noise, so the excerpt is read as the
+    // shape it was written in: headings become lines, markers become a list.
+    function inlineNodes(text, keyPrefix) {
+      const out = []
+      const parts = String(text).split(/(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)\s]+\))/gu)
+      parts.forEach((part, index) => {
+        if (part === '') return
+        const key = `${keyPrefix}:${index}`
+        const bold = /^\*\*([^*]+)\*\*$/u.exec(part)
+        if (bold !== null) { out.push(h('strong', { key }, bold[1])); return }
+        const code = /^`([^`]+)`$/u.exec(part)
+        if (code !== null) { out.push(h('code', { key, className: 'ov-code' }, code[1])); return }
+        const link = /^\[([^\]]+)\]\(([^)\s]+)\)$/u.exec(part)
+        if (link !== null) { out.push(h('a', { key, href: link[2], target: '_blank', rel: 'noreferrer' }, link[1])); return }
+        out.push(part)
+      })
+      return out
+    }
+
+    function richText(text, keyPrefix) {
+      const lines = String(text).replace(/\r/gu, '').split('\n')
+      const blocks = []
+      let list = []
+      let rows = []
+      const flushList = () => {
+        if (list.length === 0) return
+        blocks.push(h('ul', { key: `${keyPrefix}-u${blocks.length}`, className: 'ov-rich-list' }, list))
+        list = []
+      }
+      const flushTable = () => {
+        if (rows.length === 0) return
+        const head = rows[0]
+        const rest = rows.slice(1)
+        blocks.push(h('div', { key: `${keyPrefix}-t${blocks.length}`, className: 'ov-table' }, [
+          h('div', { key: 'h', className: 'ov-tr ov-tr-head' }, head.map((cell, index) => (
+            h('span', { key: index, className: 'ov-td' }, inlineNodes(cell, `${keyPrefix}:th${index}`))
+          ))),
+          ...rest.map((row, rowIndex) => h('div', { key: rowIndex, className: 'ov-tr' }, row.map((cell, cellIndex) => (
+            h('span', { key: cellIndex, className: 'ov-td' }, inlineNodes(cell, `${keyPrefix}:td${rowIndex}:${cellIndex}`))
+          ))))
+        ]))
+        rows = []
+      }
+      for (const rawLine of lines) {
+        const line = rawLine.trim()
+        if (line === '') { flushList(); flushTable(); continue }
+        const heading = /^#{1,6}\s+(.*)$/u.exec(line)
+        if (heading !== null) {
+          flushList(); flushTable()
+          blocks.push(h('p', { key: `${keyPrefix}-h${blocks.length}`, className: 'ov-rich-head' }, inlineNodes(heading[1], `${keyPrefix}:h${blocks.length}`)))
+          continue
+        }
+        const table = /^\|(.*)\|$/u.exec(line)
+        if (table !== null) {
+          const cells = table[1].split('|').map((cell) => cell.trim())
+          if (cells.every((cell) => /^:?-{2,}:?$/u.test(cell))) continue
+          flushList()
+          rows.push(cells)
+          continue
+        }
+        flushTable()
+        const bullet = /^(?:[-*+•]|\d{1,2}[.、)])\s+(.*)$/u.exec(line)
+        if (bullet !== null) {
+          list.push(h('li', { key: `${keyPrefix}-l${blocks.length}-${list.length}` }, inlineNodes(bullet[1], `${keyPrefix}:l${blocks.length}:${list.length}`)))
+          continue
+        }
+        flushList()
+        blocks.push(h('p', { key: `${keyPrefix}-p${blocks.length}`, className: 'ov-rich-p' }, inlineNodes(line, `${keyPrefix}:p${blocks.length}`)))
+      }
+      flushList(); flushTable()
+      return blocks
+    }
+
+    // The reply is the model's own account. It is worth reading, but it is not
+    // the headline: it stays folded under a label, so a round reads first as a
+    // result and only then as prose.
+    function replyQuote(text, keyPrefix, words) {
+      const body = typeof text === 'string' ? text.trim() : ''
+      if (body === '') return null
+      return h('details', { key: `${keyPrefix}-q`, className: 'ov-quote' }, [
+        h('summary', { key: 's', className: 'ov-quote-label' }, words.replyExcerpt),
+        h('div', { key: 'b', className: 'ov-rich' }, richText(body, `${keyPrefix}-qb`))
+      ])
+    }
+
+    // A side question about one round. It answers from that round's own record,
+    // one call at a time, and never writes to the conversation — the main task
+    // is untouched while somebody reads and asks.
+    function SideAsk(props) {
+      const { sessionId, roundId, words } = props
+      const [thread, setThread] = React.useState(null)
+      const [draft, setDraft] = React.useState('')
+      const [busy, setBusy] = React.useState(false)
+      const [notice, setNotice] = React.useState('')
+      const key = `${sessionId}|${roundId}`
+      React.useEffect(() => {
+        let alive = true
+        const query = new URLSearchParams({ session: sessionId, roundId: String(roundId) })
+        void callHost(`/ask?${query.toString()}`).then((answer) => {
+          if (alive !== true) return
+          setThread(answer !== undefined && answer.body !== null && Array.isArray(answer.body.items) ? answer.body.items : [])
+        })
+        return () => { alive = false }
+      }, [key])
+      const submit = () => {
+        const question = draft.trim()
+        if (question === '' || busy === true) return
+        setBusy(true)
+        setNotice('')
+        void callHost('/ask', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ session: sessionId, roundId: String(roundId), question })
+        }).then((answer) => {
+          if (answer === undefined || answer.failed === true || answer.blocked === true) { setNotice(words.askFailed); return }
+          const body = answer.body
+          if (body !== null && Array.isArray(body.items)) setThread(body.items)
+          if (body !== null && typeof body.text === 'string' && body.text !== '') setNotice(body.text)
+          if (body !== null && body.kind === 'answer') setDraft('')
+        }).finally(() => setBusy(false))
+      }
+      const answers = Array.isArray(thread) ? thread : []
+      return h('div', { className: 'ov-ask' }, [
+        ...answers.map((item, index) => h('div', { key: `t${index}`, className: 'ov-ask-item' }, [
+          h('p', { key: 'q', className: 'ov-ask-q' }, item.question),
+          h('div', { key: 'a', className: 'ov-rich ov-ask-a' }, richText(item.answer, `ask${index}`))
+        ])),
+        notice === '' ? null : h('p', { key: 'n', className: 'ov-ask-notice' }, notice),
+        h('div', { key: 'i', className: 'ov-ask-row' }, [
+          h('input', {
+            key: 'f', className: 'ov-ask-input', value: draft, placeholder: words.askPlaceholder,
+            'aria-label': words.askPlaceholder,
+            onChange: (event) => setDraft(event.target.value),
+            onKeyDown: (event) => { if (event.key === 'Enter') { event.preventDefault(); submit() } }
+          }),
+          h('button', {
+            key: 'b', type: 'button', className: 'ov-ask-send', disabled: busy === true || draft.trim() === '',
+            onClick: submit
+          }, busy === true ? words.askBusy : words.askSend)
+        ])
+      ])
     }
 
     function statusTextOf(round) {
@@ -1232,14 +1414,16 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           const open = view.roundId === '' || view.roundId === liveId
           const summaryText = snapshot !== null && typeof snapshot.summaryText === 'string' ? snapshot.summaryText.trim() : ''
           const sealed = open === true ? briefRows(live, '') : null
-          const bodyNode = sealed !== null
-            ? h('div', { key: 'c', className: 'ov-card' }, [
-              summaryText === '' ? null : h('p', { key: 's', className: 'ov-summary-text' }, summaryText),
-              sealed
-            ])
-            : summaryText === ''
-              ? null
-              : h('p', { key: 's', className: 'ov-summary-text' }, summaryText)
+          const liveNodes = []
+          if (open === true) {
+            if (summaryText !== '') liveNodes.push(h('div', { key: 's', className: 'ov-rich ov-summary-text' }, richText(summaryText, 'lsum')))
+            if (sealed !== null) liveNodes.push(sealed)
+            const liveQuote = replyQuote(live.replyExcerpt, 'l', words)
+            if (liveQuote !== null) liveNodes.push(liveQuote)
+          } else if (summaryText !== '') {
+            liveNodes.push(h('div', { key: 's', className: 'ov-rich ov-summary-text' }, richText(summaryText, 'lsum')))
+          }
+          const bodyNode = liveNodes.length === 0 ? null : h('div', { key: 'c', className: 'ov-card' }, liveNodes)
           const bodyOpen = bodyNode !== null
           parts.push(card(liveId, titleOf(live) || words.currentTab, timeOf(live.updatedAt, now), bodyOpen && open, bodyOpen, bodyNode))
         }
@@ -1253,7 +1437,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           const key = row.roundId === undefined || row.roundId === null ? `r${index}` : String(row.roundId)
           const open = view.roundId === key
           const detail = typeof row.detail === 'string' ? row.detail.trim() : ''
-          const canOpen = detail !== '' || (row.hasDetail !== false && row.hasReply === true)
+          const canOpen = detail !== '' || (typeof row.replyExcerpt === 'string' && row.replyExcerpt !== '') || (row.hasDetail !== false && row.hasReply === true)
           const loaded = open === true ? round : null
           const bodyNode = open === false ? null
             : roundFailed === true
@@ -1263,18 +1447,20 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
                 : (() => {
                   const summaryText = typeof loaded.summaryText === 'string' ? loaded.summaryText.trim() : ''
                   const sealed = briefRows(loaded, primary)
-                  if (sealed !== null) {
-                    return h('div', { key: 'b', className: 'ov-card' }, [
-                      summaryText === '' ? null : h('p', { key: 's', className: 'ov-summary-text' }, summaryText),
-                      sealed
-                    ])
-                  }
+                  const nodes = []
                   // A summary is the round's own account. It stays readable even
                   // when the round contributed no separate finding rows.
-                  if (summaryText !== '') {
-                    return h('div', { key: 'b', className: 'ov-card' }, h('p', { key: 's', className: 'ov-summary-text' }, summaryText))
+                  if (summaryText !== '') nodes.push(h('div', { key: 's', className: 'ov-rich ov-summary-text' }, richText(summaryText, 'csum')))
+                  if (sealed !== null) nodes.push(sealed)
+                  const quote = replyQuote(loaded.replyExcerpt, 'c', words)
+                  if (quote !== null) nodes.push(quote)
+                  // Nothing summarised yet: the outcome line is still a result,
+                  // so it reads as prose rather than as one squashed paragraph.
+                  if (nodes.length === 0 && detail !== '') {
+                    nodes.push(h('div', { key: 'd', className: 'ov-rich' }, richText(detail, 'cdet')))
                   }
-                  return detail === '' ? null : h('div', { key: 'b', className: 'ov-brief' }, h('p', { key: 'p', className: 'ov-history-detail' }, detail))
+                  if (nodes.length === 0) return null
+                  return h('div', { key: 'b', className: 'ov-card' }, nodes)
                 })()
           return card(key, primary, timeOf(row.archivedAt, now), open, canOpen, bodyNode)
         })))
@@ -1315,7 +1501,15 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           const roundTitle = titleOf(roundOfSnapshot)
           if (roundTitle !== sessionTitle) body.push(h('h1', { key: 't', className: 'ov-headline' }, roundTitle))
           const summaryText = typeof snapshot.summaryText === 'string' ? snapshot.summaryText.trim() : ''
-          if (summaryText !== '') body.push(h('p', { key: 'sm', className: 'ov-summary-text' }, summaryText))
+          if (summaryText !== '') body.push(h('div', { key: 'sm', className: 'ov-rich ov-summary-text' }, richText(summaryText, 'nsum')))
+          const currentQuote = replyQuote(roundOfSnapshot.replyExcerpt, 'n', words)
+          if (currentQuote !== null) body.push(currentQuote)
+          // An unanswered round still needs one line under the current round,
+          // so the panel never reads as an empty page.
+          if (roundTitle === '' && summaryText === '' && currentQuote === null) {
+            body.push(h('p', { key: 'pend', className: 'ov-quiet' }, words.pending))
+          }
+          body.push(h(SideAsk, { key: 'ask', sessionId, roundId: roundOfSnapshot.roundId, words }))
           const notices = Array.isArray(snapshot.notices) ? snapshot.notices : []
           notices.forEach((entry, index) => {
             body.push(h(Notice, { key: `n${index}`, text: entry === null || entry === undefined ? '' : entry.text }))

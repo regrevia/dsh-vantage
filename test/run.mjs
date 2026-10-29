@@ -437,8 +437,11 @@ test("summary: one call per session, and a duplicate position is refused", () =>
 test("summary: the shipped defaults match the documented policy", () => {
   const { summary } = DEFAULT_CONFIG;
   assert.equal(summary.enabled, true);
-  assert.equal(summary.cadenceMs, 180_000);
-  assert.equal(summary.firstEligibleMs, 60_000);
+  // A reader should not wait three minutes for the first read of a live round:
+  // the first summary is eligible at once, and a changed round is republished
+  // on the next minute rather than on the next speech.
+  assert.equal(summary.cadenceMs, 60_000);
+  assert.equal(summary.firstEligibleMs, 0);
   assert.equal(summary.maxTopics, 3);
   // The packet is assembled from what the round actually holds, not clipped to
   // a fixed 2400/400 pair that cut the request and the reply out of it.
@@ -775,6 +778,48 @@ test("client: a history row states the outcome, never its storage state", () => 
   assert.ok(row.includes("row?.work"), "the progress statement leads");
   assert.ok(row.includes("row?.outcome"), "without one, the rule-derived outcome speaks");
   assert.ok(row.includes("words.noSummary"), "a silent round says so instead of naming storage");
+});
+
+test("client: a table in the model's answer renders as rows, not as pipes", () => {
+  const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
+  const start = source.indexOf("function richText(text, keyPrefix)");
+  assert.ok(start > 0, "the renderer exists");
+  const body = source.slice(start, start + 2600);
+  assert.ok(body.includes("ov-tr-head"), "the first row is the header");
+  assert.ok(body.includes("^:?-{2,}:?$"), "the separator row is dropped");
+  assert.ok(body.includes("split('|')"), "cells split on the pipe");
+  assert.ok(!source.includes("ov-history-detail"), "raw paragraph rendering is gone");
+});
+
+test("client: a side question reads the round record instead of touching the session", () => {
+  const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
+  const start = source.indexOf("function SideAsk(props)");
+  assert.ok(start > 0, "the side-question panel exists");
+  const body = source.slice(start, start + 2800);
+  assert.ok(body.includes("method: 'POST'"), "a question is one explicit request");
+  assert.ok(body.includes("JSON.stringify({ session: sessionId, roundId: String(roundId), question })"), "the round is named, not the session's head");
+  assert.ok(body.includes("key === 'Enter'"), "Enter asks, nothing asks on its own");
+  assert.ok(!body.includes("setInterval"), "no polling loop");
+});
+
+test("client: the ask box exists only under the current round", () => {
+  const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
+  const sites = source.split("h(SideAsk").length - 1;
+  assert.equal(sites, 1, "one ask box, under the round being read");
+  const start = source.indexOf("h(SideAsk");
+  const body = source.slice(start - 260, start + 160);
+  assert.ok(body.includes("roundOfSnapshot"), "it belongs to the current round body");
+  assert.ok(!body.includes("loaded.roundId"), "a history card carries no ask box");
+  assert.ok(!body.includes("liveId"), "the live-history card carries no ask box either");
+});
+
+test("api: an ask reads its session from the request body", () => {
+  const source = readFileSync(new URL("../lib/api.js", import.meta.url), "utf8");
+  const start = source.indexOf("async function askRoute");
+  assert.ok(start > 0, "the route exists");
+  const body = source.slice(start, start + 1200);
+  assert.ok(body.includes('url.searchParams.get("session") ?? body?.session'), "a POST names the session in its body");
+  assert.ok(body.indexOf("await readJsonBody(request)") < body.indexOf("runtime.session("), "the body is read before the session resolves");
 });
 
 test("rounds: a sentence that points back is never a row title", () => {
@@ -1185,9 +1230,8 @@ async function testRoutes() {
     const answer = await routes.find((entry) => entry.path === ROUTES.round)
       .fetch(new Request(`http://x${ROUTES.round}?session=${SESSION}&round=${archivedState.settled.roundId}`));
     const body = await answer.json();
-    assert.equal(body.round.brief.items[0].id, "reply-excerpt");
-    assert.equal(body.round.brief.items[0].label, "回复摘录");
-    assert.match(body.round.brief.items[0].value, /归档页的开关/u, "the closing reply is quoted, not rewritten");
+    assert.equal(body.round.brief.items.length, 0, "no fact stands in for the reply");
+    assert.match(body.round.replyExcerpt, /归档页的开关/u, "the closing reply is quoted, not rewritten");
   });
 
   await testAsync("enable and summary: a saved session refuses both instead of recording", async () => {
@@ -1214,13 +1258,14 @@ async function testRoutes() {
     assert.equal(asked, 0, "nothing was switched or sent to the model");
   });
 
-  test("routes: exactly the documented seven paths, no duplicates", () => {
+  test("routes: exactly the documented eight paths, no duplicates", () => {
     const routes = createRoutes(runtime);
     const paths = routes.map((route) => route.path);
     assert.equal(new Set(paths).size, paths.length);
     assert.deepEqual(
       [...paths].sort(),
       [
+        ROUTES.ask,
         ROUTES.evidence,
         ROUTES.enable,
         ROUTES.history,
@@ -1281,8 +1326,8 @@ async function testRoutes() {
     const route = createRoutes({ ...runtime, isEnabled: () => false, stateOf: () => aborted })
       .find((entry) => entry.path === ROUTES.snapshot);
     const body = await (await route.fetch(new Request(`http://local${ROUTES.snapshot}?session=${SESSION}`))).json();
-    assert.equal(body.brief.items[0].label, "回复摘录");
-    assert.match(body.brief.items[0].value, /归档页/u);
+    assert.equal(body.brief.items.length, 0, "no fact stands in for the reply");
+    assert.match(body.round.replyExcerpt, /归档页/u);
   });
 
   await testAsync("snapshot: an unfinished saved round shows its latest reply instead of nothing", async () => {
@@ -1290,9 +1335,8 @@ async function testRoutes() {
     const route = createRoutes({ ...runtime, isEnabled: () => false, stateOf: () => open })
       .find((entry) => entry.path === ROUTES.snapshot);
     const body = await (await route.fetch(new Request(`http://local${ROUTES.snapshot}?session=${SESSION}`))).json();
-    assert.equal(body.brief.items[0].id, "reply-excerpt");
-    assert.equal(body.brief.items[0].label, "回复摘录");
-    assert.match(body.brief.items[0].value, /归档页的开关/u);
+    assert.equal(body.brief.items.length, 0, "no fact stands in for the reply");
+    assert.match(body.round.replyExcerpt, /归档页的开关/u);
   });
 
   await testAsync("snapshot: a saved transcript with no tool facts shows its closing reply", async () => {
@@ -1304,10 +1348,8 @@ async function testRoutes() {
     const route = createRoutes({ ...runtime, isEnabled: () => false, stateOf: () => sealed })
       .find((entry) => entry.path === ROUTES.snapshot);
     const body = await (await route.fetch(new Request(`http://local${ROUTES.snapshot}?session=${SESSION}`))).json();
-    assert.equal(body.brief.items.length, 1);
-    assert.equal(body.brief.items[0].id, "reply-excerpt");
-    assert.equal(body.brief.items[0].label, "回复摘录");
-    assert.match(body.brief.items[0].value, /归档页的开关/u, "the reply is quoted, not rewritten");
+    assert.equal(body.brief.items.length, 0, "no fact stands in for the reply");
+    assert.match(body.round.replyExcerpt, /归档页的开关/u, "the reply is quoted, not rewritten");
   });
 
   test("snapshot: the round that just finished stays on screen after the reply seals it", () => {
@@ -1590,7 +1632,7 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
     ]);
     assert.equal(state.round.title, "把概览页的轮次改清楚", "the request names the round");
     const body = buildSnapshot(runtime, session, state, "rev-own-title");
-    assert.equal(body.round?.title, "把概览页的轮次改清楚", "an open round has only its ask to orient the reader");
+    assert.equal(body.round?.title, "", "an unanswered round is never headed by the request that opened it");
     assert.equal(body.round?.ownTitle, "", "the small row carries only 本轮, so the ask appears once");
     assert.equal(body.goal.objective, "继续优化记忆系统", "the goal keeps its own line");
   });
@@ -1627,7 +1669,7 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
   });
 
 test("snapshot: a long goal objective becomes a one-clause heading", () => {
-    const routes = createRoutes({ ...runtime, stateOf: () => ({ ...state, round: { ...state.round, title: "10 小时低资源开发：修复 Envoy 确定性缺陷（ASR 稳定身份、游标、预算），并补齐恢复路径" } }) });
+    const routes = createRoutes({ ...runtime, stateOf: () => ({ ...state, round: { ...state.round, titleSource: "generated", title: "10 小时低资源开发：修复 Envoy 确定性缺陷（ASR 稳定身份、游标、预算），并补齐恢复路径" } }) });
     const route = routes.find((item) => item.path === ROUTES.snapshot);
     return route.fetch(new Request(`http://x${ROUTES.snapshot}?session=${SESSION}`)).then(async (response) => {
       const body = await response.json();
