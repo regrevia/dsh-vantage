@@ -28,7 +28,7 @@ window.__ModuleLoader__.load({
         goalLabel: '会话目标', // ui-copy-ignore
         milestones: '里程碑', // ui-copy-ignore
         artifacts: '关键产物', // ui-copy-ignore
-        archived: '已保存', // ui-copy-ignore
+        archived: '只读', // ui-copy-ignore
         currentRound: '本轮', // ui-copy-ignore
         lastRound: '上一轮', // ui-copy-ignore
         nothingYet: '这一轮没有留下可展示的结论', // ui-copy-ignore
@@ -45,7 +45,7 @@ window.__ModuleLoader__.load({
         newerRound: '更新一轮', // ui-copy-ignore
         backToCurrent: '回到本轮', // ui-copy-ignore
         unanswered: '未作答复', // ui-copy-ignore
-        archivedRound: '已保存的一轮', // ui-copy-ignore
+        noSummary: '这一轮没有留下结论', // ui-copy-ignore
         goalDone: '已达成', // ui-copy-ignore
         goalPaused: '已暂停', // ui-copy-ignore
         goalBlocked: '受阻', // ui-copy-ignore
@@ -79,7 +79,7 @@ window.__ModuleLoader__.load({
           disconnected: '已断开', // ui-copy-ignore
           'answered-unverified': '待核验', // ui-copy-ignore
           verified: '已完成', // ui-copy-ignore
-          archived: '已保存', // ui-copy-ignore
+          archived: '只读', // ui-copy-ignore
           unknown: '' // ui-copy-ignore
         },
         verify: {
@@ -104,7 +104,7 @@ window.__ModuleLoader__.load({
         goalLabel: 'Goal', // ui-copy-ignore
         milestones: 'Milestones', // ui-copy-ignore
         artifacts: 'Key outputs', // ui-copy-ignore
-        archived: 'Saved', // ui-copy-ignore
+        archived: 'Read-only', // ui-copy-ignore
         currentRound: 'This round', // ui-copy-ignore
         lastRound: 'Previous round', // ui-copy-ignore
         nothingYet: 'This round left no conclusion to show', // ui-copy-ignore
@@ -121,7 +121,7 @@ window.__ModuleLoader__.load({
         newerRound: 'Newer round', // ui-copy-ignore
         backToCurrent: 'Back to this round', // ui-copy-ignore
         unanswered: 'No reply', // ui-copy-ignore
-        archivedRound: 'Saved round', // ui-copy-ignore
+        noSummary: 'No conclusion saved for this round', // ui-copy-ignore
         goalDone: 'Achieved', // ui-copy-ignore
         goalPaused: 'Paused', // ui-copy-ignore
         goalBlocked: 'Blocked', // ui-copy-ignore
@@ -154,7 +154,7 @@ window.__ModuleLoader__.load({
           disconnected: 'Disconnected', // ui-copy-ignore
           'answered-unverified': 'Unverified', // ui-copy-ignore
           verified: 'Done', // ui-copy-ignore
-          archived: 'Saved', // ui-copy-ignore
+          archived: 'Read-only', // ui-copy-ignore
           unknown: '' // ui-copy-ignore
         },
         verify: {
@@ -228,13 +228,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-panel .ov-context {
   color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px; white-space: nowrap;
 }
-.dsv-panel .ov-identity { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.dsv-panel .ov-avatar {
-  display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 10px;
-  background: var(--dsw-alias-bg-l2); color: var(--dsw-alias-label-primary);
-  font-size: 14px; line-height: 20px; font-weight: 600; letter-spacing: 0;
-}
-.dsv-panel .ov-name { font-size: 15px; line-height: 24px; font-weight: 600; white-space: nowrap; }
 .dsv-panel .ov-state {
   display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 0 8px;
   border-radius: 6px; background: var(--dsw-alias-bg-l2); color: var(--dsw-alias-label-secondary);
@@ -247,7 +240,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-panel .ov-state[data-tone="warn"] { color: var(--dsw-alias-state-warn-primary); }
 .dsv-panel .ov-state[data-tone="error"] { color: var(--dsw-alias-state-error-primary); }
 .dsv-panel .ov-session-title {
-  margin-top: 12px; font-size: 20px; line-height: 32px; font-weight: 600; overflow-wrap: anywhere;
+  margin-top: 0; font-size: 20px; line-height: 32px; font-weight: 600; overflow-wrap: anywhere;
 }
 .dsv-panel .ov-roundbar {
   display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 24px;
@@ -393,6 +386,10 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-panel .ov-history-row:last-child { border-bottom: 0; }
 .dsv-panel .ov-history-row:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .dsv-panel .ov-history-row > span:first-child { min-width: 0; }
+.dsv-panel .ov-list-heading {
+  margin-bottom: 4px; color: var(--dsw-alias-label-secondary);
+  font-size: 13px; line-height: 20px; font-weight: 500;
+}
 .dsv-panel .ov-history-title {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden;
   font-size: 15px; line-height: 23px; font-weight: 500; overflow-wrap: anywhere;
@@ -1119,23 +1116,16 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       const coverage = snapshot !== null && snapshot.coverage !== null && snapshot.coverage !== undefined ? snapshot.coverage : null
       const readOnly = coverage !== null && coverage.readOnly === true
       const archived = coverage !== null && coverage.archived === true
-      const agent = snapshot !== null && snapshot.agent !== null && snapshot.agent !== undefined ? snapshot.agent : null
       const sessionTitle = snapshot !== null && typeof snapshot.sessionTitle === 'string' ? snapshot.sessionTitle : ''
       const liveRound = snapshot !== null && snapshot.round !== null && snapshot.round !== undefined ? snapshot.round : null
-      const pill = readOnly === true
+      const pill = archived === true
         ? { text: words.archived, tone: 'neutral' }
-        : mode === 'current' && liveRound !== null
+        : coverageEnabled === true && mode === 'current' && liveRound !== null
           ? { text: statusTextOf(liveRound), tone: toneOfStatus(liveRound.statusKey) }
           : { text: '', tone: 'neutral' }
-      const identity = agent === null
-        ? h('span', { key: 'c', className: 'ov-context' }, words.contextCurrent)
-        : h('div', { key: 'i', className: 'ov-identity' }, [
-            h('span', { key: 'a', className: 'ov-avatar', 'aria-hidden': 'true' }, agent.initial),
-            h('span', { key: 'n', className: 'ov-name' }, agent.name),
-            pill.text === '' ? null : h('span', { key: 'p', className: 'ov-state', 'data-tone': pill.tone }, pill.text)
-          ])
 
       const controls = [
+        pill.text === '' ? null : h('span', { key: 'p', className: 'ov-state', 'data-tone': pill.tone }, pill.text),
         archived === true ? null : h('button', {
           key: 'switch', type: 'button', role: 'switch', className: 'ov-switch',
           'aria-checked': coverageEnabled === true ? 'true' : 'false', 'aria-label': words.switchLabel,
@@ -1160,8 +1150,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 
       const header = h('header', { key: 'h', className: 'ov-toolbar' }, [
         h('div', { key: 'm', className: 'ov-head' }, [
-          identity,
-          sessionTitle === '' ? null : h('div', { key: 't', className: 'ov-session-title' }, sessionTitle)
+          h('div', { key: 't', className: 'ov-session-title' }, sessionTitle === '' ? words.contextCurrent : sessionTitle)
         ]),
         h('div', { key: 's', className: 'ov-controls' }, controls)
       ])
@@ -1178,7 +1167,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           h('button', { key: 'r', type: 'button', className: 'ov-control-link ov-back', 'data-action': 'retry' }, words.retry)
         ]))
       } else if (mode === 'list') {
-        const parts = [h('h1', { key: 't' }, words.historyHeading)]
+        const parts = [h('div', { key: 't', className: 'ov-list-heading' }, words.historyHeading)]
         const rows = history !== null && Array.isArray(history.items) ? history.items : []
         if (historyLoading === true && rows.length === 0) {
           parts.push(h('div', { key: 'l', className: 'ov-sub' }, words.historyLoading))
@@ -1193,10 +1182,15 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
             const rowTitle = titleOf(row)
             const distinct = rowTitle !== sessionTitle
             const unanswered = row.hasReply === false
-            const primary = distinct
-              ? rowTitle
-              : outcome !== '' ? outcome : unanswered ? words.unanswered : words.archivedRound
-            const subtitle = distinct && outcome !== '' ? outcome : saved
+            // A row answers "what happened in that round". The outcome comes
+            // first; a title only stands in when the round produced none, and
+            // the stored state line is the last honest thing to say.
+            const primary = outcome !== ''
+              ? outcome
+              : distinct
+                ? rowTitle
+                : unanswered ? words.unanswered : saved !== '' ? saved : words.noSummary
+            const subtitle = primary === saved ? '' : saved
             const key = row.roundId === undefined || row.roundId === null ? `r${index}` : String(row.roundId)
             return h('button', {
               key,

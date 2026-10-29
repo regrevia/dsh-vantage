@@ -760,6 +760,14 @@ test("client: a heading can never carry payload markup", () => {
   assert.ok(titleOf.includes("untitled"), "falling back to a plain heading instead");
 });
 
+test("client: a history row states the outcome, never its storage state", () => {
+  const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
+  assert.ok(!source.includes("archivedRound"), "no saved-round placeholder exists");
+  const row = source.slice(source.indexOf("const primary = outcome"), source.indexOf("const primary = outcome") + 320);
+  assert.ok(row.includes("outcome !== ''"), "the work the round did comes first");
+  assert.ok(row.includes("words.noSummary"), "a silent round says so instead of naming storage");
+});
+
 test("locale: every dictionary line is one the panel really renders", () => {
   const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
   for (const lang of ["zh", "en"]) {
@@ -958,6 +966,12 @@ async function testRoutes() {
     assert.ok(failure !== undefined, "the failure is still evidence");
     assert.ok(failure.statement.startsWith("失败"), "and reads as a failure");
     assert.equal(summarizeRound(state.round).outcome, "", "but the one-line summary says nothing it cannot stand behind");
+  });
+
+  test("rounds: an empty reply does not count as an answer", () => {
+    assert.equal(summarizeRound({ title: "t", reply: { text: "  " } }).hasReply, false, "blank text is no reply");
+    assert.equal(summarizeRound({ title: "t", replyText: "" }).hasReply, false, "empty stored text is no reply");
+    assert.equal(summarizeRound({ title: "t", reply: { text: "改完了" } }).hasReply, true, "real text is an answer");
   });
 
   test("rounds: a history row names the work, not the file that ran", () => {
