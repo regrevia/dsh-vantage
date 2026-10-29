@@ -578,7 +578,9 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         ? round.contentAt
         : typeof round.archivedAt === 'number' && round.archivedAt > 0 ? round.archivedAt : 0
       if (at > 0) parts.push(`${words.updated} ${timeOf(at, now)}`)
-      const verify = verifyTextOf(round)
+      const verify = round.roundState === 'archived' && round.verificationState === 'recheck'
+        ? ''
+        : verifyTextOf(round)
       if (verify !== '') parts.push(verify)
       return parts
     }
