@@ -103,7 +103,7 @@ sessions at a time. Three large logs pinned several GB and killed the host.
 `ownEvents: () => []`, so the array is collectable before the next session is
 opened. The regression test opens a fake stored session and asserts one close,
 an empty `ownEvents()`, the folded title, and projection reuse across reads
-(`93 passed` at that commit). The first twenty-session pass after the reload
+(`93 passed` at that commit; 94 now). The first twenty-session pass after the reload
 completed; repeated passes over the largest logs still restart the host, which
 is why the tail-read gap above stays open.
 
@@ -119,3 +119,5 @@ is why the tail-read gap above stays open.
 - **Very large saved transcripts.** Opening a 19–48 MB compressed log still
   inflates the whole event list before folding. Until `sessionPersistence`
   exposes a tail read, avoid opening several of these back to back.
+
+Live view after the fixes, a real archived session with its title, `已保存`, goal and 关键产物: `docs/preview/final-live-overview.png`.
