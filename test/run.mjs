@@ -758,7 +758,7 @@ test("client: a hidden page stops polling and a narrow one keeps its controls", 
 
 test("client: a heading can never carry payload markup", () => {
   const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
-  const titleOf = source.slice(source.indexOf("function titleOf"), source.indexOf("function titleOf") + 600);
+  const titleOf = source.slice(source.indexOf("function titleOf"), source.indexOf("function titleOf") + 1200);
   assert.ok(titleOf.includes("replace(/<"), "the panel strips a tag-shaped title");
   assert.ok(titleOf.includes("[<>]"), "and refuses one it cannot strip");
   assert.ok(titleOf.includes("untitled"), "falling back to a plain heading instead");
@@ -769,8 +769,9 @@ test("client: a history row states the outcome, never its storage state", () => 
   assert.ok(!source.includes("archivedRound"), "no saved-round placeholder exists");
   const start = source.indexOf("const primaryOf = (row");
   const row = source.slice(start, start + 900);
-  assert.ok(row.includes("titleSource === 'user'"), "a round that knows its request leads with the request");
-  assert.ok(row.includes("outcome !== ''"), "without one, the work the round did speaks");
+  assert.ok(!row.includes("titleSource === 'user'"), "the reader's request never names a row");
+  assert.ok(row.includes("row?.work"), "the progress statement leads");
+  assert.ok(row.includes("row?.outcome"), "without one, the rule-derived outcome speaks");
   assert.ok(row.includes("words.noSummary"), "a silent round says so instead of naming storage");
 });
 
@@ -780,7 +781,8 @@ test("client: only rounds that name a result become history rows", () => {
   const start = source.indexOf("const substantiveOf = (row");
   assert.ok(start > 0, "the filter exists");
   const body = source.slice(start, start + 1100);
-  assert.ok(body.includes("outcome.length < 8"), "a count or a status is not a row");
+  assert.ok(body.includes("outcome.length < 6"), "a count or a status is not a row");
+  assert.ok(body.includes("row?.work"), "a row is kept for its progress statement");
   assert.ok(body.includes("没留下结论"), "a silent round is not a row");
   assert.ok(body.includes("[0-9]+[.、)]"), "a numbered aside is not a row");
 });
@@ -1033,8 +1035,8 @@ async function testRoutes() {
       ev(5, "turn/end", { turn: 1, reason: { kind: "completed" } })
     ]);
     const summary = summarizeRound(state.settled.round);
-    assert.equal(state.settled.round.title, "跑一遍检查", "the asked-for round keeps its request");
-    assert.equal(summary.outcome, "只做了检查，没有改动", "a reply sentence never renames a round that knows its request");
+    assert.equal(state.settled.round.title, "跑一遍检查", "the round still remembers what was asked");
+    assert.equal(summary.work, "把轮次条从目标改成对话回合", "the row reports the work, not the request");
   });
 
   test("rounds: a bare interrupted turn never invents a cause", () => {
@@ -1173,8 +1175,8 @@ async function testRoutes() {
     const answer = await routes.find((entry) => entry.path === ROUTES.round)
       .fetch(new Request(`http://x${ROUTES.round}?session=${SESSION}&round=${archivedState.settled.roundId}`));
     const body = await answer.json();
-    assert.equal(body.round.brief.items[0].id, "conclusion");
-    assert.equal(body.round.brief.items[0].label, "结论");
+    assert.equal(body.round.brief.items[0].id, "reply-excerpt");
+    assert.equal(body.round.brief.items[0].label, "回复摘录");
     assert.match(body.round.brief.items[0].value, /归档页的开关/u, "the closing reply is quoted, not rewritten");
   });
 
@@ -1269,7 +1271,7 @@ async function testRoutes() {
     const route = createRoutes({ ...runtime, isEnabled: () => false, stateOf: () => aborted })
       .find((entry) => entry.path === ROUTES.snapshot);
     const body = await (await route.fetch(new Request(`http://local${ROUTES.snapshot}?session=${SESSION}`))).json();
-    assert.equal(body.brief.items[0].label, "最近回复");
+    assert.equal(body.brief.items[0].label, "回复摘录");
     assert.match(body.brief.items[0].value, /归档页/u);
   });
 
@@ -1278,8 +1280,8 @@ async function testRoutes() {
     const route = createRoutes({ ...runtime, isEnabled: () => false, stateOf: () => open })
       .find((entry) => entry.path === ROUTES.snapshot);
     const body = await (await route.fetch(new Request(`http://local${ROUTES.snapshot}?session=${SESSION}`))).json();
-    assert.equal(body.brief.items[0].id, "conclusion");
-    assert.equal(body.brief.items[0].label, "最近回复");
+    assert.equal(body.brief.items[0].id, "reply-excerpt");
+    assert.equal(body.brief.items[0].label, "回复摘录");
     assert.match(body.brief.items[0].value, /归档页的开关/u);
   });
 
@@ -1293,8 +1295,8 @@ async function testRoutes() {
       .find((entry) => entry.path === ROUTES.snapshot);
     const body = await (await route.fetch(new Request(`http://local${ROUTES.snapshot}?session=${SESSION}`))).json();
     assert.equal(body.brief.items.length, 1);
-    assert.equal(body.brief.items[0].id, "conclusion");
-    assert.equal(body.brief.items[0].label, "结论");
+    assert.equal(body.brief.items[0].id, "reply-excerpt");
+    assert.equal(body.brief.items[0].label, "回复摘录");
     assert.match(body.brief.items[0].value, /归档页的开关/u, "the reply is quoted, not rewritten");
   });
 
@@ -1578,7 +1580,8 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
     ]);
     assert.equal(state.round.title, "把概览页的轮次改清楚", "the request names the round");
     const body = buildSnapshot(runtime, session, state, "rev-own-title");
-    assert.equal(body.round?.ownTitle, "把概览页的轮次改清楚", "the round bar has its own heading");
+    assert.equal(body.round?.title, "把概览页的轮次改清楚", "an open round has only its ask to orient the reader");
+    assert.equal(body.round?.ownTitle, "", "the small row carries only 本轮, so the ask appears once");
     assert.equal(body.goal.objective, "继续优化记忆系统", "the goal keeps its own line");
   });
 
@@ -1869,6 +1872,51 @@ function testClient() {
   assert.equal(registration.name, "conversation.view");
   assert.equal(registration.label(), "Overview");
 }
+
+test("rounds: injected runtime context is never a request or a title", () => {
+  const state = folded([
+    ...userTurn(0, "Current runtime context. This snapshot supersedes earlier runtime-context snapshots."),
+    finalMessage(2, "整理完了轮次条。"),
+    ev(3, "turn/end", { turn: 1, reason: { kind: "completed" } })
+  ]);
+  assert.equal(state.round, null, "context the harness injected opens no round");
+  assert.equal(state.settled?.round?.title ?? "", "", "and never names one");
+});
+
+test("rounds: a history row reports progress, never what the reader said", () => {
+  const state = folded([
+    ...userTurn(0, "还是太口语化了 不够干练呢"),
+    finalMessage(2, "把行标题从原话改成进度陈述。"),
+    ev(3, "turn/end", { turn: 1, reason: { kind: "completed" } })
+  ]);
+  const row = summarizeRound(state.settled.round);
+  assert.equal(row.work, "把行标题从原话改成进度陈述", "the row reports what got done");
+  assert.notEqual(row.work, "还是太口语化了 不够干练呢", "the ask never becomes a title");
+});
+
+test("rounds: a list fragment or command line never becomes a title", () => {
+  const rowWith = (reply) => {
+    const state = folded([
+      ...userTurn(0, "看一下"),
+      finalMessage(2, reply),
+      ev(3, "turn/end", { turn: 1, reason: { kind: "completed" } })
+    ]);
+    return summarizeRound(state.settled.round).work;
+  };
+  assert.equal(rowWith("含 host-live 场景"), "", "a fragment starts mid-list");
+  assert.equal(rowWith("每次运行的退出码与通过数 - node → 0"), "", "a command output is evidence");
+  assert.equal(rowWith("mock 模型流"), "", "a tool name is not a result");
+  assert.equal(rowWith("审计报告 结论"), "", "a label alone leaves no title");
+});
+
+test("rounds: machine prose never becomes a progress title", () => {
+  const state = folded([
+    ...userTurn(0, "继续"),
+    finalMessage(2, "Current runtime context. This snapshot supersedes earlier runtime-context snapshots."),
+    ev(3, "turn/end", { turn: 1, reason: { kind: "completed" } })
+  ]);
+  assert.equal(summarizeRound(state.settled.round).work, "", "an English runtime snapshot is not progress");
+});
 
 testClient();
 

@@ -24,7 +24,7 @@
 import { readFileSync } from "node:fs";
 
 import { LIMITS, OverviewError, ROUTES, ROUTE_PREFIX, clip } from "./lib/schema.js";
-import { PROJECTION_VERSION, apply as foldEvent, chooseStatus, evaluateVerification, initState, materialKeyOf, roundStateOf } from "./lib/rounds.js?v=9";
+import { PROJECTION_VERSION, apply as foldEvent, chooseStatus, evaluateVerification, initState, materialKeyOf, roundStateOf } from "./lib/rounds.js?v=12";
 import { HistoryStore } from "./lib/store.js";
 import { createRoutes } from "./lib/api.js";
 import {
