@@ -779,7 +779,7 @@ test("client: only rounds that name a result become history rows", () => {
   assert.ok(source.includes(".filter(substantiveOf)"), "the list applies the result filter");
   const start = source.indexOf("const substantiveOf = (row");
   assert.ok(start > 0, "the filter exists");
-  const body = source.slice(start, start + 700);
+  const body = source.slice(start, start + 1100);
   assert.ok(body.includes("outcome.length < 8"), "a count or a status is not a row");
   assert.ok(body.includes("没留下结论"), "a silent round is not a row");
   assert.ok(body.includes("[0-9]+[.、)]"), "a numbered aside is not a row");
@@ -1033,7 +1033,8 @@ async function testRoutes() {
       ev(5, "turn/end", { turn: 1, reason: { kind: "completed" } })
     ]);
     const summary = summarizeRound(state.settled.round);
-    assert.equal(summary.outcome, "把轮次条从目标改成对话回合", "the reply says which task the turn settled");
+    assert.equal(state.settled.round.title, "跑一遍检查", "the asked-for round keeps its request");
+    assert.equal(summary.outcome, "只做了检查，没有改动", "a reply sentence never renames a round that knows its request");
   });
 
   test("rounds: a bare interrupted turn never invents a cause", () => {

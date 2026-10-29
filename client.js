@@ -583,12 +583,16 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
   // count, a caveat or a status repeat the ceremony the reader is trying to
   // skip, so the list leaves them out instead of printing filler.
   const substantiveOf = (row) => {
+    // A round the reader asked for is a row on its own: the request is the
+    // thing they will look for, and the body carries what came of it.
+    if (row?.titleSource === 'user') return titleOf(row) !== copy().untitled
     const outcome = String(row?.outcome ?? '').trim()
     if (outcome === '' || outcome.length < 8) return false
     if (/^[0-9]+[.、)]/u.test(outcome)) return false
     if (/^(?:本轮|这一轮|又|继续|之前|为什么|验证了|已保存|三个|两个|一个|重读|它|这|那|其|此|因此|所以|但|而|【)/u.test(outcome)) return false
     if (/(?:硬理由|查清了原因|日志里有|原因已查|先说|先说结论)/u.test(outcome)) return false
     if (/(?:=>|[a-z]+\.[a-z]+\()/u.test(outcome)) return false
+    if (!/[\u4e00-\u9fff]/u.test(outcome) && outcome.length > 12) return false
     if (/(?:没留下结论|没有部署|没有重启|只做了|只做|新增(?:了)?[0-9一二三四五六七八九十两几]*\s*(?:个)?能力|提交了|改了几个文件|跑了一遍|分两层)/u.test(outcome)) return false
     return true
   }
