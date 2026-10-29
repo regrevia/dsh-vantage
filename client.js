@@ -593,6 +593,12 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
     return true
   }
   const primaryOf = (row, sessionTitle, words) => {
+      // A history row answers "what did I ask here", because that is the only
+      // thing the reader can match against their own memory. The result lives
+      // inside the row. Older saved rounds carry no request, so they keep the
+      // rule-derived outcome rather than a reply sentence pretending to be one.
+      const asked = row?.titleSource === 'user' ? titleOf(row) : ''
+      if (asked !== '' && asked !== sessionTitle && asked !== copy().untitled) return asked
       const outcome = String(row?.outcome ?? '')
       if (outcome !== '') return outcome
       if (row?.hasReply === false) return words.unanswered
