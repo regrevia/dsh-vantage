@@ -1135,7 +1135,8 @@ async function testRoutes() {
   ]);
   const body = buildSnapshot(runtime, session, state, "rev-goal-title");
   assert.equal(body.round?.title, "整理概览页的标题", "the readable goal wins over the tag");
-  assert.equal(body.brief.items[0].label, "待办");
+  assert.equal(body.brief.items[0].label, "结论");
+  assert.equal(body.brief.items[0].value, "尚未形成结论");
 });
 
 test("rounds: machine markup in a goal never becomes the heading", () => {
