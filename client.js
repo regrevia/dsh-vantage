@@ -25,13 +25,14 @@ window.__ModuleLoader__.load({
         history: '历史', // ui-copy-ignore
         historyHeading: '历史', // ui-copy-ignore
         pendingLabel: '待办', // ui-copy-ignore
-        goalLabel: '目标', // ui-copy-ignore
+        goalLabel: '会话目标', // ui-copy-ignore
         milestones: '里程碑', // ui-copy-ignore
         artifacts: '关键产物', // ui-copy-ignore
         archived: '已保存', // ui-copy-ignore
-        currentRound: '当前轮', // ui-copy-ignore
-        lastRound: '最后一轮', // ui-copy-ignore
+        currentRound: '本轮', // ui-copy-ignore
+        lastRound: '上一轮', // ui-copy-ignore
         nothingYet: '这一轮没有留下可展示的结论', // ui-copy-ignore
+        inProgress: '这一轮正在处理', // ui-copy-ignore
         roundCountLabel: '历史', // ui-copy-ignore
         roundUnit: '轮', // ui-copy-ignore
         none: '无', // ui-copy-ignore
@@ -101,9 +102,10 @@ window.__ModuleLoader__.load({
         milestones: 'Milestones', // ui-copy-ignore
         artifacts: 'Key outputs', // ui-copy-ignore
         archived: 'Saved', // ui-copy-ignore
-        currentRound: 'Current round', // ui-copy-ignore
-        lastRound: 'Last round', // ui-copy-ignore
+        currentRound: 'This round', // ui-copy-ignore
+        lastRound: 'Previous round', // ui-copy-ignore
         nothingYet: 'This round left no conclusion to show', // ui-copy-ignore
+        inProgress: 'This round is in progress', // ui-copy-ignore
         roundCountLabel: 'History', // ui-copy-ignore
         roundUnit: 'rounds', // ui-copy-ignore
         none: 'None', // ui-copy-ignore
@@ -555,6 +557,8 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 
     // A title is checked again here so one missed path can never put
     // `<goal_round>` on screen.
+    const emptyWordOf = (round, words) => round !== null && round !== undefined && round.roundState !== 'archived' ? words.inProgress : words.nothingYet
+
     function titleOf(round) {
       const title = round === null || round === undefined ? undefined : round.title
       const raw = typeof title === 'string' ? title : ''
@@ -869,11 +873,14 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       }
 
       const openLink = async (link) => {
-        if (link === null || link === undefined || typeof link.path !== 'string' || link.path === '') return
+        if (link === null || link === undefined) return
+        const path = typeof link.path === 'string' ? link.path : ''
+        const url = typeof link.url === 'string' ? link.url : ''
+        if (path === '' && url === '') return
         const answer = await callHost('/open', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ session: sessionId, path: link.path })
+          body: JSON.stringify(path === '' ? { session: sessionId, url } : { session: sessionId, path })
         })
         if (answer.failed === true || answer.blocked === true) setNotice(copy().openFailed)
       }
@@ -964,6 +971,11 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         if (action === 'open-path') {
           event.preventDefault()
           openLink({ path: control.getAttribute('data-path') })
+          return
+        }
+        if (action === 'open-url') {
+          event.preventDefault()
+          openLink({ url: control.getAttribute('data-url') })
           return
         }
         if (action === 'retry') {
@@ -1094,7 +1106,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           if (detailTitle !== sessionTitle) parts.push(h('h1', { key: 't' }, detailTitle))
           if (meta.length > 0) parts.push(h('div', { key: 'm', className: 'ov-meta' }, meta.join(' · ')))
           parts.push(h('div', { key: 'b', className: 'ov-brief' }, items.length === 0
-            ? [h('div', { key: 'e', className: 'ov-sub' }, words.nothingYet)]
+            ? [h('div', { key: 'e', className: 'ov-sub' }, emptyWordOf(round, words))]
             : items.map((item, index) => {
               const key = itemKeyOf(round.roundId, item)
               return h(BriefItem, {
@@ -1122,15 +1134,21 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         const body = []
         if (roundOfSnapshot === null) {
           body.push(h('h1', { key: 't', className: 'ov-headline' }, words.untitled))
-          body.push(h('div', { key: 'e', className: 'ov-summary' }, words.nothingYet))
+          body.push(h('div', { key: 'e', className: 'ov-summary' }, emptyWordOf(roundOfSnapshot, words)))
         } else {
           const brief = snapshot.brief !== null && snapshot.brief !== undefined ? snapshot.brief : null
           const rawItems = brief !== null && Array.isArray(brief.items) ? brief.items : []
           const items = rawItems.filter((item) => item !== null && item !== undefined && item.id !== 'no-facts')
           publishItems(roundOfSnapshot.roundId, items)
           const updated = timeOf(roundOfSnapshot.contentAt, now)
+          const ownTitle = typeof roundOfSnapshot.ownTitle === 'string' ? roundOfSnapshot.ownTitle.trim() : ''
+          const goalText = snapshot !== null && snapshot.goal !== null && typeof snapshot.goal.objective === 'string' ? snapshot.goal.objective.trim() : ''
+          const roundLabel = readOnly === true ? words.lastRound : words.currentRound
+          // A heading that only repeats the conversation title or the goal line
+          // tells the reader nothing, so the label stands on its own instead.
+          const named = ownTitle !== '' && ownTitle !== sessionTitle && ownTitle !== goalText
           body.push(h('div', { key: 'rb', className: 'ov-roundbar' }, [
-            h('span', { key: 'l', className: 'ov-round-label' }, readOnly === true ? words.lastRound : words.currentRound),
+            h('span', { key: 'l', className: 'ov-round-label' }, named ? `${roundLabel} · ${ownTitle}` : roundLabel),
             updated === '' ? null : h('span', { key: 'u', className: 'ov-round-label' }, `${words.updated} ${updated}`)
           ]))
           if (objective !== '') {
@@ -1183,13 +1201,17 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
             body.push(h('div', { key: 'al', className: 'ov-section-label' }, words.artifacts))
             body.push(h('div', { key: 'o', className: 'ov-brief' }, outputs.map((item, index) => {
               const text = String(item.text)
-              const link = item.link !== null && item.link !== undefined && typeof item.link.path === 'string' ? item.link : null
+              const rawLink = item.link !== null && item.link !== undefined ? item.link : null
+              const link = rawLink !== null && typeof rawLink.path === 'string' && rawLink.path !== ''
+                ? rawLink
+                : rawLink !== null && typeof rawLink.url === 'string' && rawLink.url !== '' ? rawLink : null
               return h(link === null ? 'div' : 'button', {
                 key: `out:${index}`,
                 type: link === null ? undefined : 'button',
                 className: 'ov-output-row',
-                'data-action': link === null ? undefined : 'open-path',
-                'data-path': link === null ? undefined : link.path
+                'data-action': link === null ? undefined : typeof link.path === 'string' ? 'open-path' : 'open-url',
+                'data-path': link === null || typeof link.path !== 'string' ? undefined : link.path,
+                'data-url': link === null || typeof link.url !== 'string' ? undefined : link.url
               }, [
                 h('span', { key: 't', className: 'ov-output-text' }, text),
                 link === null ? null : h('span', { key: 'a', className: 'ov-output-arrow', 'aria-hidden': 'true' }, '›')
@@ -1197,7 +1219,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
             })))
           }
           if (items.length === 0 && outputs.length === 0) {
-            body.push(h('div', { key: 'e', className: 'ov-summary' }, words.nothingYet))
+            body.push(h('div', { key: 'e', className: 'ov-summary' }, emptyWordOf(roundOfSnapshot, words)))
           }
           if (pastCount > 0) {
             body.push(h('button', { key: 'h', type: 'button', className: 'ov-history-more', 'data-action': 'history' }, [

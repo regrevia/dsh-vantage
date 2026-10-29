@@ -916,6 +916,32 @@ async function testRoutes() {
     assert.equal(missing.status, 400, "a request without a path is rejected");
   });
 
+  await testAsync("open route: a recorded commit opens at its URL, nothing else", async () => {
+    const commit = folded([
+      ...userTurn(0, "发布修复"),
+      ev(2, "tool/call", { callId: "c1", name: "bash", arguments: JSON.stringify({ command: "git commit -m fix" }) }),
+      ev(3, "tool/result", {
+        message: { toolCallId: "c1", isError: false, content: [{ type: "text", text: "[main abc1234] fix\nhttps://github.com/acme/repo/commit/abc1234def" }] }
+      })
+    ]);
+    const opened = [];
+    const routes = createRoutes({ ...runtime, stateOf: () => commit, openPath: (target) => opened.push(target) });
+    const route = routes.find((item) => item.path === ROUTES.open);
+    const call = (body) => route.fetch(new Request(`http://x${ROUTES.open}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ session: SESSION, ...body })
+    }));
+    const denied = await call({ url: "https://github.com/acme/repo/commit/deadbeef" });
+    assert.equal(denied.status, 404, "an unrecorded URL is refused");
+    assert.deepEqual(opened, [], "nothing outside the round opens");
+    const allowed = await call({ url: "https://github.com/acme/repo/commit/abc1234def" });
+    assert.equal(allowed.status, 200);
+    assert.deepEqual(opened, ["https://github.com/acme/repo/commit/abc1234def"], "the recorded commit opens once");
+    const insecure = await call({ url: "http://github.com/acme/repo/commit/abc1234def" });
+    assert.equal(insecure.status, 400, "only https reaches the opener");
+  });
+
   test("rounds: a saved round never repeats a raw tool failure as its summary", () => {
     const state = folded([
       ...userTurn(0, "改一下页面"),
@@ -928,6 +954,17 @@ async function testRoutes() {
     assert.ok(failure !== undefined, "the failure is still evidence");
     assert.ok(failure.statement.startsWith("失败"), "and reads as a failure");
     assert.equal(summarizeRound(state.round).outcome, "", "but the one-line summary says nothing it cannot stand behind");
+  });
+
+  test("rounds: a history row says what was verified, not which file ran", () => {
+    const state = folded([
+      ...userTurn(0, "跑一遍检查"),
+      ...checkCall(2, "c1", "node test/run.mjs"),
+      finalMessage(4, "检查过了"),
+      ev(5, "turn/end", { turn: 1, reason: { kind: "completed" } })
+    ]);
+    const summary = summarizeRound(state.settled.round);
+    assert.equal(summary.outcome, "验证通过，未改动实现", "the reader gets the result, never the command");
   });
 
   test("rounds: a goal's state survives a clear and never invents an objective", () => {
@@ -1133,7 +1170,7 @@ async function testRoutes() {
     assert.equal(body.round.elapsedMs, sealed.settled.round.archivedAt - sealed.settled.round.startedAt, "a finished round stops its clock");
     assert.equal(body.brief.items.length, 1, JSON.stringify(body.brief.items.map((item) => item.text)));
     assert.notEqual(body.brief.items[0].id, "no-facts", "a sealed round keeps its one real line");
-    assert.ok(body.brief.items[0].text.includes("已修改"), "the line says what the round changed");
+    assert.equal(body.brief.items[0].text, "更新了实现", "the line says what the round changed");
     assert.equal(body.brief.items[0].label, undefined, "a change is a sentence, not a label row");
     assert.equal(body.brief.items[0].link, undefined, "and it promises no file that it cannot open");
   });
@@ -1172,6 +1209,27 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
     assert.deepEqual(body.history.items.map((item) => item.roundId), [older.roundId], "the shown round is not a previous round");
     assert.equal(body.history.count, 1, "the count matches what 历史 can open");
     assert.equal(body.history.hasMore, false);
+  });
+
+  test("snapshot: an unrecorded live session still lists the rounds it folded", () => {
+    const base = folded([...userTurn(0, "继续优化")]);
+    const shownRound = { ...base.round, roundId: `${SESSION}:2`, title: "继续优化" };
+    const olderRound = { ...base.round, roundId: `${SESSION}:1`, title: "先整理页面", archivedAt: 1 };
+    const withRounds = { ...base, round: shownRound, settled: null, recentRounds: [shownRound, olderRound] };
+    const body = buildSnapshot(runtime, session, withRounds, "rev-folded-history");
+    assert.deepEqual(body.history.items.map((item) => item.roundId), [olderRound.roundId], "the round on screen is not repeated");
+    assert.equal(body.history.count, 1, "the folded round is what 历史 can open");
+  });
+
+  await testAsync("history: an unrecorded session answers its folded rounds", async () => {
+    const base = folded([...userTurn(0, "继续优化")]);
+    const shownRound = { ...base.round, roundId: `${SESSION}:2`, title: "继续优化" };
+    const olderRound = { ...base.round, roundId: `${SESSION}:1`, title: "先整理页面", archivedAt: 1 };
+    const withRounds = { ...base, round: shownRound, settled: null, recentRounds: [shownRound, olderRound] };
+    const route = createRoutes({ ...runtime, stateOf: () => withRounds }).find((entry) => entry.path === ROUTES.history);
+    const answer = await route.fetch(new Request(`http://x${ROUTES.history}?session=${SESSION}&exclude=${shownRound.roundId}`));
+    assert.equal(answer.status, 200);
+    assert.deepEqual((await answer.json()).items.map((item) => item.roundId), [olderRound.roundId]);
   });
 
   await testAsync("history: the round on screen can be asked out of a page", async () => {
@@ -1235,8 +1293,9 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
     const rows = body.brief.items;
     assert.equal(rows.length, 1, JSON.stringify(rows.map((row) => row.text)));
     assert.equal(rows[0].source, "rule", "the line is read from the round, not written by a model");
-    assert.ok(rows[0].text.startsWith("已修改 "), "it names the work in progress");
-    assert.equal(JSON.stringify(body).includes("site/a.md"), false, "full paths stay off the brief; basenames are enough");
+    assert.equal(rows[0].text, "更新了文档", "it names the work in progress, not the files");
+    assert.equal(JSON.stringify(rows[0]).includes("site/a.md"), false, "filenames stay out of the line and its evidence");
+    assert.equal(rows[0].detail[0].value, "a.md、b.md", "expanding the line still shows which files changed");
   });
 
   test("snapshot: a delivered file opens from the line that names it", () => {
@@ -1260,7 +1319,7 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
     const body = buildSnapshot(runtime, session, round, "rev-stale");
     const texts = body.brief.items.map((item) => item.text);
     assert.equal(texts.some((text) => text.includes("通过")), false, JSON.stringify(texts));
-    assert.ok(body.brief.items[0].text.includes("已修改"), "the edit is the one line the reader gets");
+    assert.equal(body.brief.items[0].text, "更新了文档", "the edit is the one line the reader gets");
   });
 
   test("snapshot: the same headline from two topics is shown once", () => {
@@ -1306,6 +1365,18 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
     assert.equal(fact.subject, "envoy-f52motion.mp4");
   });
 
+  test("rounds: a commit URL in test output is text, not a delivered commit", () => {
+    const state = folded([
+      ...userTurn(0, "跑一下测试"),
+      ev(2, "tool/call", { callId: "c1", name: "bash", arguments: JSON.stringify({ command: "node test/run.mjs" }) }),
+      ev(3, "tool/result", {
+        message: { toolCallId: "c1", isError: false, content: [{ type: "text", text: "ok https://github.com/acme/repo/commit/0123456789abcdef" }] }
+      })
+    ]);
+    const commits = [...state.round.facts.values()].filter((fact) => fact.kind === "deliverable");
+    assert.equal(commits.length, 0, "the URL came from a fixture, not a commit");
+  });
+
   test("api: a stored deliverable path is shown as its file name", () => {
   // Rounds sealed before the basename rule are still in storage; the wire shape
   // is the last place that can keep a directory out of a one-line brief.
@@ -1323,6 +1394,48 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
   const plain = publicFact({ id: "b:2", kind: "check", statement: "测试通过", basis: "passed", validity: "current", refs: [] });
   assert.equal(plain.statement, "测试通过");
 });
+
+  test("snapshot: a goal objective never renames the round it continues", () => {
+    const state = folded([
+      ...userTurn(0, "把概览页的轮次改清楚"),
+      ev(2, "goal/change", { goal: { phase: "active", objective: "继续优化记忆系统" } })
+    ]);
+    assert.equal(state.round.title, "把概览页的轮次改清楚", "the request names the round");
+    const body = buildSnapshot(runtime, session, state, "rev-own-title");
+    assert.equal(body.round?.ownTitle, "把概览页的轮次改清楚", "the round bar has its own heading");
+    assert.equal(body.goal.objective, "继续优化记忆系统", "the goal keeps its own line");
+  });
+
+  test("snapshot: artifacts are documents and commits, never a source file or a check", () => {
+    const state = folded([
+      ...userTurn(0, "交付一版"),
+      ev(2, "tool/call", { callId: "c1", name: "edit", arguments: JSON.stringify({ path: "/w/client.js" }) }),
+      ev(3, "tool/result", { message: { toolCallId: "c1", isError: false, content: [{ type: "text", text: "ok" }] } }),
+      ev(4, "deliverables/presented", { files: [{ path: "/w/client.js", name: "client.js" }] }),
+      ev(5, "deliverables/presented", { files: [{ path: "/w/docs/ACCEPTANCE.md", name: "ACCEPTANCE.md" }] })
+    ]);
+    const body = buildSnapshot(runtime, session, state, "rev-artifacts");
+    const items = body.outcomes.items;
+    assert.equal(items.length, 1, JSON.stringify(items));
+    assert.equal(items[0].text, "已生成：ACCEPTANCE.md");
+    assert.equal(items[0].link.path, "/w/docs/ACCEPTANCE.md", "the document opens where it lives");
+    assert.equal(JSON.stringify(items).includes("client.js"), false, "a single source file is not an artifact");
+    assert.equal(JSON.stringify(items).includes("通过"), false, "a check is evidence, not an artifact");
+  });
+
+  test("snapshot: a recorded commit becomes a linked artifact", () => {
+    const state = folded([
+      ...userTurn(0, "发布一版"),
+      ev(2, "tool/call", { callId: "c1", name: "bash", arguments: JSON.stringify({ command: "git commit -m drop" }) }),
+      ev(3, "tool/result", {
+        message: { toolCallId: "c1", isError: false, content: [{ type: "text", text: "main\nhttps://github.com/acme/repo/commit/0123456789abcdef" }] }
+      })
+    ]);
+    const body = buildSnapshot(runtime, session, state, "rev-commit");
+    assert.equal(body.outcomes.items.length, 1, JSON.stringify(body.outcomes.items));
+    assert.equal(body.outcomes.items[0].link.url, "https://github.com/acme/repo/commit/0123456789abcdef");
+    assert.equal(body.outcomes.items[0].text, "提交 0123456");
+  });
 
 test("snapshot: a long goal objective becomes a one-clause heading", () => {
     const routes = createRoutes({ ...runtime, stateOf: () => ({ ...state, round: { ...state.round, title: "10 小时低资源开发：修复 Envoy 确定性缺陷（ASR 稳定身份、游标、预算），并补齐恢复路径" } }) });
