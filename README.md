@@ -21,6 +21,11 @@ running Harness window (`localhost:62741`), not a fixture:
 
 ![Saved session in the running Harness window](docs/preview/main-gui-archived.png)
 
+A saved round keeps its own reading position: the pager stays at the top while
+the detail scrolls, and going back returns to the same place in the history list.
+
+![Round pager in a saved round](docs/preview/round-pager.png)
+
 
 ## What it shows
 
@@ -33,7 +38,9 @@ running Harness window (`localhost:62741`), not a fixture:
 - **Verification** — whether the closing check passed, failed, or is still open.
   A passing check is evidence, not a topic.
 - **History** — earlier rounds that ended with a real reply, newest first. The
-  list and the round detail never appear at the same time.
+  list and the round detail never appear at the same time. Inside a round, the
+  pager and the ←/→ keys move one round at a time; the newest saved round turns
+  the forward step into 「回到本轮」.
 - **Saved sessions** — a session that is no longer live opens read-only: its
   last round, delivered items, and history come from the saved log, and the
   switch is hidden so viewing it cannot start recording or a model call.

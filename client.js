@@ -305,6 +305,8 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
   position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: center;
   gap: 20px; margin: -4px 0 8px; padding: 8px 0; background: var(--dsw-alias-bg-base);
 }
+.dsv-panel .ov-roundnav .ov-control-link { padding: 4px 8px; border-radius: 6px; }
+.dsv-panel .ov-roundnav .ov-control-link:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .dsv-panel .ov-roundpos {
   color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px;
   font-variant-numeric: tabular-nums; white-space: nowrap;
