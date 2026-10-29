@@ -7,7 +7,7 @@
  *   P5 字号阶梯 ≤ 6 级，相邻级差 ≥ 2px
  *   P6 阴影档位 ≤ 2 档
  *   P9 页面不自述规模（"共 N 篇""N 大模块"这类统计）
- * P3（图表数）与 P6 的层级判断靠截图，见 /Users/apple/.dsh/design/frontend-design-spec.md。
+ * P3（图表数）与 P6 的层级判断靠截图，见项目的设计规范。
  *
  * 用法：node style-lint.mjs <目录> [--quiet]
  * 退出码：有 error 时 1。

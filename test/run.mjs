@@ -402,7 +402,7 @@ test("regression: a human title outranks a generated one", () => {
 test("regression: a path-like generated title never becomes the heading", () => {
   const state = folded([
     ...userTurn(0, "修一下登录"),
-    ev(3, "session/title", { title: "/Users/apple/Desktop/DSH/dsh-vantage/index.js", source: { kind: "provider" } })
+    ev(3, "session/title", { title: "/Users/me/Desktop/DSH/dsh-vantage/index.js", source: { kind: "provider" } })
   ]);
   assert.equal(state.round.title, "修一下登录");
   assert.equal(state.sessionTitle, "");
@@ -900,7 +900,7 @@ async function testRoutes() {
   await testAsync("open route: only a delivered file is handed to the system viewer", async () => {
     const delivered = folded([
       ...userTurn(0, "导出视频"),
-      ev(2, "deliverables/presented", { files: [{ path: "/Users/apple/CreatorStudio/deliver/out.mp4", name: "out.mp4" }] })
+      ev(2, "deliverables/presented", { files: [{ path: "/Users/me/CreatorStudio/deliver/out.mp4", name: "out.mp4" }] })
     ]);
     const opened = [];
     const routes = createRoutes({ ...runtime, stateOf: () => delivered, openPath: (target) => opened.push(target) });
@@ -913,9 +913,9 @@ async function testRoutes() {
     const denied = await call("/etc/passwd");
     assert.equal(denied.status, 404, "a path no round delivered is refused");
     assert.deepEqual(opened, [], "nothing outside the round opens");
-    const allowed = await call("/Users/apple/CreatorStudio/deliver/out.mp4");
+    const allowed = await call("/Users/me/CreatorStudio/deliver/out.mp4");
     assert.equal(allowed.status, 200);
-    assert.deepEqual(opened, ["/Users/apple/CreatorStudio/deliver/out.mp4"], "the delivered path opens once");
+    assert.deepEqual(opened, ["/Users/me/CreatorStudio/deliver/out.mp4"], "the delivered path opens once");
     const missing = await route.fetch(new Request(`http://x${ROUTES.open}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session: SESSION }) }));
     assert.equal(missing.status, 400, "a request without a path is rejected");
   });
@@ -1345,7 +1345,7 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
   test("snapshot: a summary keeps the delivered file clickable", () => {
     const delivered = folded([
       ...userTurn(0, "导出讲解视频"),
-      ev(2, "deliverables/presented", { files: [{ path: "/Users/apple/CreatorStudio/deliver/out.mp4", name: "out.mp4" }] })
+      ev(2, "deliverables/presented", { files: [{ path: "/Users/me/CreatorStudio/deliver/out.mp4", name: "out.mp4" }] })
     ]);
     const fact = [...delivered.round.facts.values()].find((item) => item.kind === "deliverable");
     assert.ok(fact !== undefined, "the round recorded the delivery");
@@ -1358,7 +1358,7 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
     };
     const body = buildSnapshot({ ...runtime, briefOf: () => summary }, session, delivered, "rev-link");
     assert.equal(body.brief.mode, "summary");
-    assert.equal(body.brief.items[0].link.path, "/Users/apple/CreatorStudio/deliver/out.mp4", "the row still opens the file");
+    assert.equal(body.brief.items[0].link.path, "/Users/me/CreatorStudio/deliver/out.mp4", "the row still opens the file");
   });
 
   test("snapshot: an edit alone still says what changed", () => {
@@ -1379,13 +1379,13 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
   test("snapshot: a delivered file opens from the line that names it", () => {
     const delivered = folded([
       ...userTurn(0, "导出视频"),
-      ev(2, "deliverables/presented", { files: [{ path: "/Users/apple/CreatorStudio/deliver/envoy-f52motion.mp4", name: "envoy-f52motion.mp4" }] })
+      ev(2, "deliverables/presented", { files: [{ path: "/Users/me/CreatorStudio/deliver/envoy-f52motion.mp4", name: "envoy-f52motion.mp4" }] })
     ]);
     const body = buildSnapshot(runtime, session, delivered, "rev-link");
     const row = body.brief.items.find((item) => item.link !== undefined && item.link !== null);
     assert.ok(row !== undefined, "a delivered file is a line of its own");
     assert.equal(row.text, "已生成：envoy-f52motion.mp4");
-    assert.equal(row.link.path, "/Users/apple/CreatorStudio/deliver/envoy-f52motion.mp4", "the row carries its real path");
+    assert.equal(row.link.path, "/Users/me/CreatorStudio/deliver/envoy-f52motion.mp4", "the row carries its real path");
   });
 
   test("snapshot: a passing check never takes a line, even after a new edit", () => {
@@ -1436,7 +1436,7 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
   test("projection: a deliverable is named by its file, not its directory", () => {
     const state = folded([
       ...userTurn(0, "导出视频"),
-      ev(2, "deliverables/presented", { files: [{ path: "/Users/apple/CreatorStudio/deliver/envoy-f52motion.mp4", name: "envoy-f52motion.mp4" }] })
+      ev(2, "deliverables/presented", { files: [{ path: "/Users/me/CreatorStudio/deliver/envoy-f52motion.mp4", name: "envoy-f52motion.mp4" }] })
     ]);
     const fact = state.round.facts.find((item) => item.kind === "deliverable");
     assert.equal(fact.statement, "已生成：envoy-f52motion.mp4");
@@ -1461,7 +1461,7 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
   const wire = publicFact({
     id: "b:1",
     kind: "deliverable",
-    statement: "已生成：/Users/apple/CreatorStudio/deliver/promo-261028.mp4",
+    statement: "已生成：/Users/me/CreatorStudio/deliver/promo-261028.mp4",
     basis: "passed",
     validity: "current",
     refs: [{ seq: 3, label: "工具结果" }]
