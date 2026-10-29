@@ -980,6 +980,9 @@ async function testRoutes() {
       replyText: "打断现在是一条事件，不再写成「没有结论」：\n- 你终止 → 你终止了这一轮 - 发版检查仍在跑"
     });
     assert.equal(summary.outcome, "打断现在是一条事件，不再写成「没有结论」");
+
+    const clock = summarizeRound({ title: "t", replyText: "8 小时持续开发窗口已到 10:00，目标标记完成" });
+    assert.equal(clock.outcome, "8 小时持续开发窗口已到 10:00，目标标记完成", "a clock time is not a colon break");
   });
 
   test("rounds: a history row names the work, not the file that ran", () => {
