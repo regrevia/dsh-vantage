@@ -39,8 +39,11 @@ window.__ModuleLoader__.load({
         historyEmpty: '还没有更早的轮次', // ui-copy-ignore
         historyLoading: '正在读取历史', // ui-copy-ignore
         historyFailed: '历史记录没能读取', // ui-copy-ignore
-        historyBack: '返回当前', // ui-copy-ignore
+        historyBack: '返回历史', // ui-copy-ignore
         historyMore: '查看全部', // ui-copy-ignore
+        olderRound: '更早一轮', // ui-copy-ignore
+        newerRound: '更新一轮', // ui-copy-ignore
+        backToCurrent: '回到本轮', // ui-copy-ignore
         unanswered: '未作答复', // ui-copy-ignore
         archivedRound: '已保存的一轮', // ui-copy-ignore
         goalDone: '已达成', // ui-copy-ignore
@@ -112,8 +115,11 @@ window.__ModuleLoader__.load({
         historyEmpty: 'No earlier rounds yet', // ui-copy-ignore
         historyLoading: 'Reading history', // ui-copy-ignore
         historyFailed: 'History could not be read', // ui-copy-ignore
-        historyBack: 'Back to current', // ui-copy-ignore
+        historyBack: 'Back to history', // ui-copy-ignore
         historyMore: 'Show all', // ui-copy-ignore
+        olderRound: 'Older round', // ui-copy-ignore
+        newerRound: 'Newer round', // ui-copy-ignore
+        backToCurrent: 'Back to this round', // ui-copy-ignore
         unanswered: 'No reply', // ui-copy-ignore
         archivedRound: 'Saved round', // ui-copy-ignore
         goalDone: 'Achieved', // ui-copy-ignore
@@ -294,6 +300,15 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
   color: var(--dsw-alias-label-secondary); white-space: nowrap;
 }
 .dsv-panel .ov-control-link:hover { color: var(--dsw-alias-label-primary); }
+.dsv-panel .ov-control-link:disabled { color: var(--dsw-alias-label-secondary); opacity: 0.45; cursor: default; }
+.dsv-panel .ov-roundnav {
+  position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: center;
+  gap: 20px; margin: -4px 0 8px; padding: 8px 0; background: var(--dsw-alias-bg-base);
+}
+.dsv-panel .ov-roundpos {
+  color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
 .dsv-panel .ov-back { display: inline-flex; margin-bottom: 12px; }
 .dsv-panel h1 {
   margin: 0; font-size: 24px; line-height: 32px; font-weight: 600; overflow-wrap: anywhere;
@@ -702,6 +717,8 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       const expandedRef = React.useRef(new Set())
       const evidenceOpenRef = React.useRef({})
       const itemRef = React.useRef({})
+      const rootRef = React.useRef(null)
+      const listScrollRef = React.useRef(0)
       // 历史 means the rounds before the one on screen, so the shown round is
       // asked out of every page, including pages loaded later.
       const shownRoundRef = React.useRef('')
@@ -823,8 +840,22 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         ? snapshot.coverage.enabled === true
         : false
 
-      const openRound = async (roundId) => {
-        setView({ mode: 'detail', roundId: String(roundId === null || roundId === undefined ? '' : roundId) })
+      const scrollHost = () => {
+        let node = rootRef.current
+        while (node !== null && node !== undefined && node !== document.body) {
+          const overflow = getComputedStyle(node).overflowY
+          if (overflow === 'auto' || overflow === 'scroll') return node
+          node = node.parentElement
+        }
+        return document.scrollingElement
+      }
+
+      const openRound = async (roundId, from) => {
+        if (view.mode === 'list') {
+          const scroller = scrollHost()
+          listScrollRef.current = scroller === null || scroller === undefined ? 0 : scroller.scrollTop
+        }
+        setView({ mode: 'detail', roundId: String(roundId === null || roundId === undefined ? '' : roundId), from: from === 'current' ? 'current' : 'list' })
         setRound(null)
         setRoundFailed(false)
         const fresh = claim('round')
@@ -859,7 +890,16 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           return
         }
         const nextCursor = typeof answer.body.nextCursor === 'string' ? answer.body.nextCursor : ''
-        setHistory({ items: answer.body.items, nextCursor, append: append === true })
+        const seen = new Set()
+        const items = []
+        for (const item of (append === true && history !== null ? history.items : []).concat(answer.body.items)) {
+          const key = item !== null && item !== undefined && item.roundId !== undefined && item.roundId !== null ? String(item.roundId) : ''
+          if (key !== '' && seen.has(key)) continue
+          if (key !== '') seen.add(key)
+          items.push(item)
+        }
+        setHistory({ items, nextCursor })
+        return { items, nextCursor }
       }
 
       const applyExpanded = (itemKey, open) => {
@@ -894,7 +934,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       }
 
       const showHistory = () => {
-        setView({ mode: 'list', roundId: '' })
+        setView({ mode: 'list', roundId: '', from: '' })
         setRound(null)
         setRoundFailed(false)
         setTick((value) => value + 1)
@@ -902,10 +942,80 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       }
 
       const showCurrent = () => {
-        setView({ mode: 'current', roundId: '' })
+        setView({ mode: 'current', roundId: '', from: '' })
         setRound(null)
         setRoundFailed(false)
       }
+      const detailRows = () => (history !== null && Array.isArray(history.items) ? history.items : [])
+
+      const detailPosition = () => {
+        const rows = detailRows()
+        return rows.findIndex((row) => row !== null && row !== undefined && String(row.roundId) === view.roundId)
+      }
+
+      const stepOlder = async () => {
+        const rows = detailRows()
+        const index = detailPosition()
+        if (index < 0) {
+          showHistory()
+          return
+        }
+        if (index + 1 < rows.length) {
+          openRound(rows[index + 1].roundId, 'list')
+          return
+        }
+        const cursor = history !== null && typeof history.nextCursor === 'string' ? history.nextCursor : ''
+        if (cursor === '') return
+        const page = await fetchHistory(cursor, true)
+        const next = page !== null && page !== undefined ? page.items[index + 1] : null
+        if (next !== null && next !== undefined) openRound(next.roundId, 'list')
+      }
+
+      const stepNewer = () => {
+        const rows = detailRows()
+        const index = detailPosition()
+        if (index > 0) {
+          openRound(rows[index - 1].roundId, 'list')
+          return
+        }
+        showCurrent()
+      }
+
+      const leaveDetail = () => {
+        if (view.from === 'current') showCurrent()
+        else showHistory()
+      }
+
+      React.useEffect(() => {
+        const scroller = scrollHost()
+        if (scroller === null || scroller === undefined) return
+        if (view.mode === 'detail') scroller.scrollTop = 0
+        else if (view.mode === 'list') scroller.scrollTop = listScrollRef.current
+      }, [view.mode, view.roundId])
+
+      React.useEffect(() => {
+        if (view.mode !== 'detail') return undefined
+        const onKey = (event) => {
+          if (event.defaultPrevented === true || event.altKey === true || event.ctrlKey === true || event.metaKey === true) return
+          const target = event.target
+          const tag = target !== null && target !== undefined && typeof target.tagName === 'string' ? target.tagName.toLowerCase() : ''
+          if (tag === 'input' || tag === 'textarea' || tag === 'select' || (target !== null && target !== undefined && target.isContentEditable === true)) return
+          if (event.key === 'ArrowLeft') {
+            event.preventDefault()
+            stepOlder()
+          } else if (event.key === 'ArrowRight') {
+            event.preventDefault()
+            stepNewer()
+          } else if (event.key === 'Escape') {
+            event.preventDefault()
+            leaveDetail()
+          }
+        }
+        document.addEventListener('keydown', onKey)
+        return () => {
+          document.removeEventListener('keydown', onKey)
+        }
+      }, [view.mode, view.roundId, view.from, history])
 
       const toggleSwitch = async () => {
         if (pending === true || snapshot === null) return
@@ -960,7 +1070,17 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         }
         if (action === 'open-round') {
           event.preventDefault()
-          openRound(control.getAttribute('data-round'))
+          openRound(control.getAttribute('data-round'), 'list')
+          return
+        }
+        if (action === 'older-round') {
+          event.preventDefault()
+          stepOlder()
+          return
+        }
+        if (action === 'newer-round') {
+          event.preventDefault()
+          stepNewer()
           return
         }
         if (action === 'history-more') {
@@ -1024,8 +1144,13 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
             h('span', { key: 'k', className: 'ov-switch-knob' })
           ])
         ]),
-        mode === 'list' || mode === 'detail'
+        mode === 'list'
           ? h('button', { key: 'link', type: 'button', className: 'ov-control-link', 'data-action': 'current' }, words.back)
+          : mode === 'detail'
+            ? h('button', {
+              key: 'link', type: 'button', className: 'ov-control-link',
+              'data-action': view.from === 'current' ? 'current' : 'history'
+            }, view.from === 'current' ? words.backToCurrent : words.historyBack)
           : snapshot !== null && (snapshot.history?.count ?? 0) > 0
             ? h('button', { key: 'link', type: 'button', className: 'ov-control-link', 'data-action': 'history' }, words.history)
             : null
@@ -1105,6 +1230,23 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           const meta = metaOf(round, now)
           const detailTitle = titleOf(round)
           const parts = []
+          const rows = detailRows()
+          const position = detailPosition()
+          if (position >= 0) {
+            const atOldest = position + 1 >= rows.length && (history === null || typeof history.nextCursor !== 'string' || history.nextCursor === '')
+            const total = `${rows.length}${history !== null && typeof history.nextCursor === 'string' && history.nextCursor !== '' ? '+' : ''}`
+            parts.push(h('div', { key: 'nav', className: 'ov-roundnav' }, [
+              h('button', {
+                key: 'o', type: 'button', className: 'ov-control-link', 'data-action': 'older-round',
+                disabled: atOldest, 'aria-label': words.olderRound
+              }, `‹ ${words.olderRound}`),
+              h('span', { key: 'p', className: 'ov-roundpos' }, `${position + 1} / ${total}`),
+              h('button', {
+                key: 'n', type: 'button', className: 'ov-control-link', 'data-action': 'newer-round',
+                'aria-label': position === 0 ? words.backToCurrent : words.newerRound
+              }, `${position === 0 ? words.backToCurrent : words.newerRound} ›`)
+            ]))
+          }
           if (detailTitle !== sessionTitle) parts.push(h('h1', { key: 't' }, detailTitle))
           if (meta.length > 0) parts.push(h('div', { key: 'm', className: 'ov-meta' }, meta.join(' · ')))
           parts.push(h('div', { key: 'b', className: 'ov-brief' }, items.length === 0
@@ -1234,7 +1376,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       }
       if (notice !== '') main.push(h(Notice, { key: 'notice', text: notice }))
 
-      return h('section', { className: 'dsv-panel', onClick: onPanelClick }, [
+      return h('section', { className: 'dsv-panel', onClick: onPanelClick, ref: rootRef }, [
         h('div', { key: 'p', className: 'ov-panel' }, [header, h('main', { key: 'm' }, main)])
       ])
     }

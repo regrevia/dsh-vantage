@@ -971,28 +971,30 @@ async function testRoutes() {
     assert.equal(summary.outcome, "把轮次条从目标改成对话回合", "the reply says which task the turn settled");
   });
 
-  test("rounds: an interrupted turn says what ended it, not what it failed to conclude", () => {
+  test("rounds: a bare interrupted turn never invents a cause", () => {
     const continued = folded([
       ...userTurn(0, "改一下页面"),
       ...checkCall(2, "c1", "node test/run.mjs"),
       ev(4, "turn/end", { turn: 1, reason: { kind: "interrupted" } }),
       ...userTurn(6, "继续")
     ]);
-    assert.equal(summarizeRound(continued.settled.round).outcome, "你发来新消息，这一轮中断");
+    assert.equal(summarizeRound(continued.settled.round).outcome, "被中断，原因未记录");
 
+    // `session/end-seed` only proves a new process segment began. It cannot tell
+    // a restart from a crash, so the row must not name either one.
     const restarted = folded([
       ...userTurn(0, "改一下页面"),
       ev(4, "turn/end", { turn: 1, reason: { kind: "interrupted" } }),
       ev(5, "session/end-seed", {}),
       ...userTurn(6, "继续")
     ]);
-    assert.equal(summarizeRound(restarted.settled.round).outcome, "桌面端重启，这一轮中断");
+    assert.equal(summarizeRound(restarted.settled.round).outcome, "被中断，原因未记录");
 
     const unknown = folded([
       ...userTurn(0, "改一下页面"),
       ev(4, "turn/end", { turn: 1, reason: { kind: "interrupted" } })
     ]);
-    assert.equal(summarizeRound(unknown.round).outcome, "原因未知，这一轮中断");
+    assert.equal(summarizeRound(unknown.round).outcome, "被中断，原因未记录");
   });
 
   test("rounds: a terminated turn names who terminated it", () => {
@@ -1088,6 +1090,26 @@ async function testRoutes() {
     assert.equal(body.round.runtimeState, "idle");
     assert.equal(body.round.statusLine, "已保存");
     assert.ok(body.round.archivedAt > 0, "a saved round carries the time it was saved");
+  });
+
+  await testAsync("round: a saved round with no tool facts quotes its closing reply instead of claiming nothing happened", async () => {
+    const archivedState = folded([
+      ...userTurn(0, "整理归档页"),
+      finalMessage(2, "这一轮把归档页的开关收起来了，历史里只看最近三轮。"),
+      ev(3, "turn/end", { turn: 1, reason: { kind: "completed" } })
+    ]);
+    const routes = createRoutes({
+      ...runtime,
+      isEnabled: () => false,
+      stateOf: () => archivedState,
+      store: Object.assign(Object.create(store), { count: () => 0, get: () => undefined })
+    });
+    const answer = await routes.find((entry) => entry.path === ROUTES.round)
+      .fetch(new Request(`http://x${ROUTES.round}?session=${SESSION}&round=${archivedState.settled.roundId}`));
+    const body = await answer.json();
+    assert.equal(body.round.brief.items[0].id, "conclusion");
+    assert.equal(body.round.brief.items[0].label, "结论");
+    assert.match(body.round.brief.items[0].value, /归档页的开关/u, "the closing reply is quoted, not rewritten");
   });
 
   await testAsync("enable and summary: a saved session refuses both instead of recording", async () => {
