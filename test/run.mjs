@@ -389,13 +389,15 @@ test("regression: an injected checkpoint never renames the round", () => {
   assert.equal(state.round.userMessages, 1, "a checkpoint is not a request");
 });
 
-test("regression: a human title outranks a generated one", () => {
+test("regression: a session title never replaces this round's request", () => {
   const state = folded([
     ...userTurn(0, "修一下登录"),
     ev(3, "session/title", { title: "修复登录表单", source: { kind: "user" } }),
     ev(4, "session/title", { title: "登录页重构", source: { kind: "provider" } })
   ]);
-  assert.equal(state.round.title, "修复登录表单");
+  // The heading answers "what am I looking at here", so the round's own ask
+  // wins; the session name describes the whole conversation, not this round.
+  assert.equal(state.round.title, "修一下登录");
   assert.equal(state.sessionTitle, "修复登录表单");
 });
 
@@ -438,8 +440,10 @@ test("summary: the shipped defaults match the documented policy", () => {
   assert.equal(summary.cadenceMs, 180_000);
   assert.equal(summary.firstEligibleMs, 60_000);
   assert.equal(summary.maxTopics, 3);
-  assert.equal(summary.maxInputTokens, 2400);
-  assert.equal(summary.maxOutputTokens, 400);
+  // The packet is assembled from what the round actually holds, not clipped to
+  // a fixed 2400/400 pair that cut the request and the reply out of it.
+  assert.equal(summary.maxInputTokens, 12000);
+  assert.equal(summary.maxOutputTokens, 1200);
   assert.equal(summary.requestDeadlineMs, 25_000);
 });
 
@@ -1233,7 +1237,7 @@ async function testRoutes() {
     assert.equal(body.coverage.readOnly, true, "the shown facts come from the saved log");
     assert.equal(body.coverage.archived, false, "the switch stays available");
     assert.equal(body.round.statusLine, "已保存");
-    assert.ok(body.brief.items.length > 0, "the saved facts are built");
+    assert.equal(body.brief.items.length, 0, "a passing check alone is no finding to show");
     assert.equal(body.coverage.coreObservedSeq, state.lastSeq);
     assert.equal(folded, 1, "a read may fold the saved log; it records nothing");
     const blank = {
@@ -1306,22 +1310,22 @@ async function testRoutes() {
     assert.equal(body.round?.roundId, sealed.settled.roundId, "the panel shows the round that just finished");
     assert.equal(body.round.runtimeState, "idle", "nothing is running once the reply landed");
     assert.equal(body.round.elapsedMs, sealed.settled.round.archivedAt - sealed.settled.round.startedAt, "a finished round stops its clock");
-    assert.equal(body.brief.items.length, 1, JSON.stringify(body.brief.items.map((item) => item.text)));
-    assert.notEqual(body.brief.items[0].id, "no-facts", "a sealed round keeps its one real line");
-    assert.equal(body.brief.items[0].text, "更新了实现", "the line says what the round changed");
-    assert.equal(body.brief.items[0].label, undefined, "a change is a sentence, not a label row");
-    assert.equal(body.brief.items[0].link, undefined, "and it promises no file that it cannot open");
+    // A category-only edit ("更新了实现") is not a finding: the summary says what
+    // happened, and a passing check proves a claim instead of taking a line.
+    assert.equal(body.brief.items.length, 0, JSON.stringify(body.brief.items.map((item) => item.text)));
   });
 
-  test("snapshot: the heading falls back to a readable goal, never a payload tag", () => {
+  test("snapshot: a goal never stands in for this round's heading", () => {
   const state = folded([
     ...userTurn(0, "<goal_round>"),
     ev(3, "goal/change", { goal: { phase: "active", objective: "整理概览页的标题" } })
   ]);
   const body = buildSnapshot(runtime, session, state, "rev-goal-title");
-  assert.equal(body.round?.title, "整理概览页的标题", "the readable goal wins over the tag");
-  assert.equal(body.brief.items[0].label, "结论");
-  assert.equal(body.brief.items[0].value, "尚未形成结论");
+  // The Goal names the whole session's objective. The round heading answers the
+  // request made here, so an unreadable request leaves it empty rather than
+  // borrowing the Goal.
+  assert.equal(body.round?.title, "");
+  assert.equal(body.brief.items.length, 0, "a round with nothing to say renders no body");
 });
 
 test("rounds: machine markup in a goal never becomes the heading", () => {
@@ -1399,7 +1403,12 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
     assert.equal(body.brief.items[0].text, "登录流程无法保存");
     assert.equal(Array.isArray(body.brief.items[0].evidence), true, "the topic still points at its record");
     const stale = { ...runtime, briefOf: () => ({ ...summary, throughSeq: state.lastSeq - 1 }) };
-    assert.equal(buildSnapshot(stale, session, state, "rev-stale").brief.mode, "facts", "an older summary never hides new facts");
+    const staleBody = buildSnapshot(stale, session, state, "rev-stale");
+    // An older summary stays readable until the new one arrives, but it is
+    // marked stale instead of being passed off as current.
+    assert.equal(staleBody.brief.mode, "summary");
+    assert.equal(staleBody.coverage.summaryFresh, false);
+    assert.equal(staleBody.coverage.summaryStale, true);
   });
 
   test("snapshot: a summary keeps the delivered file clickable", () => {
@@ -1421,19 +1430,16 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
     assert.equal(body.brief.items[0].link.path, "/Users/me/CreatorStudio/deliver/out.mp4", "the row still opens the file");
   });
 
-  test("snapshot: an edit alone still says what changed", () => {
+  test("snapshot: an edit alone never prints a category line", () => {
     const edited = folded([
       ...userTurn(0, "重构首页"),
       ...changeCall(2, "w1", "site/a.md"),
       ...changeCall(4, "w2", "site/b.md")
     ]);
     const body = buildSnapshot(runtime, session, edited, "rev-edits");
-    const rows = body.brief.items;
-    assert.equal(rows.length, 1, JSON.stringify(rows.map((row) => row.text)));
-    assert.equal(rows[0].source, "rule", "the line is read from the round, not written by a model");
-    assert.equal(rows[0].text, "更新了文档", "it names the work in progress, not the files");
-    assert.equal(JSON.stringify(rows[0]).includes("site/a.md"), false, "filenames stay out of the line and its evidence");
-    assert.equal(rows[0].detail[0].value, "a.md、b.md", "expanding the line still shows which files changed");
+    const texts = body.brief.items.map((row) => row.text);
+    assert.equal(texts.some((text) => /更新了(?:实现|文档|界面样式|素材)/u.test(text)), false, JSON.stringify(texts));
+    assert.equal(texts.length, 0, "what the edit meant belongs to the summary, not to a category row");
   });
 
   test("snapshot: a delivered file opens from the line that names it", () => {
@@ -1457,7 +1463,7 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
     const body = buildSnapshot(runtime, session, round, "rev-stale");
     const texts = body.brief.items.map((item) => item.text);
     assert.equal(texts.some((text) => text.includes("通过")), false, JSON.stringify(texts));
-    assert.equal(body.brief.items[0].text, "更新了文档", "the edit is the one line the reader gets");
+    assert.equal(texts.length, 0, "neither a passing check nor a category-only edit takes a line");
   });
 
   test("snapshot: the same headline from two topics is shown once", () => {
@@ -1485,7 +1491,7 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
     assert.equal(body.kind, "snapshot");
     assert.equal(body.sessionId, SESSION);
     assert.equal(body.brief.mode, "facts");
-    assert.ok(body.brief.items.length >= 1);
+    assert.ok(Array.isArray(body.brief.items), "the brief always carries a list, empty when nothing is worth a line");
     assert.ok(Array.isArray(body.notices));
     assert.ok(body.verification.conditions.length <= LIMITS.shownConditions);
     const serialized = JSON.stringify(body);

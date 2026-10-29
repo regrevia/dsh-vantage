@@ -24,6 +24,8 @@ window.__ModuleLoader__.load({
         contextHistory: '历史记录', // ui-copy-ignore
         history: '历史', // ui-copy-ignore
         historyHeading: '历史', // ui-copy-ignore
+        currentTab: '当前轮次', // ui-copy-ignore
+        historyTab: '历史轮次', // ui-copy-ignore
         pendingLabel: '待办', // ui-copy-ignore
         goalLabel: '会话目标', // ui-copy-ignore
         milestones: '里程碑', // ui-copy-ignore
@@ -96,6 +98,8 @@ window.__ModuleLoader__.load({
         contextHistory: 'History', // ui-copy-ignore
         history: 'History', // ui-copy-ignore
         historyHeading: 'History', // ui-copy-ignore
+        currentTab: 'Current round', // ui-copy-ignore
+        historyTab: 'Past rounds', // ui-copy-ignore
         pendingLabel: 'Todo', // ui-copy-ignore
         goalLabel: 'Goal', // ui-copy-ignore
         milestones: 'Milestones', // ui-copy-ignore
@@ -251,6 +255,14 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-panel .ov-goal-state { flex: none; color: var(--dsw-alias-label-secondary); font-size: 13px; }
 .dsv-panel .ov-headline { margin-top: 14px; font-size: 22px; line-height: 30px; font-weight: 600; letter-spacing: 0; }
 .dsv-panel .ov-summary { margin-top: 10px; font-size: 15px; line-height: 26px; overflow-wrap: anywhere; }
+.dsv-panel .ov-summary-text { margin: 10px 0 0; font-size: 14px; line-height: 24px; color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; }
+.dsv-panel .ov-seg { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: 8px; background: var(--dsw-alias-bg-l2); }
+.dsv-panel .ov-seg-item {
+  min-height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent;
+  font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-secondary); white-space: nowrap;
+}
+.dsv-panel .ov-seg-item[aria-selected="true"] { background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font-weight: 500; }
+.dsv-panel .ov-seg-item:hover { color: var(--dsw-alias-label-primary); }
 .dsv-panel .ov-section-label {
   margin: 24px 0 2px; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px;
 }
@@ -870,13 +882,20 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 
       const openRound = async (roundId) => {
         const id = String(roundId === null || roundId === undefined ? '' : roundId)
-        if (view.mode === 'list' && view.roundId === id) {
-          setView({ mode: 'list', roundId: '', from: '' })
+        // The current round is already in the snapshot; opening it in the
+        // history list is only a fold, never another request.
+        const liveId = snapshot !== null && snapshot.round !== null && snapshot.round !== undefined ? snapshot.round.roundId : ''
+        if (id !== '' && id === liveId) {
+          setView({ mode: view.mode, roundId: view.roundId === id ? '' : id, from: '' })
+          return
+        }
+        if (view.mode === 'history' && view.roundId === id) {
+          setView({ mode: 'history', roundId: '', from: '' })
           setRound(null)
           setRoundFailed(false)
           return
         }
-        setView({ mode: 'list', roundId: id, from: '' })
+        setView({ mode: 'history', roundId: id, from: '' })
         setRound(null)
         setRoundFailed(false)
         const fresh = claim('round')
@@ -923,6 +942,24 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         return { items, nextCursor }
       }
 
+      // Scrolling up in the history list asks for the previous page; the list
+      // starts with the newest rounds already on screen, so no button is needed.
+      React.useEffect(() => {
+        if (view.mode !== 'history') return undefined
+        const node = scrollHost()
+        if (node === null || node === undefined) return undefined
+        const onScroll = () => {
+          if (node.scrollTop > 12) return
+          if (historyLoading === true || history === null) return
+          const cursor = typeof history.nextCursor === 'string' ? history.nextCursor : ''
+          if (cursor === '') return
+          fetchHistory(cursor, true)
+        }
+        node.addEventListener('scroll', onScroll, { passive: true })
+        onScroll()
+        return () => node.removeEventListener('scroll', onScroll)
+      }, [view.mode, history, historyLoading])
+
       const applyExpanded = (itemKey, open) => {
         if (open === true) expandedRef.current.add(itemKey)
         else expandedRef.current.delete(itemKey)
@@ -955,7 +992,10 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       }
 
       const showHistory = () => {
-        setView({ mode: 'list', roundId: '', from: '' })
+        // The round on screen stays first and open; older rounds page in below
+        // it, so switching tabs never loses where the reader was.
+        const liveId = snapshot !== null && snapshot.round !== null && snapshot.round !== undefined ? snapshot.round.roundId : ''
+        setView({ mode: 'history', roundId: liveId, from: '' })
         setRound(null)
         setRoundFailed(false)
         setTick((value) => value + 1)
@@ -1084,11 +1124,18 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
             h('span', { key: 'k', className: 'ov-switch-knob' })
           ])
         ]),
-        mode === 'list'
-          ? h('button', { key: 'link', type: 'button', className: 'ov-control-link', 'data-action': 'current' }, words.back)
-          : snapshot !== null && (snapshot.history?.count ?? 0) > 0
-            ? h('button', { key: 'link', type: 'button', className: 'ov-control-link', 'data-action': 'history' }, words.history)
-            : null
+        h('div', { key: 'seg', className: 'ov-seg', role: 'tablist' }, [
+          h('button', {
+            key: 'c', type: 'button', role: 'tab', className: 'ov-seg-item',
+            'aria-selected': mode === 'current' ? 'true' : 'false',
+            'data-action': 'current'
+          }, words.currentTab),
+          h('button', {
+            key: 'h', type: 'button', role: 'tab', className: 'ov-seg-item',
+            'aria-selected': mode === 'history' ? 'true' : 'false',
+            'data-action': 'history'
+          }, words.historyTab)
+        ])
       ]
 
       const header = h('header', { key: 'h', className: 'ov-toolbar' }, [
@@ -1129,60 +1176,80 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           h('div', { key: 't', className: 'ov-quiet-title' }, words.failed),
           h('button', { key: 'r', type: 'button', className: 'ov-control-link ov-back', 'data-action': 'retry' }, words.retry)
         ]))
-      } else if (mode === 'list') {
-        const parts = [h('div', { key: 't', className: 'ov-list-heading' }, words.historyHeading)]
-        const rows = history !== null && Array.isArray(history.items)
+      } else if (mode === 'history') {
+        const live = snapshot !== null && snapshot.round !== null && snapshot.round !== undefined ? snapshot.round : null
+        const liveId = live === null ? '' : String(live.roundId)
+        const source = history !== null && Array.isArray(history.items)
           ? history.items.filter(substantiveOf)
-          : []
-        if (historyLoading === true && rows.length === 0) {
-          parts.push(h('div', { key: 'l', className: 'ov-sub' }, words.historyLoading))
-        } else if (historyFailed === true && rows.length === 0) {
-          parts.push(h('div', { key: 'f', className: 'ov-sub' }, words.historyFailed))
-        } else if (rows.length === 0) {
-          parts.push(h('div', { key: 'e', className: 'ov-sub' }, words.historyEmpty))
-        } else {
-          parts.push(h('div', { key: 'r', className: 'ov-history-list' }, rows.map((row, index) => {
-            // A row answers "what happened in that round". The outcome is the
-            // whole line; a status like "replied and verified" says nothing the
-            // reader did not already assume, so it never becomes a subtitle.
-            const primary = primaryOf(row, sessionTitle, words)
-            const key = row.roundId === undefined || row.roundId === null ? `r${index}` : String(row.roundId)
-            const open = view.roundId === key
-            const detail = typeof row.detail === 'string' ? row.detail.trim() : ''
-            // A chevron promises a body. A round interrupted before it wrote a
-            // reply has facts behind it and no panel to show, so it stays static.
-            const canOpen = detail !== '' || (row.hasDetail !== false && row.hasReply === true)
-            const line = [
-              h('span', { key: 't', className: 'ov-history-title' }, primary),
-              h('span', { key: 'a', className: 'ov-history-time' }, timeOf(row.archivedAt, now)),
-              canOpen ? h('span', { key: 'c', className: 'ov-row-chevron', 'aria-hidden': 'true' }, '›') : null
-            ]
-            return h('div', { key, className: 'ov-history-item', 'data-open': open === true ? '' : undefined }, [
-              canOpen
-                ? h('button', {
-                  key: 'row',
-                  type: 'button',
-                  className: 'ov-history-row',
-                  'data-action': 'open-round',
-                  'data-round': row.roundId,
-                  'aria-expanded': open === true ? 'true' : 'false'
-                }, line)
-                : h('div', { key: 'row', className: 'ov-history-row ov-history-row-static' }, line),
-              open === false ? null : h('div', { key: 'd', className: 'ov-round-body' }, roundFailed === true
-                ? h('div', { key: 'f', className: 'ov-sub' }, words.detailFailed)
-                : round === null
-                  ? h('div', { key: 'l', className: 'ov-sub' }, words.loading)
-                  : (() => {
-                    const sealed = briefRows(round, primary)
-                    if (sealed !== null) return sealed
-                    return detail === '' ? null : h('div', { key: 'b', className: 'ov-brief' }, h('p', { key: 'p', className: 'ov-history-detail' }, detail))
-                  })())
+          : (snapshot !== null && snapshot.history !== null && snapshot.history !== undefined && Array.isArray(snapshot.history.items) ? snapshot.history.items : [])
+        const parts = []
+        const card = (key, titleText, timeText, open, canOpen, bodyNode) => h('div', { key, className: 'ov-history-item', 'data-open': open === true ? '' : undefined }, [
+          canOpen
+            ? h('button', {
+              key: 'row', type: 'button', className: 'ov-history-row',
+              'data-action': 'open-round', 'data-round': key,
+              'aria-expanded': open === true ? 'true' : 'false'
+            }, [
+              h('span', { key: 't', className: 'ov-history-title' }, titleText),
+              timeText === '' ? null : h('span', { key: 'a', className: 'ov-history-time' }, timeText),
+              h('span', { key: 'c', className: 'ov-row-chevron', 'aria-hidden': 'true' }, '›')
             ])
-          })))
-          if (history.nextCursor !== undefined && history.nextCursor !== null && history.nextCursor !== '') {
-            parts.push(h('button', { key: 'more', type: 'button', className: 'ov-control-link ov-more', 'data-action': 'history-more' }, words.historyMore))
-          }
+            : h('div', { key: 'row', className: 'ov-history-row ov-history-row-static' }, [
+              h('span', { key: 't', className: 'ov-history-title' }, titleText),
+              timeText === '' ? null : h('span', { key: 'a', className: 'ov-history-time' }, timeText)
+            ]),
+          open === false ? null : h('div', { key: 'd', className: 'ov-round-body' }, bodyNode)
+        ])
+
+        // The round being read leads the list and starts open: switching tabs
+        // must not make the reader hunt for the card they just left.
+        if (live !== null) {
+          const open = view.roundId === '' || view.roundId === liveId
+          const summaryText = snapshot !== null && typeof snapshot.summaryText === 'string' ? snapshot.summaryText.trim() : ''
+          const sealed = open === true ? briefRows(live, '') : null
+          const bodyNode = sealed !== null
+            ? h('div', { key: 'c', className: 'ov-card' }, [
+              summaryText === '' ? null : h('p', { key: 's', className: 'ov-summary-text' }, summaryText),
+              sealed
+            ])
+            : summaryText === ''
+              ? null
+              : h('p', { key: 's', className: 'ov-summary-text' }, summaryText)
+          const bodyOpen = bodyNode !== null
+          parts.push(card(liveId, titleOf(live) || words.currentTab, timeOf(live.updatedAt, now), bodyOpen && open, bodyOpen, bodyNode))
         }
+
+        const rows = source.filter((row) => row !== null && row !== undefined && String(row.roundId) !== liveId)
+        if (rows.length === 0 && live === null) {
+          parts.push(h('div', { key: 'e', className: 'ov-sub' }, historyLoading === true ? words.historyLoading : words.historyEmpty))
+        }
+        parts.push(h('div', { key: 'r', className: 'ov-history-list' }, rows.map((row, index) => {
+          const primary = primaryOf(row, sessionTitle, words)
+          const key = row.roundId === undefined || row.roundId === null ? `r${index}` : String(row.roundId)
+          const open = view.roundId === key
+          const detail = typeof row.detail === 'string' ? row.detail.trim() : ''
+          const canOpen = detail !== '' || (row.hasDetail !== false && row.hasReply === true)
+          const loaded = open === true ? round : null
+          const bodyNode = open === false ? null
+            : roundFailed === true
+              ? h('div', { key: 'f', className: 'ov-sub' }, words.detailFailed)
+              : loaded === null
+                ? h('div', { key: 'l', className: 'ov-sub' }, words.loading)
+                : (() => {
+                  const summaryText = typeof loaded.summaryText === 'string' ? loaded.summaryText.trim() : ''
+                  const sealed = briefRows(loaded, primary)
+                  if (sealed !== null) {
+                    return h('div', { key: 'b', className: 'ov-card' }, [
+                      summaryText === '' ? null : h('p', { key: 's', className: 'ov-summary-text' }, summaryText),
+                      sealed
+                    ])
+                  }
+                  return detail === '' ? null : h('div', { key: 'b', className: 'ov-brief' }, h('p', { key: 'p', className: 'ov-history-detail' }, detail))
+                })()
+          return card(key, primary, timeOf(row.archivedAt, now), open, canOpen, bodyNode)
+        })))
+        if (historyLoading === true && source.length > 0) parts.push(h('div', { key: 'l', className: 'ov-sub' }, words.historyLoading))
+        if (historyFailed === true) parts.push(h('div', { key: 'f', className: 'ov-sub' }, words.historyFailed))
         main.push(h('div', { key: 'body' }, parts))
       } else if (loading === true && snapshot === null) {
         main.push(h('div', { key: 'q', className: 'ov-quiet' }, [h('p', { key: 'p' }, words.loading)]))
@@ -1194,7 +1261,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       } else {
         const roundOfSnapshot = snapshot !== null && snapshot.round !== undefined ? snapshot.round : null
         const goal = snapshot !== null && snapshot.goal !== null && snapshot.goal !== undefined ? snapshot.goal : null
-        const objective = goal !== null && typeof goal.objective === 'string' ? goal.objective : ''
         const past = snapshot !== null && snapshot.history !== null && snapshot.history !== undefined ? snapshot.history : null
         const pastCount = past !== null && typeof past.count === 'number' ? past.count : 0
         const body = []
@@ -1208,32 +1274,20 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           publishItems(roundOfSnapshot.roundId, items)
           const updated = timeOf(roundOfSnapshot.contentAt, now)
           const ownTitle = typeof roundOfSnapshot.ownTitle === 'string' ? roundOfSnapshot.ownTitle.trim() : ''
-          const goalText = snapshot !== null && snapshot.goal !== null && typeof snapshot.goal.objective === 'string' ? snapshot.goal.objective.trim() : ''
-          const roundLabel = readOnly === true ? words.lastRound : words.currentRound
-          // A heading that only repeats the conversation title or the goal line
-          // tells the reader nothing, so the label stands on its own instead.
-          const named = ownTitle !== '' && ownTitle !== sessionTitle && ownTitle !== goalText
+          const roundLabel = words.currentRound
+          // A heading that only repeats the conversation title tells the reader
+          // nothing, so the label stands on its own instead.
+          const named = ownTitle !== '' && ownTitle !== sessionTitle
           body.push(h('div', { key: 'rb', className: 'ov-roundbar' }, [
             h('span', { key: 'l', className: 'ov-round-label' }, named ? `${roundLabel} · ${ownTitle}` : roundLabel),
             updated === '' ? null : h('span', { key: 'u', className: 'ov-round-label' }, `${words.updated} ${updated}`)
           ]))
-          if (objective !== '') {
-            const goalState = goal !== null && typeof goal.state === 'string' ? goal.state : ''
-            const goalNote = goalState === 'complete' ? words.goalDone
-              : goalState === 'paused' ? words.goalPaused
-                : goalState === 'blocked' ? words.goalBlocked : ''
-            body.push(h('div', { key: 'g', className: 'ov-goal' }, [
-              h('span', { key: 'l', className: 'ov-goal-label' }, words.goalLabel),
-              h('span', { key: 't', className: 'ov-goal-text' }, objective),
-              goalNote === '' ? null : h('span', { key: 's', className: 'ov-goal-state' }, goalNote)
-            ]))
-          }
+          // A Goal objective describes the whole session, not this round: printing
+          // it here made an unrelated goal read as the answer to this ask.
           const roundTitle = titleOf(roundOfSnapshot)
-          // The goal line already prints the objective; repeating it as the round
-          // heading is the same sentence twice in two sizes.
-          const goalPrefix = objective.replace(/…$/, '').slice(0, 24)
-          const repeatsGoal = goalPrefix !== '' && (roundTitle === objective || roundTitle.replace(/…$/, '').startsWith(goalPrefix))
-          if (roundTitle !== sessionTitle && !repeatsGoal) body.push(h('h1', { key: 't', className: 'ov-headline' }, roundTitle))
+          if (roundTitle !== sessionTitle) body.push(h('h1', { key: 't', className: 'ov-headline' }, roundTitle))
+          const summaryText = typeof snapshot.summaryText === 'string' ? snapshot.summaryText.trim() : ''
+          if (summaryText !== '') body.push(h('p', { key: 'sm', className: 'ov-summary-text' }, summaryText))
           const notices = Array.isArray(snapshot.notices) ? snapshot.notices : []
           notices.forEach((entry, index) => {
             body.push(h(Notice, { key: `n${index}`, text: entry === null || entry === undefined ? '' : entry.text }))
@@ -1284,23 +1338,9 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
               ])
             })))
           }
-          const priorRows = past !== null && Array.isArray(past.items) ? past.items.filter((row) => row !== null && row !== undefined && row.roundId !== roundOfSnapshot.roundId) : []
-          if (items.length === 0 && outputs.length === 0 && priorRows.length === 0) {
-            body.push(h('div', { key: 'e', className: 'ov-summary' }, emptyWordOf(roundOfSnapshot, words)))
-          }
-          // An empty current round still needs content: the last few finished
-          // rounds are the useful thing on screen, and one click opens them.
-          if (items.length === 0 && outputs.length === 0 && priorRows.length > 0) {
-            body.push(h('div', { key: 'recent', className: 'ov-recent' }, priorRows.slice(0, 3).map((row) => h('button', {
-              key: String(row.roundId), type: 'button', className: 'ov-history-row ov-recent-row',
-              'data-action': 'open-recent', 'data-round': row.roundId
-            }, [
-              h('span', { key: 't', className: 'ov-history-title' }, primaryOf(row, sessionTitle, words)),
-              h('span', { key: 'a', className: 'ov-history-time' }, timeOf(row.archivedAt, now)),
-              h('span', { key: 'c', className: 'ov-row-chevron', 'aria-hidden': 'true' }, '›')
-            ]))))
-          }
-          if (pastCount > 0 && priorRows.length === 0) {
+          // Past rounds live behind their own tab; the current tab shows this
+          // round alone so the two controls never present the same list twice.
+          if (pastCount > 0) {
             body.push(h('button', { key: 'h', type: 'button', className: 'ov-history-more', 'data-action': 'history' }, [
               h('span', { key: 't' }, `${words.historyHeading} · ${pastCount} ${words.roundUnit}`),
               h('span', { key: 'a', className: 'ov-output-arrow', 'aria-hidden': 'true' }, '›')

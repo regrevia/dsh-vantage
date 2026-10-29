@@ -24,7 +24,7 @@
 import { readFileSync } from "node:fs";
 
 import { LIMITS, OverviewError, ROUTES, ROUTE_PREFIX, clip } from "./lib/schema.js";
-import { PROJECTION_VERSION, apply as foldEvent, chooseStatus, evaluateVerification, initState, roundStateOf } from "./lib/rounds.js?v=6";
+import { PROJECTION_VERSION, apply as foldEvent, chooseStatus, evaluateVerification, initState, materialKeyOf, roundStateOf } from "./lib/rounds.js?v=8";
 import { HistoryStore } from "./lib/store.js";
 import { createRoutes } from "./lib/api.js";
 import {
@@ -59,8 +59,8 @@ export const DEFAULT_CONFIG = Object.freeze({
     enabled: true, // ui-copy-ignore
     cadenceMs: 180000,
     firstEligibleMs: 60000,
-    maxInputTokens: 2400,
-    maxOutputTokens: 400,
+    maxInputTokens: 12000,
+    maxOutputTokens: 1200,
     maxTopics: 3,
     requestDeadlineMs: 25000,
     provider: "", // ui-copy-ignore
@@ -463,10 +463,26 @@ export class Runtime {
       disconnected: false,
       now: this.now() // ui-copy-ignore
     });
+    // A finished round keeps the summary its reader last saw. Without it the
+    // archive degrades to facts on disk while the live card showed a paragraph,
+    // and the same round reads differently depending on where it is opened.
+    const summary = this.summaries.get(session.id);
+    const brief = summary !== undefined && summary.roundId === round.roundId
+      ? {
+          revision: summary.revision, // ui-copy-ignore
+          generatedAt: summary.generatedAt,
+          materialKey: summary.materialKey, // ui-copy-ignore
+          summary: summary.summary, // ui-copy-ignore
+          topics: summary.topics, // ui-copy-ignore
+          tokens: summary.tokens // ui-copy-ignore
+        }
+      : undefined;
     return {
       sessionId: session.id,
       roundId: round.roundId, // ui-copy-ignore
       title: round.title, // ui-copy-ignore
+      brief, // ui-copy-ignore
+      summaryText: brief?.summary ?? "",
       statusLine: status.line,
       startedAt: round.startedAt,
       updatedAt: round.updatedAt,
@@ -586,6 +602,11 @@ export class Runtime {
     if (round === null) return { kind: "skipped", reason: "fresh", text: "正在整理本轮进展" };
     const route = this.routeOf(session);
     if (route === null) return { kind: "skipped", reason: "no-model", text: "当前没有可用的模型" };
+    const materialKey = materialKeyOf(round);
+    const cached = this.summaries.get(session.id);
+    if (cached !== undefined && cached.roundId === round.roundId && cached.materialKey === materialKey) {
+      return { kind: "skipped", reason: "fresh", text: "没有新的进展" };
+    }
     if (this.scheduler.duplicate(session.id, round.roundId, state.lastSeq)) {
       return { kind: "skipped", reason: "fresh", text: "没有新的进展" };
     }
@@ -599,13 +620,20 @@ export class Runtime {
     }
     // The input cap covers the whole request including the instruction, so the
     // packet gets what is left after the prompt it is sent with.
-    const cap = Number.isFinite(this.config.summary.maxInputTokens) ? this.config.summary.maxInputTokens : 2400;
+    const cap = Number.isFinite(this.config.summary.maxInputTokens) ? this.config.summary.maxInputTokens : 12000;
     const room = Math.max(96, cap - estimateTokens(SUMMARY_SYSTEM_PROMPT) - 8);
-    const previousTopics = this.summaries.get(session.id)?.topics?.map((topic) => topic.headline) ?? [];
+    const previous = this.summaries.get(session.id);
+    const previousTopics = previous?.roundId === round.roundId ? (previous.topics ?? []).map((topic) => topic.headline) : [];
+    // The ask is the frame the summary has to answer; the closing report names
+    // what the agent itself claims, and the facts carry the evidence. Leaving the
+    // request out was why a card said "更新了实现" for any round.
     const packet = buildPacket(round, {
-      goal: this.goalOf(state),
+      request: round.title, // ui-copy-ignore
+      report: round.reply?.text ?? "",
+      previousSummary: previous?.roundId === round.roundId ? (previous.summary ?? "") : "",
+      goal: this.goalOf(state), // ui-copy-ignore
       previousTopics,
-      maxFacts: 24,
+      maxFacts: 32, // ui-copy-ignore
       maxTokens: room
     });
     if (packet.text === "") return { kind: "skipped", reason: "fresh", text: "正在整理本轮进展" };
@@ -638,14 +666,18 @@ export class Runtime {
         expectedGeneration: this.generationOf(key),
         state: this.stateOf(session),
         roundId,
-        seq
+        seq,
+        materialKey,
+        currentMaterialKey: materialKeyOf(this.stateOf(session)?.round)
       });
       if (rejected !== null) return { kind: "skipped", reason: rejected.reason, text: rejected.text };
       this.summaries.set(session.id, {
         roundId,
         throughSeq: seq,
+        materialKey, // ui-copy-ignore
         revision: `${roundId}:${seq}`, // ui-copy-ignore
         generatedAt: this.now(),
+        summary: result.summary, // ui-copy-ignore
         topics: result.topics, // ui-copy-ignore
         tokens: result.tokens // ui-copy-ignore
       });
