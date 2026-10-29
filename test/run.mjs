@@ -1337,6 +1337,36 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
     assert.equal(state.round.title, "把这个页面整理一下", "the opening request is readable; the tag is not");
   });
 
+  test("snapshot: an answered permission stops the round waiting", () => {
+    const waiting = folded([
+      ...userTurn(0, "把插件装上"),
+      ev(2, "approval/asked", { requestId: "req-1" })
+    ]);
+    const before = buildSnapshot(runtime, session, waiting, "rev-asked");
+    assert.equal(before.brief.items.some((item) => item.text === "等待授权后继续"), true, "a pending request is the round's blocker");
+    assert.equal(before.verification.state, "pending");
+    const answered = apply(waiting, ev(3, "approval/decided", { requestId: "req-1", decision: "allow" }));
+    const after = buildSnapshot(runtime, session, answered, "rev-decided");
+    assert.equal(after.brief.items.some((item) => item.text === "等待授权后继续"), false, "a given permission is not a blocker");
+    assert.notEqual(after.verification.state, "pending", "and nothing is still waiting");
+  });
+
+  test("snapshot: a replaced plan does not leave the old steps behind", () => {
+    const state = folded([
+      ...userTurn(0, "先写测试再改"),
+      ev(2, "todo/write", { todos: [
+        { text: "补一个失败用例", status: "pending" },
+        { text: "改实现", status: "pending" }
+      ] })
+    ]);
+    const before = buildSnapshot(runtime, session, state, "rev-plan-1");
+    assert.equal(before.verification.conditions.some((condition) => condition.text === "补一个失败用例"), true);
+    const replanned = apply(state, ev(4, "todo/write", { todos: [{ text: "直接改实现", status: "pending" }] }));
+    const after = buildSnapshot(runtime, session, replanned, "rev-plan-2");
+    assert.equal(after.verification.conditions.some((condition) => condition.text === "补一个失败用例"), false, "a dropped step is not still pending");
+    assert.equal(after.verification.conditions.some((condition) => condition.text === "直接改实现"), true);
+  });
+
   test("snapshot: 历史 lists the rounds before the one on screen", () => {
     const sealed = folded([
       ...userTurn(0, "跑测试"),
