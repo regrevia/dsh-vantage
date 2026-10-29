@@ -588,6 +588,9 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
     const work = String(row?.work ?? '').trim()
     const outcome = work !== '' ? work : String(row?.outcome ?? '').trim()
     if (outcome === '' || outcome.length < 6) return false
+    // A bare acknowledgement ("可以关闭了。") answers the reader, it does not
+    // report progress.
+    if (/^(?:可以|好的|好|行|嗯|对|是的|没问题|收到|继续)/u.test(outcome)) return false
     // A list fragment ("含 mock 场景") or copied command is not a result.
     if (weakRowLine(outcome)) return false
     if (/^[0-9]+[.、)]/u.test(outcome)) return false
@@ -621,10 +624,16 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       const raw = typeof title === 'string' ? title : ''
       const text = raw.replace(/<[^<>\n]{0,80}>/gu, ' ').replace(/\s+/gu, ' ').trim()
       let clean = /[<>]/u.test(text) ? '' : text
+      // Old records prefixed the round's own label to whatever opened it.
+      clean = clean.replace(/^(?:本轮|这一轮|本会话)\s*·\s*/u, '').trim()
       // An English runtime snapshot can still sit in an old saved record; it
       // is context for the model, not a title for a person.
-      if (/^(?:Current runtime context|This snapshot supersedes)/iu.test(clean)) clean = ''
+      if (/(?:Current runtime context|This snapshot supersedes)/iu.test(clean)) clean = ''
+      if (/^【DSH 崩溃防线】/u.test(clean)) clean = ''
       if (!/[\u4e00-\u9fff]/u.test(clean) && clean.split(/\s+/u).length >= 4) clean = ''
+      // A clause that opens with 我/这/该 refers back to something the reader
+      // cannot see; a heading has to stand on its own.
+      if (/^(?:我|我们|你|您|他|她|它|这|那|该|其|此|上面|上述|刚才|先前|之前|还|另外|所以|但|而|并|又|再)/u.test(clean)) clean = ''
       return clean === '' ? copy().untitled : clean
     }
 

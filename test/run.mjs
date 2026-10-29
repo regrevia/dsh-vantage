@@ -24,7 +24,7 @@ import {
   requiredParam,
   roundIdOf
 } from "../lib/schema.js";
-import { apply, evaluateVerification, initState, rankFacts, roundStateOf, summarizeRound } from "../lib/rounds.js";
+import { apply, evaluateVerification, initState, rankFacts, roundStateOf, summarizeRound, workTitleOf } from "../lib/rounds.js";
 import { HistoryStore } from "../lib/store.js";
 import { DEFAULT_CONFIG, Runtime } from "../index.js";
 import { SUMMARY_SYSTEM_PROMPT, SummaryScheduler, buildPacket, estimateTokens, publishVerdict, verifyTopics } from "../lib/summary.js";
@@ -762,6 +762,8 @@ test("client: a heading can never carry payload markup", () => {
   assert.ok(titleOf.includes("replace(/<"), "the panel strips a tag-shaped title");
   assert.ok(titleOf.includes("[<>]"), "and refuses one it cannot strip");
   assert.ok(titleOf.includes("untitled"), "falling back to a plain heading instead");
+  assert.ok(titleOf.includes("本轮|这一轮|本会话"), "an old round-prefixed title loses the label");
+  assert.ok(titleOf.includes("Current runtime context"), "the injected runtime context is never a title");
 });
 
 test("client: a history row states the outcome, never its storage state", () => {
@@ -775,6 +777,13 @@ test("client: a history row states the outcome, never its storage state", () => 
   assert.ok(row.includes("words.noSummary"), "a silent round says so instead of naming storage");
 });
 
+test("rounds: a sentence that points back is never a row title", () => {
+  const reply = "我先前在后台盯着的 CI 任务也确认了：市场 PR 的 check 检查通过。";
+  const title = workTitleOf({ roundId: "r", reply: { text: reply } }, "", reply);
+  assert.equal(/^(?:我|我们|这|该|前)/u.test(title), false, title);
+  assert.ok(title.length >= 6);
+});
+
 test("client: only rounds that name a result become history rows", () => {
   const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
   assert.ok(source.includes(".filter(substantiveOf)"), "the list applies the result filter");
@@ -785,6 +794,7 @@ test("client: only rounds that name a result become history rows", () => {
   assert.ok(body.includes("row?.work"), "a row is kept for its progress statement");
   assert.ok(body.includes("没留下结论"), "a silent round is not a row");
   assert.ok(body.includes("[0-9]+[.、)]"), "a numbered aside is not a row");
+  assert.ok(body.includes("可以|好的"), "a bare acknowledgement is not a row");
 });
 
 test("rounds: an expanded row shows the sentence the row was cut from", () => {
