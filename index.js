@@ -24,9 +24,9 @@
 import { readFileSync } from "node:fs";
 
 import { LIMITS, OverviewError, ROUTES, ROUTE_PREFIX, clip } from "./lib/schema.js";
-import { PROJECTION_VERSION, apply as foldEvent, chooseStatus, evaluateVerification, initState, materialKeyOf, rankFacts, roundStateOf } from "./lib/rounds.js?v=22";
-import { HistoryStore } from "./lib/store.js";
-import { createRoutes } from "./lib/api.js?v=25";
+import { PROJECTION_VERSION, apply as foldEvent, chooseStatus, evaluateVerification, initState, materialKeyOf, rankFacts, roundStateOf } from "./lib/rounds.js?v=24";
+import { HistoryStore } from "./lib/store.js?v=3";
+import { createRoutes } from "./lib/api.js?v=28";
 import { answerQuestion } from "./lib/ask.js?v=22";
 import {
   SummaryScheduler,
@@ -36,7 +36,7 @@ import {
   safeService,
   summarise,
   SUMMARY_SYSTEM_PROMPT
-} from "./lib/summary.js";
+} from "./lib/summary.js?v=3";
 
 /** Read once so `/health`-style reporting and log lines agree with package.json. */
 const PACKAGE = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
@@ -181,6 +181,8 @@ export class Runtime {
     /** @type {Map<string, string>} sessionId -> the request still allowed to publish. */
     this.requests = new Map();
     this.requestSeq = 0;
+    /** @type {Map<string, object>} `${sessionId}|${roundId}` -> brief written after sealing. */
+    this.sealedBriefs = new Map();
     /** @type {Map<string, string>} sessionId -> last round handed to the store. */
     this.archived = new Map();
     /**
@@ -459,6 +461,77 @@ export class Runtime {
     if (this.archived.get(session.id) === settled.roundId) return;
     this.archived.set(session.id, settled.roundId);
     void this.store.insert(this.recordOf(session, state, settled));
+    // The round is over: its own words are complete now, and this is the last
+    // material a summary can draw on. Not attached to the turn, so the reply the
+    // reader is waiting for never waits for a summary.
+    void this.requestSealedSummary(session, settled);
+  }
+
+  /**
+   * Summarise a round that has already been sealed and archived.
+   *
+   * A normal request is bound to the open round, and after the formal reply there
+   * is no open round any more — which is why every archived round used to have an
+   * empty brief and could not be opened. This one is bound to the sealed id
+   * instead, then written straight back onto the stored record.
+   *
+   * @param {object} session - runtime session.
+   * @param {{roundId: string, summary: object, round: object}} settled - sealed round.
+   * @returns {Promise<void>} resolves when the attempt settled.
+   */
+  async requestSealedSummary(session, settled) {
+    try {
+      if (!this.isEnabled(session) || !this.config.summary.enabled) return;
+      const round = settled?.round;
+      const roundId = settled?.roundId;
+      if (round === null || round === undefined || typeof roundId !== "string" || roundId === "") return;
+      const key = `${session.id}|${roundId}`;
+      if (this.sealedBriefs.has(key)) return;
+      const route = this.routeOf(session);
+      if (route === null) return;
+      const cap = Number.isFinite(this.config.summary.maxInputTokens) ? this.config.summary.maxInputTokens : 12000;
+      const room = Math.max(96, cap - estimateTokens(SUMMARY_SYSTEM_PROMPT) - 8);
+      // The closing reply is the round's own account of what it did, so it heads
+      // the packet instead of the request that opened the round.
+      const packet = buildPacket(round, {
+        request: round.title, // ui-copy-ignore
+        report: round.reply?.text ?? "",
+        maxFacts: 32, // ui-copy-ignore
+        maxTokens: room
+      });
+      if (packet.text === "") return;
+      const state = this.stateOf(session);
+      const generation = this.generationOf(identityOf(session));
+      const seq = state?.lastSeq ?? round.turnEndSeq ?? round.startSeq;
+      const result = await summarise(this.owner ?? this.ctx, {
+        sessionId: session.id,
+        provider: route.provider, // ui-copy-ignore
+        model: route.model, // ui-copy-ignore
+        maxOutputTokens: this.config.summary.maxOutputTokens,
+        deadlineMs: this.config.summary.requestDeadlineMs,
+        maxTopics: this.config.summary.maxTopics,
+        packet
+      });
+      if (result === null || !this.isEnabled(session) || this.generationOf(identityOf(session)) !== generation) return;
+      const brief = {
+        revision: `${roundId}:${seq}`, // ui-copy-ignore
+        generatedAt: this.now(),
+        materialKey: materialKeyOf(round), // ui-copy-ignore
+        summary: result.summary, // ui-copy-ignore
+        topics: result.topics, // ui-copy-ignore
+        tokens: result.tokens // ui-copy-ignore
+      };
+      this.sealedBriefs.set(key, brief);
+      if (this.sealedBriefs.size > 24) {
+        const oldest = this.sealedBriefs.keys().next();
+        if (!oldest.done) this.sealedBriefs.delete(oldest.value);
+      }
+      this.store.patch(session.id, roundId, { brief, summaryText: brief.summary });
+    } catch (error) {
+      // A wrap-up is optional background work; it must never surface as a
+      // failure of the round it describes.
+      this.warn?.("sealed summary failed", error);
+    }
   }
 
   /**
@@ -481,8 +554,9 @@ export class Runtime {
     // A finished round keeps the summary its reader last saw. Without it the
     // archive degrades to facts on disk while the live card showed a paragraph,
     // and the same round reads differently depending on where it is opened.
+    const sealed = this.sealedBriefs.get(`${session.id}|${round.roundId}`);
     const summary = this.summaries.get(session.id);
-    const brief = summary !== undefined && summary.roundId === round.roundId
+    const brief = sealed !== undefined ? sealed : summary !== undefined && summary.roundId === round.roundId
       ? {
           revision: summary.revision, // ui-copy-ignore
           generatedAt: summary.generatedAt,

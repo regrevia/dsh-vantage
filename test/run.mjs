@@ -24,10 +24,10 @@ import {
   requiredParam,
   roundIdOf
 } from "../lib/schema.js";
-import { apply, evaluateVerification, initState, rankFacts, roundStateOf, summarizeRound, workTitleOf } from "../lib/rounds.js";
+import { apply, evaluateVerification, initState, rankFacts, roundStateOf, stopOf, summarizeRound, workTitleOf } from "../lib/rounds.js";
 import { HistoryStore } from "../lib/store.js";
 import { DEFAULT_CONFIG, Runtime } from "../index.js";
-import { SUMMARY_SYSTEM_PROMPT, SummaryScheduler, buildPacket, estimateTokens, publishVerdict, verifyTopics } from "../lib/summary.js";
+import { SUMMARY_SYSTEM_PROMPT, SummaryScheduler, buildPacket, estimateTokens, publishVerdict, verifyAnswer, verifyTopics } from "../lib/summary.js";
 import { buildSnapshot, createRoutes, excerptOf, publicFact } from "../lib/api.js";
 
 let passed = 0;
@@ -543,6 +543,31 @@ test("summary: the packet is bounded and only ships observed facts", () => {
   assert.ok(packet.text.split("\n").length <= 8);
 });
 
+test("summary: public progress and concrete edits reach the packet", () => {
+  const state = folded([
+    ...userTurn(0, "修一下登录"),
+    finalMessage(2, "先改保存逻辑"),
+    ev(3, "tool/call", {
+      callId: "w1",
+      name: "edit",
+      arguments: JSON.stringify({ path: "src/login.js", old_string: "saved = false", new_string: "saved = true" })
+    }),
+    ev(4, "tool/result", { message: { toolCallId: "w1", content: [{ type: "text", text: "ok" }] } })
+  ]);
+  const packet = buildPacket(state.round, { maxFacts: 8 });
+  assert.ok(packet.text.includes("progress:"), "what the round said it was doing is material");
+  assert.ok(packet.text.includes("changes:"), "the edit itself, not only the file name");
+  assert.ok(packet.text.includes("saved = true"), "the meaning of the edit survives");
+});
+
+test("summary: a summary stands without a headline list", () => {
+  const state = folded([...userTurn(0, "修一下登录"), finalMessage(2, "保存逻辑改好了")]);
+  const packet = buildPacket(state.round, { maxFacts: 8 });
+  const answered = verifyAnswer(JSON.stringify({ summary: "把保存逻辑改成写入后立即生效。" }), packet.facts, 3, packet.text);
+  assert.ok(answered.summary.length > 0, "the paragraph alone is publishable");
+  assert.deepEqual(answered.topics, [], "no headlines is not a failure");
+});
+
 test("summary: invented numbers, conclusions, and citations are dropped", () => {
   const factId = "f-check";
   const check = { id: factId, kind: "check", statement: "测试通过", basis: "observed", validity: "valid", refs: [] };
@@ -628,6 +653,28 @@ await testAsync("store: memory mode keeps order, paging, and ceilings", async ()
   assert.equal(recent[0].roundId, roundIdOf(SESSION, 5));
   assert.equal(store.get(SESSION, roundIdOf(SESSION, 5)).title, "第 5 轮");
   assert.equal(store.get(SESSION, "missing"), undefined);
+});
+
+await testAsync("store: a summary written after sealing is what the row reads", async () => {
+  const store = new HistoryStore({ maxRoundsPerSession: 5, maxRoundsTotal: 50, maxSerializedBytes: 1 << 20, warn });
+  await store.open(undefined, { version: 1 });
+  const record = roundRecord(0);
+  store.insert(record);
+  assert.equal(store.get(SESSION, record.roundId).summaryText, "", "a sealed round may start with no paragraph");
+  const brief = {
+    revision: "r0:12",
+    generatedAt: 5,
+    materialKey: "k",
+    summary: "把登录的保存逻辑改到写入后立即生效。",
+    topics: [{ headline: "保存逻辑", qualifier: "", details: ["改成写入后生效"], factIds: ["f1"] }],
+    tokens: 40
+  };
+  assert.equal(store.patch(SESSION, record.roundId, { brief, summaryText: brief.summary }), true);
+  const patched = store.get(SESSION, record.roundId);
+  assert.equal(patched.summaryText, brief.summary);
+  assert.equal(patched.brief.summary, brief.summary, "the brief survives the round trip");
+  assert.deepEqual(patched.brief.topics[0].factIds, ["f1"]);
+  assert.equal(store.patch(SESSION, "missing", { summaryText: "x" }), false, "an unknown round is not invented");
 });
 
 await testAsync("store: the storage declaration is legal and evictions reach disk", async () => {
@@ -795,7 +842,7 @@ test("client: a side question reads the round record instead of touching the ses
   const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
   const start = source.indexOf("function SideAsk(props)");
   assert.ok(start > 0, "the side-question panel exists");
-  const body = source.slice(start, start + 2800);
+  const body = source.slice(start, start + 4200);
   assert.ok(body.includes("method: 'POST'"), "a question is one explicit request");
   assert.ok(body.includes("JSON.stringify({ session: sessionId, roundId: String(roundId), question })"), "the round is named, not the session's head");
   assert.ok(body.includes("key === 'Enter'"), "Enter asks, nothing asks on its own");
@@ -1094,48 +1141,53 @@ async function testRoutes() {
     assert.equal(summary.work, "把轮次条从目标改成对话回合", "the row reports the work, not the request");
   });
 
-  test("rounds: a bare interrupted turn never invents a cause", () => {
+  test("rounds: an interruption is run state, not an outcome", () => {
     const continued = folded([
       ...userTurn(0, "改一下页面"),
       ...checkCall(2, "c1", "node test/run.mjs"),
       ev(4, "turn/end", { turn: 1, reason: { kind: "interrupted" } }),
       ...userTurn(6, "继续")
     ]);
-    assert.equal(summarizeRound(continued.settled.round).outcome, "被中断，原因未记录");
+    const round = continued.settled.round;
+    assert.equal(stopOf(round).state, "已停止", "the row carries a stop state of its own");
+    assert.match(stopOf(round).note, /执行停止/u, "and a sentence for the detail");
+    assert.doesNotMatch(summarizeRound(round).outcome, /中断|原因未记录/u, "but the work summary never opens with the event");
 
     // `session/end-seed` only proves a new process segment began. It cannot tell
-    // a restart from a crash, so the row must not name either one.
+    // a restart from a crash, so the stop state must not name either one.
     const restarted = folded([
       ...userTurn(0, "改一下页面"),
       ev(4, "turn/end", { turn: 1, reason: { kind: "interrupted" } }),
       ev(5, "session/end-seed", {}),
       ...userTurn(6, "继续")
     ]);
-    assert.equal(summarizeRound(restarted.settled.round).outcome, "被中断，原因未记录");
+    assert.doesNotMatch(stopOf(restarted.settled.round).note, /重启|崩溃/u, "no cause is invented");
 
     const unknown = folded([
       ...userTurn(0, "改一下页面"),
       ev(4, "turn/end", { turn: 1, reason: { kind: "interrupted" } })
     ]);
-    assert.equal(summarizeRound(unknown.round).outcome, "被中断，原因未记录");
+    assert.equal(stopOf(unknown.round).state, "已停止");
   });
 
-  test("rounds: a terminated turn names who terminated it", () => {
+  test("rounds: a terminated turn names who terminated it in the run state", () => {
     const state = folded([
       ...userTurn(0, "改一下页面"),
       ev(4, "turn/end", { turn: 1, reason: { kind: "aborted", reason: { kind: "user" } } }),
       ...userTurn(6, "继续")
     ]);
-    assert.equal(summarizeRound(state.settled.round).outcome, "你终止了这一轮");
+    assert.equal(stopOf(state.settled.round).reason, "你手动停止");
+    assert.equal(stopOf(state.settled.round).note, "你终止了这一轮。");
   });
 
-  test("rounds: an upstream timeout is the interruption, not a silent stop", () => {
+  test("rounds: an upstream timeout is named as the stop reason", () => {
     const state = folded([
       ...userTurn(0, "改一下页面"),
       ev(4, "turn/end", { turn: 1, reason: { kind: "error", error: { code: "ETIMEDOUT", message: "request timed out" } } }),
       ...userTurn(6, "继续")
     ]);
-    assert.equal(summarizeRound(state.settled.round).outcome, "上游超时，这一轮中断");
+    assert.equal(stopOf(state.settled.round).note, "上游请求超时，执行停止。");
+    assert.equal(stopOf(state.settled.round).state, "已停止");
   });
 
   test("rounds: a check-only round says it changed nothing", () => {
@@ -1714,9 +1766,11 @@ test("snapshot: a long goal objective becomes a one-clause heading", () => {
       topics: [{ id: "b:1", factIds: [check.id], headline: "构建 失败", qualifier: "", details: [], state: "recorded" }]
     };
     const body = buildSnapshot({ ...runtime, briefOf: () => brief }, session, failedState, "rev2");
+    // A model-written line is the summary's own wording: it may still report a
+    // failure, and it keeps the error tone. Only rule rows are check-free.
     const item = body.brief.items[0];
     assert.equal(item.text, "构建 失败");
-    assert.equal(item.tone, "error", "a failed check stays red even when the model says it plainly");
+    assert.equal(item.tone, "error");
   });
 
   test("snapshot: a non-zero exit is a failed check even when the line paraphrases it", () => {
@@ -1735,7 +1789,7 @@ test("snapshot: a long goal objective becomes a one-clause heading", () => {
       topics: [{ id: "x:1", factIds: [check.id], headline: "构建以 exit 1 结束", qualifier: "", details: [], state: "recorded" }]
     };
     const body = buildSnapshot({ ...runtime, briefOf: () => brief }, session, failedState, "rev3");
-    assert.equal(body.brief.items[0].tone, "error");
+    assert.equal(body.brief.items[0].tone, "error", "a paraphrased failure still colours its line");
   });
 
   testAsync("store: the domain declaration passes the storage contract", async () => {
@@ -1768,7 +1822,7 @@ test("snapshot: rule rows carry no raw command or tool material", () => {
     ...userTurn(0, "跑测试"),
     ev(2, "tool/call", { callId: "e1", name: "shell", arguments: JSON.stringify({ command: "pnpm test" }) }),
     ev(3, "tool/result", { message: { toolCallId: "e1", content: [{ type: "text", text: "1 failed\n[exit code: 1]" }] } }),
-    ...changeCall(4, "w1", "src/login.js")
+    ev(4, "deliverables/presented", { files: [{ path: "/w/report.html", name: "report.html" }] })
   ]);
   const body = buildSnapshot(runtime, session, state, "rev4");
   assert.ok(body.brief.items.length >= 1, "there is something to show");
@@ -1781,10 +1835,7 @@ test("snapshot: rule rows carry no raw command or tool material", () => {
     }
     assert.ok(item.source === "rule" || item.source === "model");
   }
-  const failedCheck = body.brief.items.find((item) => item.tone === "error");
-  assert.ok(failedCheck !== undefined, "a failed check is a finding");
-  assert.equal(failedCheck.text, "自动测试未通过", "the kind of verification is named, not the runner");
-  assert.deepEqual(failedCheck.evidence, [], "no tool output hangs under it");
+  assert.equal(body.brief.items.some((item) => item.tone === "error"), false, "a failed check is evidence, not a row");
   assert.equal(JSON.stringify(body).includes("pnpm test"), false, "a raw command line stays out of the payload");
 });
 
