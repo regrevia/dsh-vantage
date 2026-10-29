@@ -39,11 +39,7 @@ window.__ModuleLoader__.load({
         historyEmpty: '还没有更早的轮次', // ui-copy-ignore
         historyLoading: '正在读取历史', // ui-copy-ignore
         historyFailed: '历史记录没能读取', // ui-copy-ignore
-        historyBack: '返回历史', // ui-copy-ignore
         historyMore: '查看全部', // ui-copy-ignore
-        olderRound: '更早一轮', // ui-copy-ignore
-        newerRound: '更新一轮', // ui-copy-ignore
-        backToCurrent: '回到本轮', // ui-copy-ignore
         unanswered: '未作答复', // ui-copy-ignore
         noSummary: '这一轮没有留下结论', // ui-copy-ignore
         goalDone: '已达成', // ui-copy-ignore
@@ -115,11 +111,7 @@ window.__ModuleLoader__.load({
         historyEmpty: 'No earlier rounds yet', // ui-copy-ignore
         historyLoading: 'Reading history', // ui-copy-ignore
         historyFailed: 'History could not be read', // ui-copy-ignore
-        historyBack: 'Back to history', // ui-copy-ignore
         historyMore: 'Show all', // ui-copy-ignore
-        olderRound: 'Older round', // ui-copy-ignore
-        newerRound: 'Newer round', // ui-copy-ignore
-        backToCurrent: 'Back to this round', // ui-copy-ignore
         unanswered: 'No reply', // ui-copy-ignore
         noSummary: 'No conclusion saved for this round', // ui-copy-ignore
         goalDone: 'Achieved', // ui-copy-ignore
@@ -294,16 +286,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 }
 .dsv-panel .ov-control-link:hover { color: var(--dsw-alias-label-primary); }
 .dsv-panel .ov-control-link:disabled { color: var(--dsw-alias-label-secondary); opacity: 0.45; cursor: default; }
-.dsv-panel .ov-roundnav {
-  position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: center;
-  gap: 20px; margin: -4px 0 8px; padding: 8px 0; background: var(--dsw-alias-bg-base);
-}
-.dsv-panel .ov-roundnav .ov-control-link { padding: 4px 8px; border-radius: 6px; }
-.dsv-panel .ov-roundnav .ov-control-link:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-.dsv-panel .ov-roundpos {
-  color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px;
-  font-variant-numeric: tabular-nums; white-space: nowrap;
-}
 .dsv-panel .ov-back { display: inline-flex; margin-bottom: 12px; }
 .dsv-panel h1 {
   margin: 0; font-size: 24px; line-height: 32px; font-weight: 600; overflow-wrap: anywhere;
@@ -378,14 +360,24 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; line-height: 20px;
   white-space: pre-wrap; overflow-wrap: anywhere;
 }
-.dsv-panel .ov-history-list { margin-top: 28px; }
+.dsv-panel .ov-history-list { margin-top: 16px; }
+.dsv-panel .ov-recent { margin-top: 18px; border-top: 1px solid var(--dsw-alias-border-l1); }
+.dsv-panel .ov-history-detail { margin: 0; font-size: 13px; line-height: 1.7; color: var(--dsw-alias-label-secondary); }
+.dsv-panel .ov-recent-row { padding: 10px 0; }
+.dsv-panel .ov-recent .ov-history-row:last-child { border-bottom: 0; }
+.dsv-panel .ov-history-item { border-bottom: 1px solid var(--dsw-alias-border-l1); }
+.dsv-panel .ov-history-item:last-child { border-bottom: 0; }
 .dsv-panel .ov-history-row {
   display: grid; grid-template-columns: minmax(0, 1fr) auto 16px; align-items: baseline; gap: 16px;
-  width: 100%; padding: 12px 0; border-bottom: 1px solid var(--dsw-alias-border-l1);
+  width: 100%; padding: 12px 0;
 }
-.dsv-panel .ov-history-row:last-child { border-bottom: 0; }
 .dsv-panel .ov-history-row:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.dsv-panel .ov-history-row-static { cursor: default; }
+.dsv-panel .ov-history-row-static:hover { background: transparent; }
 .dsv-panel .ov-history-row > span:first-child { min-width: 0; }
+.dsv-panel .ov-history-item[data-open] .ov-row-chevron { transform: rotate(90deg); }
+.dsv-panel .ov-round-body { padding-bottom: 16px; }
+.dsv-panel .ov-round-body .ov-meta { margin: 0 0 8px; }
 .dsv-panel .ov-list-heading {
   margin-bottom: 4px; color: var(--dsw-alias-label-secondary);
   font-size: 13px; line-height: 20px; font-weight: 500;
@@ -572,6 +564,33 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
     // A title is checked again here so one missed path can never put
     // `<goal_round>` on screen.
     const emptyWordOf = (round, words) => round !== null && round !== undefined && round.roundState !== 'archived' ? words.inProgress : words.nothingYet
+
+    // One line per round, shared by the history list and the preview on the
+    // current page so both always say the same thing about the same round.
+    // A row earns its place by naming a result. Rounds whose only line is a
+  // count, a caveat or a status repeat the ceremony the reader is trying to
+  // skip, so the list leaves them out instead of printing filler.
+  const substantiveOf = (row) => {
+    const outcome = String(row?.outcome ?? '').trim()
+    if (outcome === '' || outcome.length < 8) return false
+    if (/^[0-9]+[.、)]/u.test(outcome)) return false
+    if (/^(?:本轮|这一轮|又|继续|之前|为什么|验证了|已保存|三个|两个|一个|重读|它|这|那|其|此|因此|所以|但|而|【)/u.test(outcome)) return false
+    if (/(?:硬理由|查清了原因|日志里有|原因已查|先说|先说结论)/u.test(outcome)) return false
+    if (/(?:=>|[a-z]+\.[a-z]+\()/u.test(outcome)) return false
+    if (/(?:没留下结论|没有部署|没有重启|只做了|只做|新增(?:了)?[0-9一二三四五六七八九十两几]*\s*(?:个)?能力|提交了|改了几个文件|跑了一遍|分两层)/u.test(outcome)) return false
+    return true
+  }
+  const primaryOf = (row, sessionTitle, words) => {
+      const outcome = String(row?.outcome ?? '')
+      if (outcome !== '') return outcome
+      if (row?.hasReply === false) return words.unanswered
+      return primaryTitleOf(row, sessionTitle) === sessionTitle ? words.noSummary : primaryTitleOf(row, sessionTitle)
+    }
+
+    const primaryTitleOf = (row, sessionTitle) => {
+      const own = titleOf(row)
+      return own === sessionTitle ? sessionTitle : own
+    }
 
     function titleOf(round) {
       const title = round === null || round === undefined ? undefined : round.title
@@ -849,21 +868,24 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         return document.scrollingElement
       }
 
-      const openRound = async (roundId, from) => {
-        if (view.mode === 'list') {
-          const scroller = scrollHost()
-          listScrollRef.current = scroller === null || scroller === undefined ? 0 : scroller.scrollTop
+      const openRound = async (roundId) => {
+        const id = String(roundId === null || roundId === undefined ? '' : roundId)
+        if (view.mode === 'list' && view.roundId === id) {
+          setView({ mode: 'list', roundId: '', from: '' })
+          setRound(null)
+          setRoundFailed(false)
+          return
         }
-        setView({ mode: 'detail', roundId: String(roundId === null || roundId === undefined ? '' : roundId), from: from === 'current' ? 'current' : 'list' })
+        setView({ mode: 'list', roundId: id, from: '' })
         setRound(null)
         setRoundFailed(false)
         const fresh = claim('round')
         if (fresh === null) return
-        if (typeof roundId !== 'string' || roundId === '') {
+        if (id === '') {
           setRoundFailed(true)
           return
         }
-        const query = new URLSearchParams({ session: sessionId, round: roundId })
+        const query = new URLSearchParams({ session: sessionId, round: id })
         const answer = await callHost(`/round?${query.toString()}`)
         if (fresh() !== true) return
         if (answer.failed === true || answer.body === null || answer.body.round === null || answer.body.round === undefined) {
@@ -945,76 +967,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         setRound(null)
         setRoundFailed(false)
       }
-      const detailRows = () => (history !== null && Array.isArray(history.items) ? history.items : [])
-
-      const detailPosition = () => {
-        const rows = detailRows()
-        return rows.findIndex((row) => row !== null && row !== undefined && String(row.roundId) === view.roundId)
-      }
-
-      const stepOlder = async () => {
-        const rows = detailRows()
-        const index = detailPosition()
-        if (index < 0) {
-          showHistory()
-          return
-        }
-        if (index + 1 < rows.length) {
-          openRound(rows[index + 1].roundId, 'list')
-          return
-        }
-        const cursor = history !== null && typeof history.nextCursor === 'string' ? history.nextCursor : ''
-        if (cursor === '') return
-        const page = await fetchHistory(cursor, true)
-        const next = page !== null && page !== undefined ? page.items[index + 1] : null
-        if (next !== null && next !== undefined) openRound(next.roundId, 'list')
-      }
-
-      const stepNewer = () => {
-        const rows = detailRows()
-        const index = detailPosition()
-        if (index > 0) {
-          openRound(rows[index - 1].roundId, 'list')
-          return
-        }
-        showCurrent()
-      }
-
-      const leaveDetail = () => {
-        if (view.from === 'current') showCurrent()
-        else showHistory()
-      }
-
-      React.useEffect(() => {
-        const scroller = scrollHost()
-        if (scroller === null || scroller === undefined) return
-        if (view.mode === 'detail') scroller.scrollTop = 0
-        else if (view.mode === 'list') scroller.scrollTop = listScrollRef.current
-      }, [view.mode, view.roundId])
-
-      React.useEffect(() => {
-        if (view.mode !== 'detail') return undefined
-        const onKey = (event) => {
-          if (event.defaultPrevented === true || event.altKey === true || event.ctrlKey === true || event.metaKey === true) return
-          const target = event.target
-          const tag = target !== null && target !== undefined && typeof target.tagName === 'string' ? target.tagName.toLowerCase() : ''
-          if (tag === 'input' || tag === 'textarea' || tag === 'select' || (target !== null && target !== undefined && target.isContentEditable === true)) return
-          if (event.key === 'ArrowLeft') {
-            event.preventDefault()
-            stepOlder()
-          } else if (event.key === 'ArrowRight') {
-            event.preventDefault()
-            stepNewer()
-          } else if (event.key === 'Escape') {
-            event.preventDefault()
-            leaveDetail()
-          }
-        }
-        document.addEventListener('keydown', onKey)
-        return () => {
-          document.removeEventListener('keydown', onKey)
-        }
-      }, [view.mode, view.roundId, view.from, history])
 
       const toggleSwitch = async () => {
         if (pending === true || snapshot === null) return
@@ -1069,17 +1021,13 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         }
         if (action === 'open-round') {
           event.preventDefault()
-          openRound(control.getAttribute('data-round'), 'list')
+          openRound(control.getAttribute('data-round'))
           return
         }
-        if (action === 'older-round') {
+        if (action === 'open-recent') {
           event.preventDefault()
-          stepOlder()
-          return
-        }
-        if (action === 'newer-round') {
-          event.preventDefault()
-          stepNewer()
+          showHistory()
+          openRound(control.getAttribute('data-round'))
           return
         }
         if (action === 'history-more') {
@@ -1138,11 +1086,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         ]),
         mode === 'list'
           ? h('button', { key: 'link', type: 'button', className: 'ov-control-link', 'data-action': 'current' }, words.back)
-          : mode === 'detail'
-            ? h('button', {
-              key: 'link', type: 'button', className: 'ov-control-link',
-              'data-action': view.from === 'current' ? 'current' : 'history'
-            }, view.from === 'current' ? words.backToCurrent : words.historyBack)
           : snapshot !== null && (snapshot.history?.count ?? 0) > 0
             ? h('button', { key: 'link', type: 'button', className: 'ov-control-link', 'data-action': 'history' }, words.history)
             : null
@@ -1154,6 +1097,26 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         ]),
         h('div', { key: 's', className: 'ov-controls' }, controls)
       ])
+
+      const briefRows = (target, skip) => {
+        const sealed = target?.brief !== null && target?.brief !== undefined && Array.isArray(target.brief.items) ? target.brief.items : []
+        // A raw reply is a transcript, not a brief: the row already carries
+        // the one-line outcome, and printing the whole answer here is exactly
+        // the wall of prose this page exists to avoid.
+        const same = (text) => String(text).replace(/[\s。！？；：，、.!?;:,]/gu, '') === String(skip).replace(/[\s。！？；：，、.!?;:,]/gu, '')
+        const rows = sealed.filter((item) => item !== null && item !== undefined && item.id !== 'no-facts' && item.source !== 'transcript' && !(skip !== undefined && same(item.text ?? item.value ?? '')))
+        publishItems(target.roundId, rows)
+        if (rows.length === 0) return null
+        return h('div', { key: 'b', className: 'ov-brief' }, rows.map((item, index) => {
+          const key = itemKeyOf(target.roundId, item)
+          return h(BriefItem, {
+            key: `${key}:${index}`, item, itemKey: key, roundId: target.roundId,
+            tone: toneOfItem(item, target), open: expandedRef.current.has(key),
+            evidenceOpen: evidenceOpenRef.current[key] === true,
+            onToggle: applyExpanded, onEvidence: applyEvidenceOpen, onOpenLink: openLink
+          })
+        }))
+      }
 
       const main = []
 
@@ -1168,7 +1131,9 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         ]))
       } else if (mode === 'list') {
         const parts = [h('div', { key: 't', className: 'ov-list-heading' }, words.historyHeading)]
-        const rows = history !== null && Array.isArray(history.items) ? history.items : []
+        const rows = history !== null && Array.isArray(history.items)
+          ? history.items.filter(substantiveOf)
+          : []
         if (historyLoading === true && rows.length === 0) {
           parts.push(h('div', { key: 'l', className: 'ov-sub' }, words.historyLoading))
         } else if (historyFailed === true && rows.length === 0) {
@@ -1177,34 +1142,41 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           parts.push(h('div', { key: 'e', className: 'ov-sub' }, words.historyEmpty))
         } else {
           parts.push(h('div', { key: 'r', className: 'ov-history-list' }, rows.map((row, index) => {
-            const saved = String(row.statusLine === undefined || row.statusLine === null ? '' : row.statusLine)
-            const outcome = String(row.outcome === undefined || row.outcome === null ? '' : row.outcome)
-            const rowTitle = titleOf(row)
-            const distinct = rowTitle !== sessionTitle
-            const unanswered = row.hasReply === false
-            // A row answers "what happened in that round". The outcome comes
-            // first; a title only stands in when the round produced none, and
-            // the stored state line is the last honest thing to say.
-            const primary = outcome !== ''
-              ? outcome
-              : distinct
-                ? rowTitle
-                : unanswered ? words.unanswered : saved !== '' ? saved : words.noSummary
-            const subtitle = primary === saved ? '' : saved
+            // A row answers "what happened in that round". The outcome is the
+            // whole line; a status like "replied and verified" says nothing the
+            // reader did not already assume, so it never becomes a subtitle.
+            const primary = primaryOf(row, sessionTitle, words)
             const key = row.roundId === undefined || row.roundId === null ? `r${index}` : String(row.roundId)
-            return h('button', {
-              key,
-              type: 'button',
-              className: 'ov-history-row',
-              'data-action': 'open-round',
-              'data-round': row.roundId
-            }, [
-              h('span', { key: 'm' }, [
-                h('span', { key: 't', className: 'ov-history-title' }, primary),
-                subtitle === '' ? null : h('span', { key: 's', className: 'ov-history-sub' }, subtitle)
-              ]),
+            const open = view.roundId === key
+            const detail = typeof row.detail === 'string' ? row.detail.trim() : ''
+            // A chevron promises a body. A round interrupted before it wrote a
+            // reply has facts behind it and no panel to show, so it stays static.
+            const canOpen = detail !== '' || (row.hasDetail !== false && row.hasReply === true)
+            const line = [
+              h('span', { key: 't', className: 'ov-history-title' }, primary),
               h('span', { key: 'a', className: 'ov-history-time' }, timeOf(row.archivedAt, now)),
-              h('span', { key: 'c', className: 'ov-row-chevron', 'aria-hidden': 'true' }, '›')
+              canOpen ? h('span', { key: 'c', className: 'ov-row-chevron', 'aria-hidden': 'true' }, '›') : null
+            ]
+            return h('div', { key, className: 'ov-history-item', 'data-open': open === true ? '' : undefined }, [
+              canOpen
+                ? h('button', {
+                  key: 'row',
+                  type: 'button',
+                  className: 'ov-history-row',
+                  'data-action': 'open-round',
+                  'data-round': row.roundId,
+                  'aria-expanded': open === true ? 'true' : 'false'
+                }, line)
+                : h('div', { key: 'row', className: 'ov-history-row ov-history-row-static' }, line),
+              open === false ? null : h('div', { key: 'd', className: 'ov-round-body' }, roundFailed === true
+                ? h('div', { key: 'f', className: 'ov-sub' }, words.detailFailed)
+                : round === null
+                  ? h('div', { key: 'l', className: 'ov-sub' }, words.loading)
+                  : (() => {
+                    const sealed = briefRows(round, primary)
+                    if (sealed !== null) return sealed
+                    return detail === '' ? null : h('div', { key: 'b', className: 'ov-brief' }, h('p', { key: 'p', className: 'ov-history-detail' }, detail))
+                  })())
             ])
           })))
           if (history.nextCursor !== undefined && history.nextCursor !== null && history.nextCursor !== '') {
@@ -1212,52 +1184,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           }
         }
         main.push(h('div', { key: 'body' }, parts))
-      } else if (mode === 'detail') {
-        if (roundFailed === true) {
-          main.push(h('div', { key: 'q', className: 'ov-quiet' }, [
-            h('div', { key: 't', className: 'ov-quiet-title' }, words.detailFailed)
-          ]))
-        } else if (round === null) {
-          main.push(h('div', { key: 'q', className: 'ov-quiet' }, [h('p', { key: 'p' }, words.loading)]))
-        } else {
-          const sealedBrief = round.brief !== null && round.brief !== undefined && Array.isArray(round.brief.items) ? round.brief.items : []
-          const items = sealedBrief.filter((item) => item !== null && item !== undefined && item.id !== 'no-facts')
-          publishItems(round.roundId, items)
-          const meta = metaOf(round, now)
-          const detailTitle = titleOf(round)
-          const parts = []
-          const rows = detailRows()
-          const position = detailPosition()
-          if (position >= 0) {
-            const atOldest = position + 1 >= rows.length && (history === null || typeof history.nextCursor !== 'string' || history.nextCursor === '')
-            const total = `${rows.length}${history !== null && typeof history.nextCursor === 'string' && history.nextCursor !== '' ? '+' : ''}`
-            parts.push(h('div', { key: 'nav', className: 'ov-roundnav' }, [
-              h('button', {
-                key: 'o', type: 'button', className: 'ov-control-link', 'data-action': 'older-round',
-                disabled: atOldest, 'aria-label': words.olderRound
-              }, `‹ ${words.olderRound}`),
-              h('span', { key: 'p', className: 'ov-roundpos' }, `${position + 1} / ${total}`),
-              h('button', {
-                key: 'n', type: 'button', className: 'ov-control-link', 'data-action': 'newer-round',
-                'aria-label': position === 0 ? words.backToCurrent : words.newerRound
-              }, `${position === 0 ? words.backToCurrent : words.newerRound} ›`)
-            ]))
-          }
-          if (detailTitle !== sessionTitle) parts.push(h('h1', { key: 't' }, detailTitle))
-          if (meta.length > 0) parts.push(h('div', { key: 'm', className: 'ov-meta' }, meta.join(' · ')))
-          parts.push(h('div', { key: 'b', className: 'ov-brief' }, items.length === 0
-            ? [h('div', { key: 'e', className: 'ov-sub' }, emptyWordOf(round, words))]
-            : items.map((item, index) => {
-              const key = itemKeyOf(round.roundId, item)
-              return h(BriefItem, {
-                key: `${key}:${index}`, item, itemKey: key, roundId: round.roundId,
-                tone: toneOfItem(item, round), open: expandedRef.current.has(key),
-                evidenceOpen: evidenceOpenRef.current[key] === true,
-                onToggle: applyExpanded, onEvidence: applyEvidenceOpen, onOpenLink: openLink
-              })
-            })))
-          main.push(h('div', { key: 'body' }, parts))
-        }
       } else if (loading === true && snapshot === null) {
         main.push(h('div', { key: 'q', className: 'ov-quiet' }, [h('p', { key: 'p' }, words.loading)]))
       } else if (coverageEnabled !== true && !(snapshot !== null && snapshot.round !== null && snapshot.round !== undefined)) {
@@ -1358,10 +1284,23 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
               ])
             })))
           }
-          if (items.length === 0 && outputs.length === 0) {
+          const priorRows = past !== null && Array.isArray(past.items) ? past.items.filter((row) => row !== null && row !== undefined && row.roundId !== roundOfSnapshot.roundId) : []
+          if (items.length === 0 && outputs.length === 0 && priorRows.length === 0) {
             body.push(h('div', { key: 'e', className: 'ov-summary' }, emptyWordOf(roundOfSnapshot, words)))
           }
-          if (pastCount > 0) {
+          // An empty current round still needs content: the last few finished
+          // rounds are the useful thing on screen, and one click opens them.
+          if (items.length === 0 && outputs.length === 0 && priorRows.length > 0) {
+            body.push(h('div', { key: 'recent', className: 'ov-recent' }, priorRows.slice(0, 3).map((row) => h('button', {
+              key: String(row.roundId), type: 'button', className: 'ov-history-row ov-recent-row',
+              'data-action': 'open-recent', 'data-round': row.roundId
+            }, [
+              h('span', { key: 't', className: 'ov-history-title' }, primaryOf(row, sessionTitle, words)),
+              h('span', { key: 'a', className: 'ov-history-time' }, timeOf(row.archivedAt, now)),
+              h('span', { key: 'c', className: 'ov-row-chevron', 'aria-hidden': 'true' }, '›')
+            ]))))
+          }
+          if (pastCount > 0 && priorRows.length === 0) {
             body.push(h('button', { key: 'h', type: 'button', className: 'ov-history-more', 'data-action': 'history' }, [
               h('span', { key: 't' }, `${words.historyHeading} · ${pastCount} ${words.roundUnit}`),
               h('span', { key: 'a', className: 'ov-output-arrow', 'aria-hidden': 'true' }, '›')

@@ -763,9 +763,33 @@ test("client: a heading can never carry payload markup", () => {
 test("client: a history row states the outcome, never its storage state", () => {
   const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
   assert.ok(!source.includes("archivedRound"), "no saved-round placeholder exists");
-  const row = source.slice(source.indexOf("const primary = outcome"), source.indexOf("const primary = outcome") + 320);
+  const start = source.indexOf("const primaryOf = (row");
+  const row = source.slice(start, start + 420);
   assert.ok(row.includes("outcome !== ''"), "the work the round did comes first");
   assert.ok(row.includes("words.noSummary"), "a silent round says so instead of naming storage");
+});
+
+test("client: only rounds that name a result become history rows", () => {
+  const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
+  assert.ok(source.includes(".filter(substantiveOf)"), "the list applies the result filter");
+  const start = source.indexOf("const substantiveOf = (row");
+  assert.ok(start > 0, "the filter exists");
+  const body = source.slice(start, start + 700);
+  assert.ok(body.includes("outcome.length < 8"), "a count or a status is not a row");
+  assert.ok(body.includes("没留下结论"), "a silent round is not a row");
+  assert.ok(body.includes("[0-9]+[.、)]"), "a numbered aside is not a row");
+});
+
+test("rounds: an expanded row shows the sentence the row was cut from", () => {
+  const inside = summarizeRound({
+    roundId: "r",
+    reply: { text: "已经按「让第一次按就成功」改完并发布了 1.14.11。先把两次按压的真相讲清楚：第一次失败是插件导入时抛错。" }
+  });
+  assert.equal(inside.outcome, "已经按「让第一次按就成功」改完并发布了 1.14.11");
+  assert.ok(inside.detail.includes("真相"), "the rest of the paragraph is kept");
+  assert.ok(!inside.detail.includes("已经按"), "the row text is never repeated");
+  const code = summarizeRound({ roundId: "c", reply: { text: "每次 ask 都是 context.exit(() => service.runExclusive(x))。" } });
+  assert.equal(code.outcome, "", "code is not a result line");
 });
 
 test("locale: every dictionary line is one the panel really renders", () => {
@@ -974,6 +998,11 @@ async function testRoutes() {
     assert.equal(summarizeRound({ title: "t", reply: { text: "改完了" } }).hasReply, true, "real text is an answer");
   });
 
+  test("rounds: a row with nothing to show does not ask to be opened", () => {
+    const cut = summarizeRound({ title: "t", replyText: "" });
+    assert.equal(cut.hasDetail, false, "no reply and no facts means no panel");
+  });
+
   test("rounds: a row headline stops at the colon, not inside the detail", () => {
     const summary = summarizeRound({
       title: "t",
@@ -983,6 +1012,12 @@ async function testRoutes() {
 
     const clock = summarizeRound({ title: "t", replyText: "8 小时持续开发窗口已到 10:00，目标标记完成" });
     assert.equal(clock.outcome, "8 小时持续开发窗口已到 10:00，目标标记完成", "a clock time is not a colon break");
+
+    const chatty = summarizeRound({ title: "t", replyText: "这一轮把概览按你指出的四点理顺了，改完已在真实会话上看过" });
+    assert.equal(chatty.outcome, "把概览按你指出的四点理顺了", "a row drops the talk about checking itself");
+
+    const metaOnly = summarizeRound({ title: "t", replyText: "是我把本轮范围和后续迁移放在一起说了" });
+    assert.equal(metaOnly.outcome, "", "a sentence about the conversation is not an outcome");
   });
 
   test("rounds: a history row names the work, not the file that ran", () => {
