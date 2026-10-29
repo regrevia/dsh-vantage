@@ -974,6 +974,14 @@ async function testRoutes() {
     assert.equal(summarizeRound({ title: "t", reply: { text: "改完了" } }).hasReply, true, "real text is an answer");
   });
 
+  test("rounds: a row headline stops at the colon, not inside the detail", () => {
+    const summary = summarizeRound({
+      title: "t",
+      replyText: "打断现在是一条事件，不再写成「没有结论」：\n- 你终止 → 你终止了这一轮 - 发版检查仍在跑"
+    });
+    assert.equal(summary.outcome, "打断现在是一条事件，不再写成「没有结论」");
+  });
+
   test("rounds: a history row names the work, not the file that ran", () => {
     const state = folded([
       ...userTurn(0, "跑一遍检查"),
