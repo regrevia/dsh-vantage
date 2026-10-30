@@ -1084,6 +1084,10 @@ async function testRoutes() {
     assert.equal(first.status, 200, "the first paint may ask before it knows its project");
     const body = await first.json();
     assert.equal(body.project, "/w/own", "and is told which project it is rendering");
+    const poll = await route.fetch(new Request(`http://x${ROUTES.snapshot}?session=${SESSION}&revision=${body.revision}`));
+    const again = await poll.json();
+    assert.equal(again.kind, "unchanged");
+    assert.equal(again.project, "/w/own", "even a poll that changed nothing still declares the project");
   });
 
   await testAsync("open route: only a delivered file is handed to the system viewer", async () => {

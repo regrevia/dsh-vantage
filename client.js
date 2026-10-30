@@ -1193,8 +1193,8 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         setBlocked(false)
         setFailed(false)
         setLoading(false)
-        if (answer.body.kind === 'unchanged') return
         if (typeof answer.body.project === 'string') PROJECT = answer.body.project
+        if (answer.body.kind === 'unchanged') return
         revisionRef.current = answer.body.revision
         shownRoundRef.current = typeof answer.body.round?.roundId === 'string' ? answer.body.round.roundId : ''
         setSnapshot(answer.body)
@@ -1509,7 +1509,11 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
             h('span', { key: 'k', className: 'ov-switch-knob' })
           ])
         ]),
-        h('div', { key: 'seg', className: 'ov-seg', role: 'tablist' }, [
+        (() => {
+          // Switching between "this round" and "history" is only a choice when
+          // there is more than one round to choose between.
+          const items = snapshot !== null && snapshot.history !== null && snapshot.history !== undefined && Array.isArray(snapshot.history.items) ? snapshot.history.items : []
+          return items.length > 1 ? h('div', { key: 'seg', className: 'ov-seg', role: 'tablist' }, [
           h('button', {
             key: 'c', type: 'button', role: 'tab', className: 'ov-seg-item',
             'aria-selected': mode === 'current' ? 'true' : 'false',
@@ -1520,7 +1524,8 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
             'aria-selected': mode === 'history' ? 'true' : 'false',
             'data-action': 'history'
           }, words.historyTab)
-        ])
+          ]) : null
+        })()
       ]
 
       const header = h('header', { key: 'h', className: 'ov-toolbar' }, [
