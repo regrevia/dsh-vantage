@@ -1,7 +1,7 @@
 window.__ModuleLoader__.load({
   id: 'dsh-vantage',
-  factory(require) {
-    const React = require('react')
+  factory(load) {
+    const React = load('react')
     const h = React.createElement
 
     const HOST_BASE = '/api/dsh-vantage'
@@ -11,6 +11,10 @@ window.__ModuleLoader__.load({
     const REQUEST_MS = 8000
     const STYLE_ID = 'dsh-vantage-style'
     const HISTORY_PAGE = 10
+    // The working tree this panel was rendered for. The first snapshot fills it
+    // in; every later read declares it, so a round from another project is
+    // refused instead of being shown here.
+    let PROJECT = null
 
     // One dictionary per language, handed to the locale service and mirrored
     // in locale/*.json so a missing registration still renders.
@@ -48,9 +52,9 @@ window.__ModuleLoader__.load({
         goalPaused: '已暂停', // ui-copy-ignore
         goalBlocked: '受阻', // ui-copy-ignore
         detailFailed: '这一轮的记录没能读取', // ui-copy-ignore
-        askPlaceholder: '问这一轮里的事',
+        askPlaceholder: '答疑', // ui-copy-ignore
         pending: '这一轮还没有回复', // ui-copy-ignore
-        askSend: '提问', // ui-copy-ignore
+        askSend: '发送', // ui-copy-ignore
         askBusy: '正在回答', // ui-copy-ignore
         askFailed: '没能回答这个问题', // ui-copy-ignore
         back: '返回当前', // ui-copy-ignore
@@ -127,9 +131,9 @@ window.__ModuleLoader__.load({
         goalPaused: 'Paused', // ui-copy-ignore
         goalBlocked: 'Blocked', // ui-copy-ignore
         detailFailed: 'This round could not be read', // ui-copy-ignore
-        askPlaceholder: 'Ask about this round', // ui-copy-ignore
+        askPlaceholder: 'Ask', // ui-copy-ignore
         pending: 'No reply to this round yet', // ui-copy-ignore
-        askSend: 'Ask', // ui-copy-ignore
+        askSend: 'Send', // ui-copy-ignore
         askBusy: 'Answering', // ui-copy-ignore
         askFailed: 'The question was not answered', // ui-copy-ignore
         back: 'Back to current', // ui-copy-ignore
@@ -511,7 +515,9 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), REQUEST_MS)
       try {
-        const init = Object.assign({}, options, { signal: controller.signal, cache: 'no-store' })
+        const headers = Object.assign({}, options?.headers)
+        if (PROJECT !== null) headers['x-dsh-vantage-project'] = PROJECT
+        const init = Object.assign({}, options, { signal: controller.signal, cache: 'no-store', headers })
         const response = await fetch(`${HOST_BASE}${path}`, init)
         if (response.status === 403) return { blocked: true }
         let body = null
@@ -661,8 +667,76 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
     // The reply is the model's own account. It is worth reading, but it is not
     // the headline: it reads as prose under the result. Opening the round is the
     // only gesture — there is no second control to unfold the text.
-    function replyQuote(text, keyPrefix) {
+    const flatForCompare = (value) => String(value ?? '')
+      .replace(/[\s*_`>#]+/gu, '')
+      .replace(/[，,。.：:；;！!？?、「」（）()"'“”—…-]+/gu, '')
+
+    // The card prints the heading and the summary above the reply. A reply that
+    // opens by restating that heading is the same sentence twice on one screen,
+    // so the repeated lead is cut and what follows it stays.
+    function withoutRepeatedLead(text, head) {
       const body = typeof text === 'string' ? text.trim() : ''
+      const want = flatForCompare(head)
+      if (body === '' || want.length < 6) return body
+      if (!flatForCompare(body).startsWith(want)) return body
+      // Walk the raw text until it has produced as many comparable characters as
+      // the heading, then skip the punctuation that closes that clause.
+      let seen = 0
+      for (let at = 0; at < body.length; at += 1) {
+        if (flatForCompare(body[at]) === '') continue
+        seen += 1
+        if (seen < want.length) continue
+        const rest = body.slice(at + 1).replace(/^[\s，,。.：:；;！!？?、「」（）()"'“”—…-]+/u, '').trim()
+        return rest.length >= 6 ? rest : ''
+      }
+      return body
+    }
+
+    // A path, a URL, a file name or a code identifier is how the work was done,
+    // never what came of it: on the card it is scaffolding, so a line carrying
+    // one is not a result line.
+    const MACHINE_RE = /(?:https?:\/\/|\/[\w.-]+\/|\b[\w-]+\.(?:kt|java|ts|js|mjs|json|jpg|jpeg|png|log|md|yml|apk)\b|[`<>|]|→|\?[A-Za-z]+=)/u
+
+    const cleanLine = (text) => String(text ?? '')
+      .replace(/（[^）]*[\/.][^）]*）/gu, '')
+      .replace(/\([^)]*[\/.][^)]*\)/gu, '')
+      .replace(/https?:\/\/\S+/gu, '')
+      .replace(/\/[\w.\-/]+/gu, '')
+      .replace(/[*_`>#]/gu, '')
+      .replace(/\s+/gu, ' ')
+      .trim()
+
+    // What the card owes the reader is the result: at most two short result
+    // lines, in the model's own words, with the report itself left in the round.
+    // Saying how the work was wired up is the report, not the result.
+    const MECHANISM_RE = /(?:渲染时|存储|缓存|接口|字段|日志|编译|注入|过滤|命令行|配置项|构建)/u
+
+    function digestReply(text, strict = true) {
+      const lines = String(text ?? '').split(/\n+/u)
+      const picked = []
+      let total = 0
+      for (const raw of lines) {
+        const line = cleanLine(raw.replace(/^\s*(?:[-*+]|\d+[.．、)])\s*/u, '').replace(/^\d+\s*[.．]\s*/u, ''))
+        if (line.length < 8 || MACHINE_RE.test(line)) continue
+        if (strict && MECHANISM_RE.test(line)) continue
+        for (const sentence of line.split(/(?<=[。！？；;])/u)) {
+          const piece = sentence.trim()
+          if (piece.length < 8 || total + piece.length > 140) continue
+          picked.push(piece)
+          total += piece.length
+          if (picked.length === 2) return picked.join(' ')
+        }
+      }
+      if (picked.length > 0) return picked.join(' ')
+      // Still better than an empty card: the opening line, cut to one sentence.
+      const first = cleanLine(String(text ?? '').split(/\n+/u)[0] ?? '').replace(/^\d+\s*[.．、)]\s*/u, '')
+      const head = first.split(/(?<=[。！？；;])/u)[0] ?? ''
+      return head.length <= 80 ? head.trim() : ''
+    }
+
+    function replyQuote(text, keyPrefix, head) {
+      const source = withoutRepeatedLead(text, head)
+      const body = digestReply(source)
       if (body === '') return null
       return h('div', { key: `${keyPrefix}-q`, className: 'ov-quote' }, [
         h('div', { key: 'b', className: 'ov-rich' }, richText(body, `${keyPrefix}-qb`))
@@ -687,12 +761,16 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       const [busy, setBusy] = React.useState(false)
       const [notice, setNotice] = React.useState('')
       const boxRef = React.useRef(null)
+      // A finished answer must not be overwritten by a list request that was
+      // already in flight when the question was sent.
+      const answered = React.useRef(false)
       const key = `${sessionId}|${roundId}`
       React.useEffect(() => {
         let alive = true
+        answered.current = false
         const query = new URLSearchParams({ session: sessionId, roundId: String(roundId) })
         void callHost(`/ask?${query.toString()}`).then((answer) => {
-          if (alive !== true) return
+          if (alive !== true || answered.current === true) return
           setThread(answer !== undefined && answer.body !== null && Array.isArray(answer.body.items) ? answer.body.items : [])
         })
         return () => { alive = false }
@@ -709,7 +787,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         }).then((answer) => {
           if (answer === undefined || answer.failed === true || answer.blocked === true) { setNotice(words.askFailed); return }
           const body = answer.body
-          if (body !== null && Array.isArray(body.items)) setThread(body.items)
+          if (body !== null && Array.isArray(body.items)) { answered.current = true; setThread(body.items) }
           if (body !== null && typeof body.text === 'string' && body.text !== '') setNotice(body.text)
           if (body !== null && body.kind === 'answer') {
             setDraft('')
@@ -826,6 +904,15 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       return lines
     }
 
+    // One identity per open target, so a target that failed once is remembered
+    // whichever row or round offered it.
+    function linkKeyOf(link) {
+      if (link === null || link === undefined) return ''
+      const path = typeof link.path === 'string' ? link.path : ''
+      const url = typeof link.url === 'string' ? link.url : ''
+      return path !== '' ? `p:${path}` : url !== '' ? `u:${url}` : ''
+    }
+
     function itemKeyOf(roundId, item) {
       const id = item === null || item === undefined || item.id === undefined || item.id === null ? String(item.title) : String(item.id)
       const round = roundId === undefined || roundId === null ? '' : String(roundId)
@@ -893,6 +980,8 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       // A clause that opens with 我/这/该 refers back to something the reader
       // cannot see; a heading has to stand on its own.
       if (/^(?:我|我们|你|您|他|她|它|这|那|该|其|此|上面|上述|刚才|先前|之前|还|另外|所以|但|而|并|又|再)/u.test(clean)) clean = ''
+      // "继续" answers the previous turn; on its own it names no work.
+      if (/^(?:继续|接着|然后|好的|好|可以|行|嗯|对|是的|收到|没问题|OK|ok)$/u.test(clean)) clean = ''
       return clean === '' ? copy().untitled : clean
     }
 
@@ -951,7 +1040,8 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           ])))
         ]))
       }
-      const link = item.link !== null && typeof item.link === 'object' ? item.link : null
+      const rawLink = item.link !== null && typeof item.link === 'object' ? item.link : null
+      const link = rawLink !== null && props.isDead(rawLink) ? null : rawLink
       const fileIcon = h('svg', {
         key: 'i', className: 'ov-file-icon', viewBox: '0 0 16 16', width: 16, height: 16,
         fill: 'none', stroke: 'currentColor', strokeWidth: 1.4, 'aria-hidden': 'true'
@@ -1029,6 +1119,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       const seqRef = React.useRef({})
       const retryRef = React.useRef(0)
       const retryTimer = React.useRef(null)
+      const deadLinkRef = React.useRef(new Set())
       const loadHolder = React.useRef(null)
       const expandedRef = React.useRef(new Set())
       const evidenceOpenRef = React.useRef({})
@@ -1103,12 +1194,14 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         setFailed(false)
         setLoading(false)
         if (answer.body.kind === 'unchanged') return
+        if (typeof answer.body.project === 'string') PROJECT = answer.body.project
         revisionRef.current = answer.body.revision
         shownRoundRef.current = typeof answer.body.round?.roundId === 'string' ? answer.body.round.roundId : ''
         setSnapshot(answer.body)
       }, [claim, sessionId])
 
       React.useEffect(() => {
+        PROJECT = null
         revisionRef.current = null
         setSnapshot(null)
         setHistory(null)
@@ -1254,8 +1347,15 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         setTick((value) => value + 1)
       }
 
+      // A target that will not open is not offered twice: the row loses its
+      // link instead of announcing a failure the reader cannot act on.
+      const deadLink = (link) => {
+        if (link === null || link === undefined) return true
+        return deadLinkRef.current.has(linkKeyOf(link))
+      }
+
       const openLink = async (link) => {
-        if (link === null || link === undefined) return
+        if (deadLink(link)) return
         const path = typeof link.path === 'string' ? link.path : ''
         const url = typeof link.url === 'string' ? link.url : ''
         if (path === '' && url === '') return
@@ -1264,7 +1364,10 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(path === '' ? { session: sessionId, url } : { session: sessionId, path })
         })
-        if (answer.failed === true || answer.blocked === true) setNotice(copy().openFailed)
+        if (answer.failed === true || answer.blocked === true) {
+          deadLinkRef.current.add(linkKeyOf(link))
+          setTick((value) => value + 1)
+        }
       }
 
       const publishItems = (roundId, items) => {
@@ -1442,7 +1545,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
             key: `${key}:${index}`, item, itemKey: key, roundId: target.roundId,
             tone: toneOfItem(item, target), open: expandedRef.current.has(key),
             evidenceOpen: evidenceOpenRef.current[key] === true,
-            onToggle: applyExpanded, onEvidence: applyEvidenceOpen, onOpenLink: openLink
+            onToggle: applyExpanded, onEvidence: applyEvidenceOpen, onOpenLink: openLink, isDead: deadLink
           })
         }))
       }
@@ -1485,6 +1588,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 
         // The round being read leads the list and starts open: switching tabs
         // must not make the reader hunt for the card they just left.
+        let leadLive = true
         if (live !== null) {
           const open = view.roundId === '' || view.roundId === liveId
           const summaryText = snapshot !== null && typeof snapshot.summaryText === 'string' ? snapshot.summaryText.trim() : ''
@@ -1493,20 +1597,33 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           if (open === true) {
             if (summaryText !== '') liveNodes.push(h('div', { key: 's', className: 'ov-rich ov-summary-text' }, richText(summaryText, 'lsum')))
             if (sealed !== null) liveNodes.push(sealed)
-            const liveQuote = replyQuote(live.replyText || live.replyExcerpt, 'l')
+            const liveQuote = replyQuote(live.replyText || live.replyExcerpt, 'l', titleOf(live))
             if (liveQuote !== null) liveNodes.push(liveQuote)
           } else if (summaryText !== '') {
             liveNodes.push(h('div', { key: 's', className: 'ov-rich ov-summary-text' }, richText(summaryText, 'lsum')))
           }
+          // A reading hint belongs in the body, not in the row's existence: an
+          // empty round must not become a card headed by a bare tab name.
+          const hasContent = liveNodes.length > 0 || summaryText !== ''
           if (liveNodes.length === 0 && view.roundId === liveId) {
             liveNodes.push(h('div', { key: 'q', className: 'ov-sub' }, roundFailed === true ? words.detailFailed : words.loading))
           }
           const bodyNode = liveNodes.length === 0 ? null : h('div', { key: 'c', className: 'ov-card' }, liveNodes)
-          parts.push(card(liveId, titleOf(live) || words.currentTab, timeOf(live.updatedAt, now), open, true, bodyNode))
+          const liveTitle = titleOf(live)
+          // A round that left no headline and no text is not a row of its own:
+          // the list below already carries it, under its own honest state.
+          leadLive = hasContent
+          // An acknowledgement ("继续") is no headline: the same round is also a
+          // list row, and that row already names what the round got done.
+          const liveRow = source.find((row) => row !== null && row !== undefined && String(row.roundId) === liveId)
+          const liveHeading = liveTitle !== words.untitled
+            ? liveTitle
+            : liveRow === undefined ? words.currentTab : primaryOf(liveRow, sessionTitle, words)
+          if (leadLive) parts.push(card(liveId, liveHeading, timeOf(live.updatedAt, now), open, true, bodyNode))
         }
 
-        const rows = source.filter((row) => row !== null && row !== undefined && String(row.roundId) !== liveId)
-        if (rows.length === 0 && live === null) {
+        const rows = source.filter((row) => row !== null && row !== undefined && !(leadLive === true && String(row.roundId) === liveId))
+        if (rows.length === 0 && leadLive === false) {
           parts.push(h('div', { key: 'e', className: 'ov-sub' }, historyLoading === true ? words.historyLoading : words.historyEmpty))
         }
         parts.push(h('div', { key: 'r', className: 'ov-history-list' }, rows.map((row, index) => {
@@ -1532,7 +1649,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
                   // when the round contributed no separate finding rows.
                   if (summaryText !== '') nodes.push(h('div', { key: 's', className: 'ov-rich ov-summary-text' }, richText(summaryText, 'csum')))
                   if (sealed !== null) nodes.push(sealed)
-                  const quote = replyQuote(loaded.replyText || loaded.replyExcerpt, 'c')
+                  const quote = replyQuote(loaded.replyText || loaded.replyExcerpt, 'c', primary)
                   if (quote !== null) nodes.push(quote)
                   // The stop reason is run state, not work content: one quiet
                   // line under the text, never the row's title.
@@ -1541,8 +1658,9 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
                   }
                   // Nothing summarised yet: the outcome line is still a result,
                   // so it reads as prose rather than as one squashed paragraph.
-                  if (nodes.length === 0 && detail !== '') {
-                    nodes.push(h('div', { key: 'd', className: 'ov-rich' }, richText(detail, 'cdet')))
+                  const gist = nodes.length === 0 ? digestReply(detail) : ''
+                  if (gist !== '') {
+                    nodes.push(h('div', { key: 'd', className: 'ov-rich' }, richText(gist, 'cdet')))
                   }
                   if (nodes.length === 0) return null
                   return h('div', { key: 'b', className: 'ov-card' }, nodes)
@@ -1585,11 +1703,13 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           ]))
           // A Goal objective describes the whole session, not this round: printing
           // it here made an unrelated goal read as the answer to this ask.
-          const roundTitle = titleOf(roundOfSnapshot)
-          if (roundTitle !== sessionTitle) body.push(h('h1', { key: 't', className: 'ov-headline' }, roundTitle))
+          // A round with nothing to report prints no heading: the fallback
+          // word ("本次任务") is a label, not a title.
+          const roundTitle = typeof roundOfSnapshot.title === 'string' ? roundOfSnapshot.title.trim() : ''
+          if (roundTitle !== '' && roundTitle !== sessionTitle) body.push(h('h1', { key: 't', className: 'ov-headline' }, roundTitle))
           const summaryText = typeof snapshot.summaryText === 'string' ? snapshot.summaryText.trim() : ''
           if (summaryText !== '') body.push(h('div', { key: 'sm', className: 'ov-rich ov-summary-text' }, richText(summaryText, 'nsum')))
-          const currentQuote = replyQuote(roundOfSnapshot.replyText || roundOfSnapshot.replyExcerpt, 'n')
+          const currentQuote = replyQuote(roundOfSnapshot.replyText || roundOfSnapshot.replyExcerpt, 'n', roundTitle)
           if (currentQuote !== null) body.push(currentQuote)
           // An unanswered round still needs one line under the current round,
           // so the panel never reads as an empty page.
@@ -1612,7 +1732,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
                 key: `${key}:${index}`, item, itemKey: key, roundId: roundOfSnapshot.roundId,
                 tone: toneOfItem(item, snapshot), open: expandedRef.current.has(key),
                 evidenceOpen: evidenceOpenRef.current[key] === true,
-                onToggle: applyExpanded, onEvidence: applyEvidenceOpen, onOpenLink: openLink
+                onToggle: applyExpanded, onEvidence: applyEvidenceOpen, onOpenLink: openLink, isDead: deadLink
               })
             })))
           }
@@ -1631,9 +1751,10 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
             body.push(h('div', { key: 'o', className: 'ov-brief' }, outputs.map((item, index) => {
               const text = String(item.text)
               const rawLink = item.link !== null && item.link !== undefined ? item.link : null
-              const link = rawLink !== null && typeof rawLink.path === 'string' && rawLink.path !== ''
-                ? rawLink
-                : rawLink !== null && typeof rawLink.url === 'string' && rawLink.url !== '' ? rawLink : null
+              const usable = rawLink !== null && !deadLink(rawLink)
+                && ((typeof rawLink.path === 'string' && rawLink.path !== '')
+                  || (typeof rawLink.url === 'string' && rawLink.url !== ''))
+              const link = usable ? rawLink : null
               return h(link === null ? 'div' : 'button', {
                 key: `out:${index}`,
                 type: link === null ? undefined : 'button',

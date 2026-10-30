@@ -31,4 +31,4 @@ for (const [name, cmd, args] of checks) {
     console.log(out.filter((line) => /error|fail/i.test(line)).slice(0, 12).join('\n'))
   }
 }
-process.exit(failed ? 1 : 0)
+process.exitCode = failed ? 1 : 0

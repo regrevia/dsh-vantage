@@ -24,11 +24,18 @@ import {
   requiredParam,
   roundIdOf
 } from "../lib/schema.js";
-import { apply, evaluateVerification, initState, rankFacts, roundStateOf, stopOf, summarizeRound, workTitleOf } from "../lib/rounds.js";
+import { apply, evaluateVerification, initState, outcomeDetailOf, rankFacts, roundStateOf, stopOf, summarizeRound, workTitleOf } from "../lib/rounds.js";
 import { HistoryStore } from "../lib/store.js";
 import { DEFAULT_CONFIG, Runtime } from "../index.js";
 import { SUMMARY_SYSTEM_PROMPT, SummaryScheduler, buildPacket, estimateTokens, publishVerdict, verifyAnswer, verifyTopics } from "../lib/summary.js";
 import { buildSnapshot, createRoutes, excerptOf, publicFact } from "../lib/api.js";
+import { answerQuestion } from "../lib/ask.js";
+
+// The panel declares the project it is rendering; a test request does the same.
+const PROJECT_HEADER = "x-dsh-vantage-project";
+const req = (url, init = {}) => new Request(url, Object.assign({}, init, {
+  headers: Object.assign({ [PROJECT_HEADER]: "" }, init.headers ?? {})
+}));
 
 let passed = 0;
 const failures = [];
@@ -125,11 +132,11 @@ test("schema: params are required and bounded", () => {
 });
 
 await testAsync("schema: body reads reject empty and oversized payloads", async () => {
-  const empty = new Request("http://x/y", { method: "POST", body: "" });
+  const empty = req("http://x/y", { method: "POST", body: "" });
   await assert.rejects(() => readJsonBody(empty));
-  const big = new Request("http://x/y", { method: "POST", body: JSON.stringify({ a: "x".repeat(5000) }) });
+  const big = req("http://x/y", { method: "POST", body: JSON.stringify({ a: "x".repeat(5000) }) });
   await assert.rejects(() => readJsonBody(big, 100));
-  const good = new Request("http://x/y", { method: "POST", body: JSON.stringify({ session: "s1" }) });
+  const good = req("http://x/y", { method: "POST", body: JSON.stringify({ session: "s1" }) });
   assert.deepEqual(await readJsonBody(good), { session: "s1" });
 });
 
@@ -796,6 +803,20 @@ test("client: only a row with more to show is a control", () => {
   assert.ok(source.includes("'ov-fact-label'"), "a pending row renders as label and value");
 });
 
+test("client: the ask box is labelled 答疑", () => {
+  const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
+  assert.match(source, /askPlaceholder: '答疑'/u, "the field says what it answers");
+  assert.ok(!source.includes("问这一轮里的事"), "no conversational prompt survives");
+});
+
+test("client: the quoted reply drops the lead the card already printed", () => {
+  const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
+  assert.ok(source.includes("function withoutRepeatedLead(text, head)"), "one helper owns the repeat cut");
+  assert.equal(source.match(/replyQuote\([^)]*'l', titleOf\(live\)\)/u)?.length, 1, "the live card passes its heading");
+  assert.equal(source.match(/replyQuote\([^)]*'c', primary\)/u)?.length, 1, "a stored round passes its row title");
+  assert.equal(source.match(/replyQuote\([^)]*'n', roundTitle\)/u)?.length, 1, "the current round passes its heading");
+});
+
 test("client: a hidden page stops polling and a narrow one keeps its controls", () => {
   const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
   assert.ok(source.includes("document.visibilityState !== 'visible'"), "a hidden tab skips the request");
@@ -808,7 +829,7 @@ test("client: a hidden page stops polling and a narrow one keeps its controls", 
 
 test("client: a heading can never carry payload markup", () => {
   const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
-  const titleOf = source.slice(source.indexOf("function titleOf"), source.indexOf("function titleOf") + 1200);
+  const titleOf = source.slice(source.indexOf("function titleOf"), source.indexOf("function titleOf") + 1600);
   assert.ok(titleOf.includes("replace(/<"), "the panel strips a tag-shaped title");
   assert.ok(titleOf.includes("[<>]"), "and refuses one it cannot strip");
   assert.ok(titleOf.includes("untitled"), "falling back to a plain heading instead");
@@ -1038,6 +1059,33 @@ async function testRoutes() {
     setEnabled: async (_session, enabled) => ({ enabled: enabled === true, generation: 1 })
   };
 
+  await testAsync("routes: a round from another project is never served", async () => {
+    const owned = { ...session, header: { createdAt: 1, cwd: "/w/own" } };
+    const route = createRoutes({ ...runtime, session: async () => owned }).find((entry) => entry.path === ROUTES.round);
+    const roundId = state.round.roundId;
+    const foreign = await route.fetch(req(`http://x${ROUTES.round}?session=${SESSION}&round=${roundId}`));
+    assert.equal(foreign.status, 403, "an undeclared project cannot read a project's rounds");
+    const other = await route.fetch(req(`http://x${ROUTES.round}?session=${SESSION}&round=${roundId}`, {
+      headers: { [PROJECT_HEADER]: "/w/other" }
+    }));
+    assert.equal(other.status, 403, "a different project is refused the same way");
+    const same = await route.fetch(req(`http://x${ROUTES.round}?session=${SESSION}&round=${roundId}`, {
+      headers: { [PROJECT_HEADER]: "/w/own" }
+    }));
+    assert.equal(same.status, 200, "the panel's own project still reads its own rounds");
+    const body = await same.json();
+    assert.equal(body.round.roundId, roundId, "and the round arrives whole");
+  });
+
+  await testAsync("routes: the snapshot teaches the panel its project", async () => {
+    const owned = { ...session, header: { createdAt: 1, cwd: "/w/own" } };
+    const route = createRoutes({ ...runtime, session: async () => owned }).find((entry) => entry.path === ROUTES.snapshot);
+    const first = await route.fetch(new Request(`http://x${ROUTES.snapshot}?session=${SESSION}`));
+    assert.equal(first.status, 200, "the first paint may ask before it knows its project");
+    const body = await first.json();
+    assert.equal(body.project, "/w/own", "and is told which project it is rendering");
+  });
+
   await testAsync("open route: only a delivered file is handed to the system viewer", async () => {
     const delivered = folded([
       ...userTurn(0, "导出视频"),
@@ -1046,7 +1094,7 @@ async function testRoutes() {
     const opened = [];
     const routes = createRoutes({ ...runtime, stateOf: () => delivered, openPath: (target) => opened.push(target) });
     const route = routes.find((item) => item.path === ROUTES.open);
-    const call = (target) => route.fetch(new Request(`http://x${ROUTES.open}`, {
+    const call = (target) => route.fetch(req(`http://x${ROUTES.open}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ session: SESSION, path: target })
@@ -1057,7 +1105,7 @@ async function testRoutes() {
     const allowed = await call("/Users/me/CreatorStudio/deliver/out.mp4");
     assert.equal(allowed.status, 200);
     assert.deepEqual(opened, ["/Users/me/CreatorStudio/deliver/out.mp4"], "the delivered path opens once");
-    const missing = await route.fetch(new Request(`http://x${ROUTES.open}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session: SESSION }) }));
+    const missing = await route.fetch(req(`http://x${ROUTES.open}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session: SESSION }) }));
     assert.equal(missing.status, 400, "a request without a path is rejected");
   });
 
@@ -1072,7 +1120,7 @@ async function testRoutes() {
     const opened = [];
     const routes = createRoutes({ ...runtime, stateOf: () => commit, openPath: (target) => opened.push(target) });
     const route = routes.find((item) => item.path === ROUTES.open);
-    const call = (body) => route.fetch(new Request(`http://x${ROUTES.open}`, {
+    const call = (body) => route.fetch(req(`http://x${ROUTES.open}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ session: SESSION, ...body })
@@ -1190,14 +1238,31 @@ async function testRoutes() {
     assert.equal(stopOf(state.settled.round).state, "已停止");
   });
 
-  test("rounds: a check-only round says it changed nothing", () => {
+  test("rounds: a check-only round names the check it ran", () => {
     const state = folded([
       ...userTurn(0, "跑一遍检查"),
       ...checkCall(2, "c1", "node test/run.mjs"),
       ev(4, "turn/end", { turn: 1, reason: { kind: "completed" } }),
       ...userTurn(6, "继续")
     ]);
-    assert.equal(summarizeRound(state.settled.round).outcome, "只做了检查，没有改动");
+    assert.equal(summarizeRound(state.settled.round).outcome, "用例检查通过");
+  });
+
+  test("rounds: a check names the surface it covered, never its runner file", () => {
+    const named = (command) => {
+      const state = folded([
+        ...userTurn(0, "跑一遍检查"),
+        ...checkCall(2, "c1", command),
+        ev(4, "turn/end", { turn: 1, reason: { kind: "completed" } }),
+        ...userTurn(6, "继续")
+      ]);
+      return summarizeRound(state.settled.round).outcome;
+    };
+    assert.equal(named("node /Users/apple/.dsh/skills/ui-restraint/scripts/ui-copy-lint.mjs ."), "界面文案检查通过");
+    assert.equal(named("node /Users/apple/.agents/skills/zh-ui-type-lint/scripts/zh-lint.mjs ."), "中文排印检查通过");
+    assert.equal(named("node /Users/apple/.dsh/tools/style-lint.mjs ."), "视觉样式检查通过");
+    // A path is its own object: the file it names stays in the line.
+    assert.equal(named("node --test src/login.test.ts"), "src/login.test.ts 通过");
   });
 
   test("rounds: a goal's state survives a clear and never invents an objective", () => {
@@ -1226,7 +1291,7 @@ async function testRoutes() {
       store: Object.assign(Object.create(store), { count: () => 0, recent: () => [] })
     });
     const answer = await routes.find((entry) => entry.path === ROUTES.snapshot)
-      .fetch(new Request(`http://x${ROUTES.snapshot}?session=${SESSION}`));
+      .fetch(req(`http://x${ROUTES.snapshot}?session=${SESSION}`));
     const body = await answer.json();
     assert.equal(answer.status, 200, "no switch is needed to read history");
     assert.equal(body.coverage.readOnly, true);
@@ -1235,11 +1300,33 @@ async function testRoutes() {
     assert.equal(body.round.roundState, "archived", "a saved round is not running");
     assert.equal(body.round.runtimeState, "idle");
     const history = await routes.find((entry) => entry.path === ROUTES.history)
-      .fetch(new Request(`http://x${ROUTES.history}?session=${SESSION}&exclude=${body.round.roundId}`));
+      .fetch(req(`http://x${ROUTES.history}?session=${SESSION}&exclude=${body.round.roundId}`));
     const page = await history.json();
     assert.equal(history.status, 200);
     assert.equal(page.items.length, 1, "the finished round comes from the folded log when the store is empty");
     assert.ok(page.items[0].archivedAt > 0, "the saved round keeps when it was saved");
+  });
+
+  await testAsync("history: a shortened stored request stops naming the row", async () => {
+    const rows = [{
+      roundId: "old:1",
+      title: "你是 C 线开发，仓库 /Users/apple/Desktop/work/St…",
+      archivedAt: 1,
+      updatedAt: 1
+    }];
+    const routes = createRoutes({
+      ...runtime,
+      isEnabled: () => false,
+      session: async () => ({ ...session, archived: true }),
+      stateOf: () => ({ lastSeq: 0, round: null, recentRounds: [] }),
+      store: Object.assign(Object.create(store), { count: () => 0, page: () => ({ items: rows, nextCursor: null }) })
+    });
+    const response = await routes.find((entry) => entry.path === ROUTES.history)
+      .fetch(req(`http://x${ROUTES.history}?session=${SESSION}&limit=5`));
+    const page = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(page.items.length, 1, "the stored row still comes back");
+    assert.equal(page.items[0].title, "", "but a shortened request is not a row label");
   });
 
   await testAsync("round: an archived round never claims to be running", async () => {
@@ -1258,7 +1345,7 @@ async function testRoutes() {
       store: Object.assign(Object.create(store), { count: () => 0, get: () => undefined })
     });
     const answer = await routes.find((entry) => entry.path === ROUTES.round)
-      .fetch(new Request(`http://x${ROUTES.round}?session=${SESSION}&round=${archivedState.settled.roundId}`));
+      .fetch(req(`http://x${ROUTES.round}?session=${SESSION}&round=${archivedState.settled.roundId}`));
     const body = await answer.json();
     assert.equal(answer.status, 200);
     assert.equal(body.round.roundState, "archived");
@@ -1280,10 +1367,51 @@ async function testRoutes() {
       store: Object.assign(Object.create(store), { count: () => 0, get: () => undefined })
     });
     const answer = await routes.find((entry) => entry.path === ROUTES.round)
-      .fetch(new Request(`http://x${ROUTES.round}?session=${SESSION}&round=${archivedState.settled.roundId}`));
+      .fetch(req(`http://x${ROUTES.round}?session=${SESSION}&round=${archivedState.settled.roundId}`));
     const body = await answer.json();
     assert.equal(body.round.brief.items.length, 0, "no fact stands in for the reply");
     assert.match(body.round.replyExcerpt, /归档页的开关/u, "the closing reply is quoted, not rewritten");
+  });
+
+  await testAsync("round: an opened row shows the whole reply, not its excerpt", async () => {
+    const long = "四件事都收尾了，0.9.139 已发布。不显示思考过程与系统提示词：渲染时过滤，存储不动。设备实测两次，三条注入文本只显示「过滤器自检：这一条应该显示」。第 2 项是开关双向切换，第 3 项是展开正文完整，第 4 项是失效链接不再提供。";
+    const archivedState = folded([
+      ...userTurn(0, "继续"),
+      finalMessage(2, long),
+      ev(3, "turn/end", { turn: 1, reason: { kind: "completed" } })
+    ]);
+    const routes = createRoutes({
+      ...runtime,
+      isEnabled: () => false,
+      stateOf: () => archivedState,
+      store: Object.assign(Object.create(store), { count: () => 0, get: () => undefined })
+    });
+    const answer = await routes.find((entry) => entry.path === ROUTES.round)
+      .fetch(req(`http://x${ROUTES.round}?session=${SESSION}&round=${archivedState.settled.roundId}`));
+    const body = await answer.json();
+    assert.equal(answer.status, 200);
+    assert.equal(body.round.replyText.includes("…"), false, "the opened body carries no cut marker");
+    assert.ok(body.round.replyText.length >= long.length - 2, `the whole reply is sent: ${body.round.replyText.length} of ${long.length}`);
+    assert.ok(body.round.replyText.includes("第 4 项是失效链接不再提供"), "the tail of the reply survives");
+  });
+
+  await testAsync("round: a counted ending is titled by what it delivered", async () => {
+    const archivedState = folded([
+      ...userTurn(0, "发布吧"),
+      finalMessage(2, "四件事都收尾了，`0.9.139` 已发布。开关双向切换、正文完整、链接可用三项都在设备上验过。"),
+      ev(3, "turn/end", { turn: 1, reason: { kind: "completed" } })
+    ]);
+    const routes = createRoutes({
+      ...runtime,
+      isEnabled: () => false,
+      stateOf: () => archivedState,
+      store: Object.assign(Object.create(store), { count: () => 0, get: () => undefined })
+    });
+    const answer = await routes.find((entry) => entry.path === ROUTES.round)
+      .fetch(req(`http://x${ROUTES.round}?session=${SESSION}&round=${archivedState.settled.roundId}`));
+    const body = await answer.json();
+    assert.equal(body.round.title.includes("0.9.139"), true, body.round.title);
+    assert.equal(body.round.title.includes("…"), false, "a heading is not a cut");
   });
 
   await testAsync("enable and summary: a saved session refuses both instead of recording", async () => {
@@ -1296,7 +1424,7 @@ async function testRoutes() {
       requestSummary: async () => { asked += 1; return { kind: "queued" }; }
     });
     const post = (path, payload) => routes.find((entry) => entry.path === path)
-      .fetch(new Request(`http://x${path}`, {
+      .fetch(req(`http://x${path}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ session: SESSION, ...payload })
@@ -1341,7 +1469,7 @@ async function testRoutes() {
       }
     };
     const route = createRoutes(closed).find((entry) => entry.path === ROUTES.snapshot);
-    const answer = await route.fetch(new Request(`http://local${ROUTES.snapshot}?session=${SESSION}`));
+    const answer = await route.fetch(req(`http://local${ROUTES.snapshot}?session=${SESSION}`));
     const body = await answer.json();
     assert.equal(answer.status, 200);
     assert.equal(body.coverage.enabled, false, "recording is still off");
@@ -1361,7 +1489,7 @@ async function testRoutes() {
       }
     };
     const blankAnswer = await createRoutes(blank).find((entry) => entry.path === ROUTES.snapshot)
-      .fetch(new Request(`http://local${ROUTES.snapshot}?session=${SESSION}`));
+      .fetch(req(`http://local${ROUTES.snapshot}?session=${SESSION}`));
     assert.equal(blankAnswer.status, 200);
     assert.equal((await blankAnswer.json()).round, null, "a brand-new off session stays empty");
     assert.equal(folded, 1, "an empty session is never folded");
@@ -1377,7 +1505,7 @@ async function testRoutes() {
     assert.equal(aborted.lastAssistant.text, "先收归档页的开关。");
     const route = createRoutes({ ...runtime, isEnabled: () => false, stateOf: () => aborted })
       .find((entry) => entry.path === ROUTES.snapshot);
-    const body = await (await route.fetch(new Request(`http://local${ROUTES.snapshot}?session=${SESSION}`))).json();
+    const body = await (await route.fetch(req(`http://local${ROUTES.snapshot}?session=${SESSION}`))).json();
     assert.equal(body.brief.items.length, 0, "no fact stands in for the reply");
     assert.match(body.round.replyExcerpt, /归档页/u);
   });
@@ -1386,7 +1514,7 @@ async function testRoutes() {
     const open = folded([...userTurn(1, "看下进度"), finalMessage(3, "先把归档页的开关收起来。")]);
     const route = createRoutes({ ...runtime, isEnabled: () => false, stateOf: () => open })
       .find((entry) => entry.path === ROUTES.snapshot);
-    const body = await (await route.fetch(new Request(`http://local${ROUTES.snapshot}?session=${SESSION}`))).json();
+    const body = await (await route.fetch(req(`http://local${ROUTES.snapshot}?session=${SESSION}`))).json();
     assert.equal(body.brief.items.length, 0, "no fact stands in for the reply");
     assert.match(body.round.replyExcerpt, /归档页的开关/u);
   });
@@ -1399,7 +1527,7 @@ async function testRoutes() {
     ]);
     const route = createRoutes({ ...runtime, isEnabled: () => false, stateOf: () => sealed })
       .find((entry) => entry.path === ROUTES.snapshot);
-    const body = await (await route.fetch(new Request(`http://local${ROUTES.snapshot}?session=${SESSION}`))).json();
+    const body = await (await route.fetch(req(`http://local${ROUTES.snapshot}?session=${SESSION}`))).json();
     assert.equal(body.brief.items.length, 0, "no fact stands in for the reply");
     assert.match(body.round.replyExcerpt, /归档页的开关/u, "the reply is quoted, not rewritten");
   });
@@ -1423,6 +1551,72 @@ async function testRoutes() {
     assert.equal(body.brief.items.length, 0, JSON.stringify(body.brief.items.map((item) => item.text)));
   });
 
+  test("snapshot: a spoken lead-in never becomes the heading", () => {
+  const state = folded([
+    ...userTurn(0, "把启动上限提一点"),
+    finalMessage(2, "设好了，给以后的启动加了个 6G 的上限：原来是 4G 左右。"),
+    ev(3, "turn/end", { turn: 1, reason: { kind: "completed" } })
+  ]);
+  const body = buildSnapshot(runtime, session, state, "rev-chatter");
+  assert.equal(body.round?.title, "给以后的启动加了个 6G 的上限", "the heading names the work, not the mood");
+  assert.equal(body.round?.replyExcerpt, "原来是 4G 左右。", "the fold quotes the claim, not the opener or the heading");
+});
+
+  await testAsync("round route: the page names the round the way the list does", async () => {
+    const live = folded([
+      ...userTurn(0, "把启动上限提一点"),
+      finalMessage(2, "给以后的启动加了个 6G 的上限：原来是 4G 左右。")
+    ]);
+    const brief = { roundId: live.round.roundId, summary: "把启动上限提到 6G，原来的上限是 4G。", materialKey: "", throughSeq: live.lastSeq };
+    const routes = createRoutes({ ...runtime, stateOf: () => live, briefOf: () => brief });
+    const snapshotRoute = routes.find((entry) => entry.path === ROUTES.snapshot);
+    const snapshot = await (await snapshotRoute.fetch(req(`http://local${ROUTES.snapshot}?session=${SESSION}`))).json();
+    const roundRoute = routes.find((entry) => entry.path === ROUTES.round);
+    const body = await (await roundRoute.fetch(req(`http://local${ROUTES.round}?session=${SESSION}&round=${snapshot.round.roundId}`))).json();
+    assert.equal(body.round.title, snapshot.round.title, "one round, one name");
+    assert.ok(!body.round.replyExcerpt.includes(body.round.title), "the excerpt does not restate the title");
+  });
+
+  test("snapshot: the heading is whole and the summary does not repeat it", () => {
+  const state = folded([
+    ...userTurn(0, "过滤宿主写进用户消息的文本"),
+    finalMessage(2, "过滤已经接上，按来源分了几类。"),
+    ev(3, "turn/end", { turn: 1, reason: { kind: "completed" } })
+  ]);
+  const text = "手机端 App 里宿主写进用户消息的文本——压缩摘要、Fast mode 提醒、轮内调度提醒和环境块——现在统一走一层过滤，不再作为思考过程或系统提示显示出来。";
+  const summary = {
+    roundId: state.settled.round.roundId,
+    throughSeq: state.lastSeq,
+    revision: "summary-long",
+    generatedAt: now(),
+    summary: text,
+    topics: []
+  };
+  const body = buildSnapshot({ ...runtime, briefOf: () => summary }, session, state, "rev-long");
+  assert.equal(body.round.title, "手机端 App 里宿主写进用户消息的文本", "the heading stops at the topic, never mid-clause");
+  assert.ok(!body.round.title.includes("…"), "a heading is printed whole");
+
+test("history: the reader's own message never names a row", () => {
+  const source = readFileSync(new URL("../lib/api.js", import.meta.url), "utf8");
+  const at = source.indexOf("const titleSource = typeof record.titleSource");
+  assert.ok(at > 0, "the row reads the stored title source");
+  const block = source.slice(at, at + 420);
+  assert.ok(block.includes('titleSource === "user"'), "a request-sourced title is refused");
+  assert.ok(block.includes("looksLikeRequest(storedTitle)"), "an untracked request title is refused too");
+  assert.ok(block.includes('? "" : storedTitle'), "so the row falls back to its own work line");
+});
+
+test("history row title stops at a clause, never an ellipsis", () => {
+  const long = "归档轮次现在能挂接后续写入的收尾小结，并把当时的停顿按原因写成一行事件，面板据此折叠旧的细节";
+  const title = workTitleOf({ roundId: "r", summaryText: long }, long);
+  assert.ok(!title.includes("…"), "a row line is not cut with an ellipsis");
+  assert.ok(title.length <= 40, "the row stays one line");
+  assert.ok(long.startsWith(title) && /[，、；：]/u.test(long.charAt(title.length)), "it stops where a clause ends");
+});
+  assert.ok(body.summaryText.startsWith("压缩摘要"), "the paragraph drops the line printed above it");
+  assert.ok(!body.summaryText.includes("手机端 App"), "the summary no longer restates its heading");
+});
+
   test("snapshot: a goal never stands in for this round's heading", () => {
   const state = folded([
     ...userTurn(0, "<goal_round>"),
@@ -1434,6 +1628,13 @@ async function testRoutes() {
   // borrowing the Goal.
   assert.equal(body.round?.title, "");
   assert.equal(body.brief.items.length, 0, "a round with nothing to say renders no body");
+});
+
+test("api: the heading is stripped from the paragraph under it", () => {
+  const source = readFileSync(new URL("../lib/api.js", import.meta.url), "utf8");
+  assert.ok(source.includes("const summaryLine = summaryUsable ? clip(dropHeadingLead("), "the snapshot body drops the heading it repeats");
+  assert.ok(source.includes("clip(dropHeadingLead(archived.summaryText"), "the archived view drops it too");
+  assert.ok(source.includes("quoteOf(round.reply?.text"), "the fold quotes the reply after the same normalization");
 });
 
 test("rounds: machine markup in a goal never becomes the heading", () => {
@@ -1507,9 +1708,31 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
     const olderRound = { ...base.round, roundId: `${SESSION}:1`, title: "先整理页面", archivedAt: 1 };
     const withRounds = { ...base, round: shownRound, settled: null, recentRounds: [shownRound, olderRound] };
     const route = createRoutes({ ...runtime, stateOf: () => withRounds }).find((entry) => entry.path === ROUTES.history);
-    const answer = await route.fetch(new Request(`http://x${ROUTES.history}?session=${SESSION}&exclude=${shownRound.roundId}`));
+    const answer = await route.fetch(req(`http://x${ROUTES.history}?session=${SESSION}&exclude=${shownRound.roundId}`));
     assert.equal(answer.status, 200);
     assert.deepEqual((await answer.json()).items.map((item) => item.roundId), [olderRound.roundId]);
+  });
+
+  await testAsync("history: a row label is the round's work, never a cut ask", async () => {
+    const ask = "连续的中断干脆就写中断前的那些东西吧 写在这也没意义啊";
+    const base = folded([...userTurn(0, "继续优化")]);
+    const shownRound = { ...base.round, roundId: `${SESSION}:2`, title: "继续优化" };
+    const olderRound = { ...base.round, roundId: `${SESSION}:1`, title: ask, archivedAt: 1 };
+    const withRounds = { ...base, round: shownRound, settled: null, recentRounds: [shownRound, olderRound] };
+    const route = createRoutes({ ...runtime, stateOf: () => withRounds }).find((entry) => entry.path === ROUTES.history);
+    const body = await (await route.fetch(req(`http://x${ROUTES.history}?session=${SESSION}&exclude=${shownRound.roundId}`))).json();
+    assert.equal(body.items[0].title, ask, "the ask is printed whole, not cut");
+    assert.ok(!body.items[0].title.includes("…"), "a row label never ends in an ellipsis");
+    const stored = "输入框已复刻正式对话里的 composer - 圆角容器…";
+    const cutStore = Object.assign(Object.create(Object.getPrototypeOf(runtime.store)), runtime.store, {
+      count: () => 1,
+      recent: () => [{ roundId: `${SESSION}:0`, title: stored, statusLine: "", at: 0 }],
+      page: () => ({ items: [{ roundId: `${SESSION}:0`, title: stored, statusLine: "", at: 0 }], nextCursor: null }),
+      get: () => undefined
+    });
+    const cutRoute = createRoutes({ ...runtime, store: cutStore }).find((entry) => entry.path === ROUTES.history);
+    const cutBody = await (await cutRoute.fetch(req(`http://x${ROUTES.history}?session=${SESSION}&exclude=${shownRound.roundId}`))).json();
+    assert.equal(cutBody.items[0].title, "输入框已复刻正式对话里的 composer - 圆角容器", "an old cut label is closed instead of printed");
   });
 
   await testAsync("history: the round on screen can be asked out of a page", async () => {
@@ -1517,7 +1740,7 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
     const page = { items: [{ roundId: shown }, { roundId: "session:8" }], nextCursor: "next" };
     const withStore = { ...runtime, store: { ...store, page: () => page } };
     const route = createRoutes(withStore).find((entry) => entry.path === ROUTES.history);
-    const answer = await route.fetch(new Request(`http://local${ROUTES.history}?session=${SESSION}&exclude=${shown}`));
+    const answer = await route.fetch(req(`http://local${ROUTES.history}?session=${SESSION}&exclude=${shown}`));
     const body = await answer.json();
     assert.deepEqual(body.items.map((item) => item.roundId), ["session:8"]);
     assert.equal(body.nextCursor, "next", "paging still works after the shown round is dropped");
@@ -1580,6 +1803,27 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
     assert.equal(texts.length, 0, "what the edit meant belongs to the summary, not to a category row");
   });
 
+  test("snapshot: a delivered file that is gone is not offered as a link", () => {
+    const delivered = folded([
+      ...userTurn(0, "导出视频"),
+      ev(2, "deliverables/presented", { files: [{ path: "/Users/me/old/envoy-gone.mp4", name: "envoy-gone.mp4" }] })
+    ]);
+    const missing = { ...runtime, fileExists: () => false };
+    const body = buildSnapshot(missing, session, delivered, "rev-gone");
+    assert.equal(body.outcomes.items.length, 0, "a target that cannot open is not an artifact line");
+    const offered = body.brief.items.filter((item) => item.link !== undefined && item.link !== null);
+    assert.equal(offered.length, 0, JSON.stringify(body.brief.items));
+  });
+
+  test("round: an opened round prints the whole claim, not a cut", () => {
+    const full = "四件事都收尾了，0.9.139 已发布：插件重载、开关切换、正文完整、链接可用，四张证据图分别是开关前后、展开前后、失效链接点击前后与历史行。";
+    const opened = outcomeDetailOf(full, "", true);
+    assert.equal(opened, full, "an opened round keeps every word");
+    assert.equal(opened.includes("…"), false, "an opened round never ends on a pointer to more");
+    const row = outcomeDetailOf(full, "");
+    assert.ok(row.length <= 421, `a row stays short: ${row.length}`);
+  });
+
   test("snapshot: a delivered file opens from the line that names it", () => {
     const delivered = folded([
       ...userTurn(0, "导出视频"),
@@ -1623,7 +1867,7 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
   test("snapshot: the payload is small, complete, and JSON-pure", async () => {
     const routes = createRoutes(runtime);
     const route = routes.find((item) => item.path === ROUTES.snapshot);
-    const response = await route.fetch(new Request(`http://x${ROUTES.snapshot}?session=${SESSION}`));
+    const response = await route.fetch(req(`http://x${ROUTES.snapshot}?session=${SESSION}`));
     assert.equal(response.status, 200);
     const body = await response.json();
     assert.equal(body.kind, "snapshot");
@@ -1723,7 +1967,7 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
 test("snapshot: a long goal objective becomes a one-clause heading", () => {
     const routes = createRoutes({ ...runtime, stateOf: () => ({ ...state, round: { ...state.round, titleSource: "generated", title: "10 小时低资源开发：修复 Envoy 确定性缺陷（ASR 稳定身份、游标、预算），并补齐恢复路径" } }) });
     const route = routes.find((item) => item.path === ROUTES.snapshot);
-    return route.fetch(new Request(`http://x${ROUTES.snapshot}?session=${SESSION}`)).then(async (response) => {
+    return route.fetch(req(`http://x${ROUTES.snapshot}?session=${SESSION}`)).then(async (response) => {
       const body = await response.json();
       assert.equal(body.round.title, "10 小时低资源开发");
       assert.ok(body.round.title.length <= 42);
@@ -1733,9 +1977,9 @@ test("snapshot: a long goal objective becomes a one-clause heading", () => {
   test("snapshot: a matching revision answers unchanged and can be read again", async () => {
     const routes = createRoutes(runtime);
     const route = routes.find((item) => item.path === ROUTES.snapshot);
-    const first = await (await route.fetch(new Request(`http://x${ROUTES.snapshot}?session=${SESSION}`))).json();
+    const first = await (await route.fetch(req(`http://x${ROUTES.snapshot}?session=${SESSION}`))).json();
     const second = await (
-      await route.fetch(new Request(`http://x${ROUTES.snapshot}?session=${SESSION}&revision=${encodeURIComponent(first.revision)}`))
+      await route.fetch(req(`http://x${ROUTES.snapshot}?session=${SESSION}&revision=${encodeURIComponent(first.revision)}`))
     ).json();
     assert.equal(second.kind, "unchanged");
     assert.equal(second.revision, first.revision);
@@ -1848,7 +2092,7 @@ test("schema: the documented statuses no longer include a spent budget", () => {
   await testAsync("evidence: excerpts are plain text, never payloads", async () => {
     const routes = createRoutes(runtime);
     const fact = state.round.facts.find((item) => item.kind === "check");
-    const request = new Request(
+    const request = req(
       `http://x${ROUTES.evidence}?session=${SESSION}&round=${encodeURIComponent(state.round.roundId)}&fact=${encodeURIComponent(fact.id)}`
     );
     const response = await routes.find((item) => item.path === ROUTES.evidence).fetch(request);
@@ -1865,7 +2109,7 @@ test("schema: the documented statuses no longer include a spent budget", () => {
   await testAsync("routes: unknown sessions answer a structured error, not a crash", async () => {
     const routes = createRoutes({ ...runtime, session: async () => { throw Object.assign(new Error("nope"), { code: "session/not-found" }); } });
     const response = await routes.find((item) => item.path === ROUTES.snapshot).fetch(
-      new Request(`http://x${ROUTES.snapshot}?session=${SESSION}`)
+      req(`http://x${ROUTES.snapshot}?session=${SESSION}`)
     );
     assert.ok(response.status >= 400);
     const body = await response.json();
@@ -1884,7 +2128,7 @@ test("schema: the documented statuses no longer include a spent budget", () => {
     });
     const route = routes.find((item) => item.path === ROUTES.enable);
     const post = (enabled) =>
-      route.fetch(new Request(`http://x${ROUTES.enable}`, {
+      route.fetch(req(`http://x${ROUTES.enable}`, {
         method: "POST",
         body: JSON.stringify({ session: SESSION, enabled })
       }));
@@ -1904,7 +2148,7 @@ test("schema: the documented statuses no longer include a spent budget", () => {
     const handler = guarded(() => {
       throw new Error("kaboom");
     }, (message) => notes.push(message));
-    const response = await handler(new Request("http://x/y"));
+    const response = await handler(req("http://x/y"));
     assert.equal(response.status, 500);
     const body = await response.json();
     assert.equal(body.error.code, "internal");
@@ -2019,6 +2263,54 @@ test("rounds: machine prose never becomes a progress title", () => {
     ev(3, "turn/end", { turn: 1, reason: { kind: "completed" } })
   ]);
   assert.equal(summarizeRound(state.settled.round).work, "", "an English runtime snapshot is not progress");
+});
+
+// --- side questions ---------------------------------------------------------
+
+const fakeLlm = (handler) => ({
+  get: (name) => (name === "llm" ? { prepareCall: async (_cfg, signal) => ({ config: {}, stream: (opts) => handler(opts, signal) }) } : undefined)
+});
+
+await testAsync("ask: the answer is the text the model streamed, nothing else", async () => {
+  const ctx = fakeLlm(async function* () {
+    yield { type: "text-delta", text: "本轮只改了" };
+    yield { type: "text-delta", text: "一处配置。" };
+  });
+  const result = await answerQuestion(ctx, { provider: "p", model: "m", maxOutputTokens: 64, deadlineMs: 2000, packet: "问", sessionId: "s" });
+  assert.equal(result?.answer, "本轮只改了一处配置。", "deltas are joined in order");
+});
+
+await testAsync("ask: closing the panel cancels the model call", async () => {
+  let leaked = false;
+  const stop = new AbortController();
+  const ctx = fakeLlm(async function* (opts) {
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    leaked = opts.signal.aborted === false;
+    yield { type: "text-delta", text: "迟到的回答" };
+  });
+  const pending = answerQuestion(ctx, { provider: "p", model: "m", maxOutputTokens: 64, deadlineMs: 5000, signal: stop.signal, packet: "问", sessionId: "s" });
+  stop.abort();
+  const result = await pending;
+  assert.equal(result, null, "an aborted call produces no answer");
+  assert.equal(leaked, false, "the request carries the abort down to the stream");
+});
+
+await testAsync("ask: an answer never outlives its deadline", async () => {
+  const ctx = fakeLlm(async function* (opts) {
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    if (opts.signal.aborted) return;
+    yield { type: "text-delta", text: "太晚了" };
+  });
+  const result = await answerQuestion(ctx, { provider: "p", model: "m", maxOutputTokens: 64, deadlineMs: 30, packet: "问", sessionId: "s" });
+  assert.equal(result, null, "a stuck call is dropped instead of hanging the panel");
+});
+
+test("ask: a reading surface cannot hold more model calls than the host allows", () => {
+  const source = readFileSync(new URL("../index.js", import.meta.url), "utf8");
+  assert.ok(source.includes("const ASK_CONCURRENCY = 2;"), "the cap is a fixed number");
+  assert.ok(source.includes("this.askCalls.size >= ASK_CONCURRENCY"), "past it the box waits");
+  assert.ok(source.includes("for (const call of runtime.askCalls) call.abort();"), "shutdown cancels what is still streaming");
+  assert.ok(source.includes("本轮小结："), "the answer sees what the card prints");
 });
 
 testClient();

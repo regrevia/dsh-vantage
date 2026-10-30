@@ -100,13 +100,15 @@ function hue(c) {
   return h < 0 ? h + 360 : h
 }
 
+const varMap = new Map()
 const hexOf = (c) => '#' + [c.r, c.g, c.b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('').toUpperCase()
 
+function main() {
 const dir = process.argv[2]
 const quiet = process.argv.includes('--quiet')
 if (!dir) {
   console.error('用法: node style-lint.mjs <目录>')
-  process.exit(2)
+  process.exitCode = 2; return
 }
 
 let files
@@ -114,14 +116,13 @@ try {
   files = walk(dir, [])
 } catch (e) {
   console.error(`style-lint: 目录不存在或不可读：${dir}`)
-  process.exit(2)
+  process.exitCode = 2; return
 }
 const textColors = new Map()
 const bgColors = new Map()
 const radii = new Map()
 const fonts = new Map()
 const shadows = new Map()
-const varMap = new Map()
 let allText = ''
 const gradStops = new Set()
 
@@ -263,4 +264,7 @@ if (!quiet) {
   for (const i of [...errs, ...warns]) console.log(`  ${i.sev === 'error' ? 'ERROR' : 'WARN '} [${i.code}] ${i.msg}`)
   if (!issues.length) console.log('  通过')
 }
-process.exit(errs.length ? 1 : 0)
+process.exitCode = errs.length ? 1 : 0
+}
+
+main()

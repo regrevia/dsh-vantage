@@ -21,7 +21,7 @@
  *    there is no usage quota to spend.
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 import { LIMITS, OverviewError, ROUTES, ROUTE_PREFIX, clip } from "./lib/schema.js";
 import { PROJECTION_VERSION, apply as foldEvent, chooseStatus, evaluateVerification, initState, materialKeyOf, rankFacts, roundStateOf } from "./lib/rounds.js?v=24";
@@ -83,6 +83,9 @@ const STORE_SPEC = Object.freeze({ version: 2, compatibleVersions: [1] });
 
 /** How often the scheduler wakes up to check a visible session. */
 const TICK_MS = 10000;
+/** Model calls a side question may hold at once, across every session. */
+const ASK_CONCURRENCY = 2;
+
 /** Rounds of recap a side question may read; read only when someone asks. */
 const RECAP_ROUNDS = 10;
 
@@ -198,6 +201,8 @@ export class Runtime {
     this.askThreads = new Map();
     /** @type {Set<string>} one question at a time per round. */
     this.askInflight = new Set();
+    /** @type {Set<AbortController>} model calls a shutdown has to cancel. */
+    this.askCalls = new Set();
     this.connection = "online";
     this.now = () => Date.now();
     this.timer = null;
@@ -361,6 +366,21 @@ export class Runtime {
    * @param {object} session - runtime session.
    * @returns {object|undefined} state, or undefined when the log is unreadable.
    */
+  /**
+   * Whether a delivered file is still on disk. The panel only offers a link it
+   * can open, so a path that was moved or deleted drops out of the row.
+   *
+   * @param {string} target - absolute path recorded with the fact.
+   * @returns {boolean} true when the path exists.
+   */
+  fileExists(target) {
+    try {
+      return existsSync(target);
+    } catch {
+      return false;
+    }
+  }
+
   stateOf(session) {
     const key = identityOf(session);
     const cached = this.cache.get(session.id);
@@ -900,6 +920,10 @@ export class Runtime {
     if (round === undefined || round === null) return { kind: "skipped", reason: "no-round", text: "这一轮的记录已不在本机", items: [] };
     const key = `${session.id}|${wanted}`;
     if (this.askInflight.has(key)) return { kind: "skipped", reason: "busy", text: "上一个问题还在回答", items: this.threadOf(session.id, wanted) };
+    // Side questions draw on the same model budget as the conversation they sit
+    // beside: past the cap the box waits instead of opening more streams, so the
+    // main task never competes with a reading surface. // ui-copy-ignore
+    if (this.askCalls.size >= ASK_CONCURRENCY) return { kind: "skipped", reason: "busy", text: "先答完正在回答的问题", items: this.threadOf(session.id, wanted) };
     const route = this.routeOf(session);
     if (route === null) return { kind: "skipped", reason: "no-model", text: "当前没有可用的模型", items: this.threadOf(session.id, wanted) };
     const previous = this.threadOf(session.id, wanted);
@@ -907,6 +931,10 @@ export class Runtime {
     lines.push(`本轮请求：${round.title ?? ""}`.trim());
     const reply = String(round.reply?.text ?? round.replyText ?? "").trim();
     if (reply !== "") lines.push(`本轮回复：${clip(reply, LIMITS.replyExcerpt)}`);
+    // The summary is what the card prints, so a question about the round has the
+    // same material the reader is looking at instead of a bare headline.
+    const recapLine = String(round.summaryText ?? "").replace(/\s+/gu, " ").trim();
+    if (recapLine !== "") lines.push(`本轮小结：${clip(recapLine, LIMITS.factStatement)}`);
     const facts = rankFacts(round).slice(0, 24).map((fact) => `- ${fact.statement ?? ""}`).filter((line) => line.length > 4);
     if (facts.length > 0) lines.push("已记录的事实：", ...facts);
     // Earlier rounds travel as a recap built here, when a question is actually
@@ -918,14 +946,17 @@ export class Runtime {
       for (const item of previous.slice(-4)) lines.push(`问：${item.question}`, `答：${item.answer}`);
     }
     lines.push(`用户的追问：${question}`);
+    const call = new AbortController();
     this.askInflight.add(key);
+    this.askCalls.add(call);
     try {
       const result = await answerQuestion(this.owner ?? this.ctx, {
         sessionId: session.id,
-        provider: route.provider,
-        model: route.model,
+        provider: route.provider, // ui-copy-ignore
+        model: route.model, // ui-copy-ignore
         maxOutputTokens: this.config.summary.maxOutputTokens,
         deadlineMs: this.config.summary.requestDeadlineMs,
+        signal: call.signal, // ui-copy-ignore
         packet: lines.join("\n") // ui-copy-ignore
       });
       if (result === null) return { kind: "skipped", reason: "no-model", text: "模型没有给出答案", items: previous };
@@ -946,6 +977,7 @@ export class Runtime {
       return { kind: "skipped", reason: "failed", text: "没能回答这个问题", items: previous };
     } finally {
       this.askInflight.delete(key);
+      this.askCalls.delete(call);
     }
   }
 
@@ -996,6 +1028,8 @@ function install(ctx, runtime, warn) {
     return () => {
       runtime.closed = true;
       if (runtime.timer !== null) clearInterval(runtime.timer);
+      for (const call of runtime.askCalls) call.abort();
+      runtime.askCalls.clear();
       void runtime.store.close();
     };
   });

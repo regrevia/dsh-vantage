@@ -144,7 +144,7 @@ function main() {
   const quiet = args.includes('--quiet');
   const strict = args.includes('--strict');
   const targets = args.filter((a) => !a.startsWith('--'));
-  if (!targets.length) { console.error('usage: node zh-lint.mjs <dir-or-file> [--json] [--quiet] [--strict]'); process.exit(2); }
+  if (!targets.length) { console.error('usage: node zh-lint.mjs <dir-or-file> [--json] [--quiet] [--strict]'); process.exitCode = 2; return }
 
   // Per-project waiver file, so one legacy screen doesn't block the repo.
   let ignored = new Set();
@@ -177,7 +177,7 @@ function main() {
     }
     console.log(`\nzh-lint: ${errors.length} error(s), ${warns.length} warning(s).`);
   }
-  process.exit(errors.length || (strict && warns.length) ? 1 : 0);
+  process.exitCode = errors.length || (strict && warns.length) ? 1 : 0;
 }
 
 main();

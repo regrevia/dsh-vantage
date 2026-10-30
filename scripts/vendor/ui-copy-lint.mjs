@@ -184,4 +184,4 @@ if (json) {
   console.log(`\nui-copy-lint: ${errors} error(s), ${warnings} warning(s) in ${results.length} file(s).`)
 }
 
-process.exit(errors > 0 ? 1 : 0)
+process.exitCode = errors > 0 ? 1 : 0
