@@ -9,6 +9,8 @@
   "pendingLabel": "Todo",
   "goalLabel": "Goal",
   "milestones": "Milestones",
+  "noProcess": "No process recorded for this round",
+  "process": "Process",
   "artifacts": "Key outputs",
   "archived": "Read-only",
   "currentRound": "Current round",

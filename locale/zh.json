@@ -9,6 +9,8 @@
   "pendingLabel": "待办",
   "goalLabel": "目标",
   "milestones": "里程碑",
+  "noProcess": "这一轮没有记录到过程",
+  "process": "过程",
   "artifacts": "关键产物",
   "archived": "只读",
   "currentRound": "当前轮",

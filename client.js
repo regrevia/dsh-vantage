@@ -32,6 +32,7 @@ window.__ModuleLoader__.load({
         pendingLabel: '待办', // ui-copy-ignore
         goalLabel: '会话目标', // ui-copy-ignore
         milestones: '里程碑', // ui-copy-ignore
+        process: '过程', // ui-copy-ignore
         artifacts: '关键产物', // ui-copy-ignore
         archived: '只读', // ui-copy-ignore
         currentRound: '本轮', // ui-copy-ignore
@@ -46,6 +47,7 @@ window.__ModuleLoader__.load({
         historyMore: '查看全部', // ui-copy-ignore
         unanswered: '未作答复', // ui-copy-ignore
         noSummary: '这一轮没有留下结论', // ui-copy-ignore
+        noProcess: '这一轮没有记录到过程', // ui-copy-ignore
         goalDone: '已达成', // ui-copy-ignore
         goalPaused: '已暂停', // ui-copy-ignore
         goalBlocked: '受阻', // ui-copy-ignore
@@ -110,6 +112,7 @@ window.__ModuleLoader__.load({
         pendingLabel: 'Todo', // ui-copy-ignore
         goalLabel: 'Goal', // ui-copy-ignore
         milestones: 'Milestones', // ui-copy-ignore
+        process: 'Process', // ui-copy-ignore
         artifacts: 'Key outputs', // ui-copy-ignore
         archived: 'Read-only', // ui-copy-ignore
         currentRound: 'This round', // ui-copy-ignore
@@ -124,6 +127,7 @@ window.__ModuleLoader__.load({
         historyMore: 'Show all', // ui-copy-ignore
         unanswered: 'No reply', // ui-copy-ignore
         noSummary: 'No conclusion saved for this round', // ui-copy-ignore
+        noProcess: 'No process recorded for this round', // ui-copy-ignore
         goalDone: 'Achieved', // ui-copy-ignore
         goalPaused: 'Paused', // ui-copy-ignore
         goalBlocked: 'Blocked', // ui-copy-ignore
@@ -267,7 +271,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-panel .ov-goal-state { flex: none; color: var(--dsw-alias-label-secondary); font-size: 13px; }
 .dsv-panel .ov-headline { margin-top: 14px; font-size: 22px; line-height: 30px; font-weight: 600; letter-spacing: 0; }
 .dsv-panel .ov-summary { margin-top: 10px; font-size: 15px; line-height: 26px; overflow-wrap: anywhere; }
-.dsv-panel .ov-summary-text { margin: 10px 0 0; font-size: 14px; line-height: 24px; color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; }
 .dsv-panel .ov-seg { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: 8px; background: var(--dsw-alias-bg-l2); }
 .dsv-panel .ov-seg-item {
   min-height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent;
@@ -374,13 +377,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-panel .ov-tr { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--dsw-alias-border-l1); font-size: 13px; line-height: 20px; }
 .dsv-panel .ov-tr-head { color: var(--dsw-alias-label-secondary); }
 .dsv-panel .ov-td { overflow-wrap: anywhere; }
-.dsv-panel .ov-quote { margin-top: 8px; }
-.dsv-panel .ov-quote .ov-rich { margin-top: 0; }
-.dsv-panel .ov-quote .ov-rich-p, .dsv-panel .ov-quote .ov-rich-list, .dsv-panel .ov-quote .ov-rich-list li { color: var(--dsw-alias-label-secondary); }
-.dsv-panel .ov-quote .ov-rich-head { margin-top: 18px; font-weight: 600; }
-.dsv-panel .ov-quote .ov-rich-head[data-level="1"] { font-size: 15px; line-height: 24px; }
-.dsv-panel .ov-quote .ov-rich-head[data-level="2"] { font-size: 14px; line-height: 23px; }
-.dsv-panel .ov-quote .ov-rich > *:first-child { margin-top: 0; }
 .dsv-panel .ov-stop { margin-top: 12px; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
 .dsv-panel .ov-ask-open {
   display: inline-flex; align-items: center; margin: 12px 0 0; padding: 0;
@@ -460,6 +456,17 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
   display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 20px;
   color: var(--dsw-alias-label-secondary); font-size: 20px; line-height: 20px;
 }
+.dsv-panel .ov-timeline { margin: 8px 0 0; }
+.dsv-panel .ov-tl-row {
+  display: flex; gap: 12px; align-items: baseline;
+  padding: 8px 0; border-top: 1px solid var(--dsw-alias-border-l1);
+}
+.dsv-panel .ov-tl-row:first-child { border-top: 0; padding-top: 0; }
+.dsv-panel .ov-tl-time {
+  flex: none; width: 44px; color: var(--dsw-alias-label-secondary);
+  font-size: 13px; line-height: 22px; font-variant-numeric: tabular-nums;
+}
+.dsv-panel .ov-tl-text { min-width: 0; font-size: 15px; line-height: 22px; overflow-wrap: anywhere; }
 .dsv-panel .ov-more { display: inline-flex; margin-top: 16px; }
 .dsv-panel .ov-quiet { padding-top: 24px; }
 .dsv-panel .ov-quiet .ov-quiet-title { font-size: 17px; line-height: 26px; font-weight: 600; }
@@ -828,16 +835,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       return kept.slice(cut).join(' ')
     }
 
-    function replyQuote(text, keyPrefix, head, shown) {
-      // The row above prints one sentence of this reply: the quote starts after it.
-      const source = withoutBackReference(withoutPreview(withoutPreview(withoutRepeatedLead(text, head), head), shown))
-      const body = digestReply(source)
-      if (body === '') return null
-      return h('div', { key: `${keyPrefix}-q`, className: 'ov-quote' }, [
-        h('div', { key: 'b', className: 'ov-rich' }, richText(body, `${keyPrefix}-qb`))
-      ])
-    }
-
     // The box grows with its text up to the ceiling the stylesheet sets, then
     // scrolls: the same behaviour as the conversation's composer.
     const growBox = (node) => {
@@ -1052,16 +1049,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       if (work !== '' && !weakRowLine(work)) return work
       const outcome = String(row?.outcome ?? '').trim()
       if (outcome !== '' && !weakRowLine(outcome)) return outcome
-      // Nothing in the row's own lines stands alone: the paragraph behind it
-      // still has a first sentence that names what the round got done.
-      const paragraph = firstSentenceOf(digestReply(String(row?.detail ?? '').trim()), '')
-      if (paragraph !== '' && !weakRowLine(paragraph)) return paragraph
       return outcome !== '' ? outcome : words.noSummary
-    }
-
-    const primaryTitleOf = (row, sessionTitle) => {
-      const own = titleOf(row)
-      return own === sessionTitle ? sessionTitle : own
     }
 
     function titleOf(round) {
@@ -1652,6 +1640,99 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         h('div', { key: 's', className: 'ov-controls' }, controls)
       ])
 
+      // The course of the work, not its closing paragraph. A round can run for
+      // half an hour with nothing printed in the conversation; these are the
+      // lines that say what it was doing during that silence.
+      const stepsOf = (target) => {
+        const raw = target !== null && target !== undefined && Array.isArray(target.steps) ? target.steps : []
+        const steps = []
+        for (const step of raw) {
+          if (step === null || step === undefined) continue
+          const text = typeof step.text === 'string' ? step.text.trim() : ''
+          if (text === '') continue
+          const at = typeof step.t === 'number' && step.t > 0 ? step.t : typeof step.time === 'number' && step.time > 0 ? step.time : 0
+          steps.push({ at, text, kind: typeof step.kind === 'string' ? step.kind : '' })
+        }
+        return steps
+      }
+
+      const clockOf = (at) => {
+        if (typeof at !== 'number' || at <= 0) return ''
+        const date = new Date(at)
+        return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+      }
+
+      // What a row leads with: the last two lines of the silent stretch it
+      // covers, never the closing sentence the conversation already printed.
+      const stepTitleOf = (steps) => {
+        const texts = steps.map((step) => step.text).filter((text) => text !== '')
+        if (texts.length === 0) return ''
+        if (texts.length === 1) return texts[0].length > 48 ? `${texts[0].slice(0, 47)}…` : texts[0]
+        const joined = `${texts[0]}，${texts[texts.length - 1]}`
+        return joined.length > 48 ? `${joined.slice(0, 47)}…` : joined
+      }
+
+      // The one line under a row: what it touched, how much it checked, and the
+      // span it covered. Same-minute facts are not a span, so the range is
+      // printed only when it is at least a minute wide.
+      const progressOfSteps = (steps) => {
+        let changes = 0
+        let checks = 0
+        for (const step of steps) {
+          if (step.kind === 'change') changes += 1
+          else if (step.kind === 'check') checks += 1
+        }
+        const parts = []
+        if (changes > 0) parts.push(`改 ${changes} 处`)
+        if (checks > 0) parts.push(`检查 ${checks} 项`)
+        const times = steps.map((step) => step.at).filter((at) => at > 0)
+        if (times.length > 1) {
+          const first = Math.min(...times)
+          const last = Math.max(...times)
+          if (last - first >= 60 * 1000) parts.push(`${clockOf(first)}–${clockOf(last)}`)
+        }
+        return parts.join(' · ')
+      }
+
+      const timelineNode = (prefix, steps, limit) => {
+        const shown = steps.slice(Math.max(0, steps.length - limit))
+        if (shown.length === 0) return null
+        return h('div', { key: 'tl', className: 'ov-timeline' }, shown.map((step, index) => h('div', {
+          key: `${prefix}:tl:${index}`,
+          className: 'ov-tl-row',
+          'data-kind': step.kind === '' ? undefined : step.kind
+        }, [
+          h('span', { key: 't', className: 'ov-tl-time' }, clockOf(step.at)),
+          h('span', { key: 'x', className: 'ov-tl-text' }, step.text)
+        ])))
+      }
+
+      // Not every round recorded a change or a check. What it did record may
+      // still be the only trace of a long stretch of work: the tool errors it
+      // ran into, the files it finished. Those stand in for a timeline, so the
+      // body of a round is never the conversation's own closing words. A real
+      // milestone is never replaced, because this only runs on an empty timeline.
+      const DIGEST_KINDS = Object.freeze({ change: true, check: true, deliverable: true, job: true, blocker: true, failure: true, interruption: true, note: true }) // ui-copy-ignore
+      const digestStepsOf = (target, limit) => {
+        const own = stepsOf(target)
+        if (own.length > 0) return own
+        const facts = Array.isArray(target?.facts) ? target.facts : []
+        const rows = facts
+          .filter((fact) => fact !== null && fact !== undefined && DIGEST_KINDS[fact.kind] === true && typeof fact.statement === 'string' && fact.statement.trim() !== '')
+          .map((fact) => ({ at: Number(fact.createdAt ?? fact.updatedAt ?? 0), text: fact.statement.trim(), kind: String(fact.kind) }))
+          .sort((a, b) => (a.at === b.at ? 0 : a.at < b.at ? -1 : 1))
+        if (rows.length > 0) return rows.slice(Math.max(0, rows.length - Math.max(1, limit)))
+        // A round stored before facts existed still recorded the commands it
+        // ran. Those outcomes are the work itself, so they stand in for a
+        // timeline where the conversation left nothing else behind.
+        const jobs = Array.isArray(target?.outcomes?.items) ? target.outcomes.items : []
+        const ran = jobs
+          .filter((item) => item !== null && item !== undefined && (item.kind === 'job' || item.kind === 'change' || item.kind === 'check') && typeof item.text === 'string' && item.text.trim() !== '')
+          .map((item) => ({ at: Number(item.time ?? item.at ?? 0), text: item.text.trim(), kind: String(item.kind) }))
+          .sort((a, b) => (a.at === b.at ? 0 : a.at < b.at ? -1 : 1))
+        return ran.slice(Math.max(0, ran.length - Math.max(1, limit)))
+      }
+
       const briefRows = (target, skip) => {
         const sealed = target?.brief !== null && target?.brief !== undefined && Array.isArray(target.brief.items) ? target.brief.items : []
         // A raw reply is a transcript, not a brief: the row already carries
@@ -1721,56 +1802,53 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           const primary = primaryOf(row, sessionTitle, words)
           const key = row.roundId === undefined || row.roundId === null ? `r${index}` : String(row.roundId)
           const open = view.roundId === key
-          const detail = typeof row.detail === 'string' ? row.detail.trim() : ''
           // A stored round can always be asked for: its paragraph may be missing
           // while the facts behind it are on disk, and an unopenable newest row is
           // the one place a reader has no other way in.
           // A row is a door only when there is a room behind it: no empty
           // expansion, and no arrow on a row that holds nothing.
-          const projected = detail !== ''
+          const rowSteps = stepsOf(row)
+          // A row opens onto work, not onto a reply: the reply is in the
+          // conversation, and an expansion that only quotes it is the thing
+          // this page was built to replace.
+          const projected = rowSteps.length > 0
+            || (typeof row.progress === 'string' && row.progress !== '')
             || row.hasDetail === true
-            || (typeof row.replyExcerpt === 'string' && row.replyExcerpt !== '')
           const loaded = open === true ? round : null
           // The line under the heading previews the round, so a collapsed row
           // still says what happened without being opened. The body that opens
           // under it does not print that sentence again.
-          const preview = firstSentenceOf(typeof row.outcome === 'string' && row.outcome.trim() !== '' ? row.outcome : digestReply(detail), primary)
+          // The row's heading and its one line both come from the facts of the
+          // round, so a reader sees what was worked on before opening anything.
+          const steps = rowSteps
+          const progress = progressOfSteps(steps)
+          const rowTitle = stepTitleOf(steps)
+          // The line under the heading is how much work the round covered.
+          // When nothing was recorded it stays empty instead of quoting the
+          // conversation back at the reader.
+          const preview = progress
           const bodyNode = open === false ? null
             : roundFailed === true
               ? h('div', { key: 'f', className: 'ov-sub' }, words.detailFailed)
               : loaded === null
                 ? h('div', { key: 'l', className: 'ov-sub' }, words.loading)
                 : (() => {
-                  const summaryText = typeof loaded.summaryText === 'string' ? loaded.summaryText.trim() : ''
-                  const sealed = briefRows(loaded, primary)
-                  const nodes = []
-                  // A summary is the round's own account. It stays readable even
-                  // when the round contributed no separate finding rows.
-                  if (summaryText !== '') {
-                    // The row above already prints the summary's first clause:
-                    // the body continues from there instead of repeating it.
-                    // A summary that only repeats the row leaves no body at all,
-                    // and an empty paragraph under a chevron is a broken promise.
-                    const shown = withoutPreview(withoutRepeatedLead(summaryText, primary) || summaryText, preview)
-                    if (shown !== '') nodes.push(h('div', { key: 's', className: 'ov-rich ov-summary-text' }, richText(shown, 'csum')))
-                  }
+                  const timeline = timelineNode(loaded.roundId, digestStepsOf(loaded, 8), 10)
+                  // With a timeline there is nothing to quote, and without one
+                  // the round still has its own record of what it ran into.
+                  // The reply is what the conversation already printed; the
+                  // page exists for what it did not.
+                  const sealed = timeline === null ? briefRows(loaded, primary) : null
+                  const nodes = timeline === null ? [] : [timeline]
                   if (sealed !== null) nodes.push(sealed)
-                  const quote = replyQuote(loaded.replyText || loaded.replyExcerpt, 'c', primary, preview)
-                  if (quote !== null) nodes.push(quote)
                   // The stop reason is run state, not work content: one quiet
                   // line under the text, never the row's title.
                   if (typeof loaded.stopReason === 'string' && loaded.stopReason !== '') {
                     nodes.push(h('div', { key: 'x', className: 'ov-stop' }, loaded.stopReason))
                   }
-                  // Nothing summarised yet: the outcome line is still a result,
-                  // so it reads as prose rather than as one squashed paragraph.
-                  const gist = nodes.length === 0
-                    ? withoutPreview(withoutRepeatedLead(digestReply(detail), primary) || digestReply(detail), preview)
-                    : ''
-                  if (gist !== '') {
-                    nodes.push(h('div', { key: 'd', className: 'ov-rich' }, richText(gist, 'cdet')))
+                  if (nodes.length === 0) {
+                    return h('div', { key: 'b', className: 'ov-card' }, [h('div', { key: 'n', className: 'ov-sub' }, words.noProcess)])
                   }
-                  if (nodes.length === 0) return null
                   return h('div', { key: 'b', className: 'ov-card' }, nodes)
                 })()
           // A chevron must not lie: a round that prints nothing behind it falls
@@ -1779,7 +1857,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           const canOpen = open === true ? shownOpen : projected
           const stopped = typeof row.stopState === 'string' ? row.stopState : ''
           const stamp = [timeOf(row.archivedAt, now), stopped].filter((part) => part !== '').join(' · ')
-          return card(key, primary, preview, stamp, shownOpen, canOpen, bodyNode)
+          return card(key, rowTitle === '' ? primary : rowTitle, preview, stamp, shownOpen, canOpen, bodyNode)
         })))
         if (historyLoading === true && source.length > 0) parts.push(h('div', { key: 'l', className: 'ov-sub' }, words.historyLoading))
         if (historyFailed === true) parts.push(h('div', { key: 'f', className: 'ov-sub' }, words.historyFailed))
@@ -1818,16 +1896,22 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           // A round with nothing to report prints no heading: the fallback
           // word ("本次任务") is a label, not a title.
           const roundTitle = typeof roundOfSnapshot.title === 'string' ? roundOfSnapshot.title.trim() : ''
-          if (roundTitle !== '' && roundTitle !== sessionTitle) body.push(h('h1', { key: 't', className: 'ov-headline' }, roundTitle))
-          const summaryText = typeof snapshot.summaryText === 'string' ? snapshot.summaryText.trim() : ''
-          if (summaryText !== '') body.push(h('div', { key: 'sm', className: 'ov-rich ov-summary-text' }, richText(summaryText, 'nsum')))
-          const currentQuote = replyQuote(roundOfSnapshot.replyText || roundOfSnapshot.replyExcerpt, 'n', roundTitle, '')
-          if (currentQuote !== null) body.push(currentQuote)
-          // An unanswered round still needs one line under the current round,
-          // so the panel never reads as an empty page.
-          if (roundTitle === '' && summaryText === '' && currentQuote === null) {
-            body.push(h('p', { key: 'pend', className: 'ov-quiet' }, words.pending))
+          // The current round leads with what it has been doing, because the
+          // conversation prints nothing while it works. The reply is not a
+          // source here: it is the line the conversation ends with, and this
+          // page exists for the stretch before it.
+          const currentTimeline = timelineNode(roundOfSnapshot.roundId, digestStepsOf(roundOfSnapshot, 12), 14)
+          // A headline is the summary of the work below it. Without any
+          // recorded work there is nothing for it to summarize, and the round
+          // title is then a line the conversation already printed.
+          const quiet = currentTimeline === null && items.length === 0
+          if (!quiet && roundTitle !== '' && roundTitle !== sessionTitle) body.push(h('h1', { key: 't', className: 'ov-headline' }, roundTitle))
+          if (currentTimeline !== null) {
+            body.push(h('div', { key: 'pl', className: 'ov-section-label' }, words.process))
+            body.push(currentTimeline)
           }
+          // A round with nothing recorded says so, instead of quoting itself.
+          if (quiet) body.push(h('p', { key: 'pend', className: 'ov-quiet' }, words.noProcess))
           // The box opens on demand: a page whose only control is an empty field
           // asks nothing. The round being read is always the one it asks about.
           if (askShown === true) {
@@ -1841,7 +1925,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           notices.forEach((entry, index) => {
             body.push(h(Notice, { key: `n${index}`, text: entry === null || entry === undefined ? '' : entry.text }))
           })
-          if (items.length > 0) {
+          if (items.length > 0 && currentTimeline === null) {
             const conclusionOnly = items.every((item) => item !== null && item !== undefined && item.source === 'transcript')
             // A quoted reply labels itself; a section heading above it would read
             // as two headings for one line.

@@ -28,7 +28,7 @@ import { apply, evaluateVerification, initState, outcomeDetailOf, rankFacts, rou
 import { HistoryStore } from "../lib/store.js";
 import { DEFAULT_CONFIG, Runtime } from "../index.js";
 import { SUMMARY_SYSTEM_PROMPT, SummaryScheduler, buildPacket, estimateTokens, publishVerdict, verifyAnswer, verifyTopics } from "../lib/summary.js";
-import { buildSnapshot, createRoutes, excerptOf, publicFact } from "../lib/api.js";
+import { buildSnapshot, createRoutes, excerptOf, progressLineOf, publicFact, stepTitleOf, timelineSteps } from "../lib/api.js";
 import { answerQuestion } from "../lib/ask.js";
 
 // The panel declares the project it is rendering; a test request does the same.
@@ -95,6 +95,54 @@ const finalMessage = (seq, text) =>
     step: 1,
     message: { role: "assistant", content: [{ type: "text", text }] }
   });
+
+// --- timeline ---------------------------------------------------------------
+// A round's timeline is the work itself: the lines a reader can follow while
+// the model prints nothing. The closing summary is never a source.
+{
+  const round = {
+    roundId: "tl-1",
+    facts: [
+      { id: "f3", kind: "check", statement: "scripts/lint.mjs 0 error", updatedAt: Date.parse("2026-10-28T10:04:00+08:00") },
+      { id: "f1", kind: "change", statement: "改了启动脚本", files: ["/repo/a.command"], updatedAt: Date.parse("2026-10-28T10:01:00+08:00") },
+      { id: "f2", kind: "report", statement: "总结一下", updatedAt: Date.parse("2026-10-28T10:02:00+08:00") },
+      { id: "f4", kind: "deliverable", statement: "已生成：/repo/dist/out.txt", updatedAt: Date.parse("2026-10-28T10:03:00+08:00") }
+    ]
+  };
+  const steps = timelineSteps(round, 10);
+  assert.deepEqual(steps.map((step) => step.kind), ["change", "deliverable", "check"]);
+  assert.equal(steps[0].text, "改 a.command");
+  assert.ok(steps.every((step) => step.t > 0), "every line carries the time it happened");
+  assert.ok(steps[0].t <= steps[1].t && steps[1].t <= steps[2].t, "the timeline runs oldest first");
+  assert.equal(timelineSteps(round, 2).length, 2, "the limit keeps the newest lines");
+  assert.deepEqual(timelineSteps({ roundId: "x" }, 5), [], "no facts, no timeline");
+  assert.ok(steps.every((step) => !String(step.text).includes("总结")), "a report fact is not process");
+}
+
+{
+  const steps = [
+    { t: Date.parse("2026-10-28T10:01:00+08:00"), kind: "change", text: "改 a.command" },
+    { t: Date.parse("2026-10-28T10:02:00+08:00"), kind: "check", text: "lint 通过" },
+    { t: Date.parse("2026-10-28T10:26:00+08:00"), kind: "check", text: "重启后回读 6 GB" }
+  ];
+  assert.equal(stepTitleOf(steps), "改 a.command，重启后回读 6 GB", "the row title summarises the lines under it");
+  assert.equal(stepTitleOf([{ text: "只有一个动作" }]), "只有一个动作");
+  assert.equal(stepTitleOf([]), "");
+  assert.ok(stepTitleOf(steps).length <= 49);
+
+  const line = progressLineOf({ facts: [
+    { kind: "change", files: ["/repo/a.command", "/repo/b.mjs"], updatedAt: Date.parse("2026-10-28T10:01:30+08:00") },
+    { kind: "check", statement: "lint", updatedAt: Date.parse("2026-10-28T10:26:00+08:00") }
+  ] });
+  assert.equal(line, "改 2 个文件 · 检查 1 项 · 10:01–10:26");
+  const sameMinute = progressLineOf({ facts: [
+    { kind: "check", statement: "a", updatedAt: Date.parse("2026-10-28T10:01:05+08:00") },
+    { kind: "check", statement: "b", updatedAt: Date.parse("2026-10-28T10:01:50+08:00") }
+  ] });
+  assert.equal(sameMinute, "检查 2 项", "same-minute facts are not a span");
+  assert.equal(progressLineOf({}), "");
+}
+
 
 // --- schema -----------------------------------------------------------------
 
@@ -218,6 +266,18 @@ test("rounds: a check names the work it covered, never the runner", () => {
   const fact = state.round.facts.find((entry) => entry.kind === "check");
   assert.equal(fact.statement, "src/login.test.ts 未通过");
   assert.equal(state.round.conditions[0].text, "src/login.test.ts");
+});
+
+test("rounds: a shell command that is not a check is still recorded work", () => {
+  const state = folded([
+    ...userTurn(0, "看看日志"),
+    ev(2, "tool/call", { callId: "c1", name: "shell", arguments: JSON.stringify({ command: "tail -14 /tmp/dsh6g-launch.log" }) }),
+    ev(3, "tool/result", { message: { toolCallId: "c1", content: [{ type: "text", text: "ok" }] } })
+  ]);
+  const fact = state.round.facts.find((entry) => entry.kind === "job");
+  assert.ok(fact !== undefined, "the command is a fact of the round");
+  assert.equal(fact.statement, "tail -14 /tmp/dsh6g-launch.log");
+  assert.equal(state.round.facts.some((entry) => entry.kind === "report"), false, "a command is not completion prose");
 });
 
 test("rounds: a non-zero tool result is evidence, never a task failure", () => {
@@ -820,14 +880,15 @@ test("client: the history list opens exactly the row that was clicked", () => {
   assert.ok(source.includes("answered !== id"), "a detail for another round is not shown");
 });
 
-test("client: the quoted reply drops the lead the card already printed", () => {
+test("client: a round body shows the work, never the reply", () => {
   const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
-  assert.ok(source.includes("function withoutRepeatedLead(text, head)"), "one helper owns the repeat cut");
-  assert.equal(source.match(/replyQuote\([^)]*'l'/u), null, "the history list no longer copies the round on screen");
-  assert.equal(source.match(/replyQuote\([^)]*'c', primary, preview\)/u)?.length, 1, "a stored round passes its row title and its line");
-  assert.equal(source.match(/replyQuote\([^)]*'n', roundTitle, ''\)/u)?.length, 1, "the current round passes its heading");
-  assert.ok(source.includes("withoutPreview(withoutPreview(withoutRepeatedLead(text, head), head), shown)"), "the quote skips the title and the sentence the row prints");
-  assert.ok(source.includes("flat.includes(want) || want.includes(flat)"), "a clipped or pronoun-less line still matches its sentence");
+  assert.equal(source.match(/replyQuote\(/gu), null, "no body prints the round's reply");
+  assert.equal(source.match(/ov-summary-text/gu), null, "the closing summary is not a body");
+  assert.ok(source.includes("function withoutRepeatedLead(text, head)"), "one helper still owns the repeat cut");
+  assert.ok(source.includes("const digestStepsOf = (target, limit) =>"), "a body reads the facts of the round");
+  assert.ok(source.includes("digestStepsOf(loaded, 8)"), "a stored round renders its own facts");
+  assert.ok(source.includes("digestStepsOf(roundOfSnapshot, 12)"), "the current round renders its own facts");
+  assert.ok(source.includes("words.noProcess"), "a round with nothing recorded says so");
 });
 
 test("client: a hidden page stops polling and a narrow one keeps its controls", () => {
