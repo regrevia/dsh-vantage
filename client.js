@@ -54,7 +54,6 @@ window.__ModuleLoader__.load({
         detailFailed: '这一轮的记录没能读取', // ui-copy-ignore
         askPlaceholder: '答疑', // ui-copy-ignore
         askOpen: '答疑', // ui-copy-ignore
-        pending: '这一轮还没有回复', // ui-copy-ignore
         askSend: '发送', // ui-copy-ignore
         askBusy: '正在回答', // ui-copy-ignore
         askFailed: '没能回答这个问题', // ui-copy-ignore
@@ -134,7 +133,6 @@ window.__ModuleLoader__.load({
         detailFailed: 'This round could not be read', // ui-copy-ignore
         askPlaceholder: 'Ask', // ui-copy-ignore
         askOpen: 'Ask', // ui-copy-ignore
-        pending: 'No reply to this round yet', // ui-copy-ignore
         askSend: 'Send', // ui-copy-ignore
         askBusy: 'Answering', // ui-copy-ignore
         askFailed: 'The question was not answered', // ui-copy-ignore
@@ -257,8 +255,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-panel .ov-roundbar {
   display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 24px;
 }
-.dsv-panel .ov-round-label { color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px; }
-.dsv-panel .ov-round-label:last-child { font-variant-numeric: tabular-nums; }
+.dsv-panel .ov-round-label { color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px; font-variant-numeric: tabular-nums; }
 .dsv-panel .ov-goal {
   display: flex; align-items: baseline; justify-content: space-between; gap: 20px; margin-top: 10px;
   font-size: 14px; line-height: 24px;
@@ -462,11 +459,22 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
   padding: 8px 0; border-top: 1px solid var(--dsw-alias-border-l1);
 }
 .dsv-panel .ov-tl-row:first-child { border-top: 0; padding-top: 0; }
+.dsv-panel .ov-tl-mark {
+  flex: none; width: 12px; color: var(--dsw-alias-label-secondary);
+  font-size: 13px; line-height: 22px;
+}
+.dsv-panel .ov-tl-row[data-kind='deliverable'] .ov-tl-mark,
+.dsv-panel .ov-tl-row[data-kind='change'] .ov-tl-mark { color: var(--dsw-alias-brand-primary, var(--dsw-alias-label-primary)); }
 .dsv-panel .ov-tl-time {
   flex: none; width: 44px; color: var(--dsw-alias-label-secondary);
   font-size: 13px; line-height: 22px; font-variant-numeric: tabular-nums;
 }
-.dsv-panel .ov-tl-text { min-width: 0; font-size: 15px; line-height: 22px; overflow-wrap: anywhere; }
+/* One line per milestone: a command is evidence, not a paragraph. The full
+   line stays in the round record behind the row. */
+.dsv-panel .ov-tl-text {
+  min-width: 0; font-size: 15px; line-height: 22px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .dsv-panel .ov-more { display: inline-flex; margin-top: 16px; }
 .dsv-panel .ov-quiet { padding-top: 24px; }
 .dsv-panel .ov-quiet .ov-quiet-title { font-size: 17px; line-height: 26px; font-weight: 600; }
@@ -777,50 +785,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
     // sentence would print the round twice.
     // A sentence shown as the row's preview must not be printed again in the
     // body that opens under it.
-    function withoutPreview(text, preview) {
-      const want = flatForCompare(preview)
-      if (want === '') return text
-      const kept = sentencesOf(text).filter((sentence) => {
-        const flat = flatForCompare(sentence)
-        // A line that was clipped, or that dropped its opening pronoun, still
-        // names the sentence it came from: one of the two holds the other.
-        const holds = want.length > 12 && (flat.includes(want) || want.includes(flat))
-        return flat !== want && !holds
-      })
-      return kept.length === 0 ? text : kept.join(' ')
-    }
-
-    function firstSentenceOf(text, head) {
-      const pool = sentencesOf(withoutRepeatedLead(text, head) || text)
-        .map((sentence) => sentence.trim())
-        .filter((piece) => piece !== '' && TERMINAL_RE.test(piece) && flatForCompare(piece) !== flatForCompare(head))
-      // A round that is one sentence long has nothing to preview: the body is
-      // that sentence.
-      if (pool.length < 2) return ''
-      // The full sentence: the row clamps it to one line in CSS, so clipping it
-      // here would make it stop matching the same sentence in the body.
-      return pool[pool.length - 1]
-    }
-
-    function digestReply(text) {
-      const picked = []
-      let total = 0
-      for (const raw of String(text ?? '').split(/\n+/u)) {
-        const line = cleanLine(raw.replace(/^\s*(?:[-*+]|\d+[.．、)])\s*/u, '').replace(/^\d+\s*[.．]\s*/u, ''))
-        if (line === '') continue
-        for (const sentence of sentencesOf(line)) {
-          const piece = sentence.trim()
-          if (!TERMINAL_RE.test(piece)) continue
-          if (!CJK_RE.test(piece) && MACHINE_RE.test(piece)) continue
-          if (total + piece.length > 160) break
-          picked.push(piece)
-          total += piece.length
-          if (picked.length === 2) return picked.join(' ')
-        }
-      }
-      return picked.join(' ')
-    }
-
     // A sentence that only points back at something said earlier cannot open a
     // quote: the reader has no earlier text to read it against.
     const BACK_REFERENCE_HEADS = ['说的是', '指的是', '也就是说', '上面说的', '刚才说的', '前面说的']
@@ -828,13 +792,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       const flat = flatForCompare(sentence).replace(/^我们?/u, '')
       return BACK_REFERENCE_HEADS.some((head) => flat.startsWith(head))
     }
-    function withoutBackReference(text) {
-      const kept = sentencesOf(text)
-      const cut = kept.findIndex((sentence) => !opensBackReference(sentence))
-      if (cut <= 0) return text
-      return kept.slice(cut).join(' ')
-    }
-
     // The box grows with its text up to the ceiling the stylesheet sets, then
     // scrolls: the same behaviour as the conversation's composer.
     const growBox = (node) => {
@@ -1050,26 +1007,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       const outcome = String(row?.outcome ?? '').trim()
       if (outcome !== '' && !weakRowLine(outcome)) return outcome
       return outcome !== '' ? outcome : words.noSummary
-    }
-
-    function titleOf(round) {
-      const title = round === null || round === undefined ? undefined : round.title
-      const raw = typeof title === 'string' ? title : ''
-      const text = raw.replace(/<[^<>\n]{0,80}>/gu, ' ').replace(/\s+/gu, ' ').trim()
-      let clean = /[<>]/u.test(text) ? '' : text
-      // Old records prefixed the round's own label to whatever opened it.
-      clean = clean.replace(/^(?:本轮|这一轮|本会话)\s*·\s*/u, '').trim()
-      // An English runtime snapshot can still sit in an old saved record; it
-      // is context for the model, not a title for a person.
-      if (/(?:Current runtime context|This snapshot supersedes)/iu.test(clean)) clean = ''
-      if (/^【DSH 崩溃防线】/u.test(clean)) clean = ''
-      if (!/[\u4e00-\u9fff]/u.test(clean) && clean.split(/\s+/u).length >= 4) clean = ''
-      // A clause that opens with 我/这/该 refers back to something the reader
-      // cannot see; a heading has to stand on its own.
-      if (/^(?:我|我们|你|您|他|她|它|这|那|该|其|此|上面|上述|刚才|先前|之前|还|另外|所以|但|而|并|又|再)/u.test(clean)) clean = ''
-      // "继续" answers the previous turn; on its own it names no work.
-      if (/^(?:继续|接着|然后|好的|好|可以|行|嗯|对|是的|收到|没问题|OK|ok)$/u.test(clean)) clean = ''
-      return clean === '' ? copy().untitled : clean
     }
 
     function metaOf(round, now) {
@@ -1697,11 +1634,17 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       const timelineNode = (prefix, steps, limit) => {
         const shown = steps.slice(Math.max(0, steps.length - limit))
         if (shown.length === 0) return null
+        // A row that produced something is punctuated as done; a command that
+        // only moved the work along keeps a plain dot. The mark is decoration,
+        // so it carries nothing the text does not: a reader who cannot see it
+        // loses no fact.
+        const marks = new Set(['change', 'check', 'deliverable'])
         return h('div', { key: 'tl', className: 'ov-timeline' }, shown.map((step, index) => h('div', {
           key: `${prefix}:tl:${index}`,
           className: 'ov-tl-row',
           'data-kind': step.kind === '' ? undefined : step.kind
         }, [
+          h('span', { key: 'm', className: 'ov-tl-mark', 'aria-hidden': 'true' }, marks.has(step.kind) ? '✓' : '•'),
           h('span', { key: 't', className: 'ov-tl-time' }, clockOf(step.at)),
           h('span', { key: 'x', className: 'ov-tl-text' }, step.text)
         ])))
@@ -1885,17 +1828,21 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           publishItems(roundOfSnapshot.roundId, items)
           const updated = timeOf(roundOfSnapshot.contentAt, now)
           const roundLabel = words.currentRound
-          // The small row says which round and when; the work title is the
-          // headline below, so printing it twice only looks like a mistake.
+          // The small row says which round and when; the work below speaks for
+          // itself, so the round's own title is not printed a second time.
+          // How long this round has been going is the thing the conversation
+          // itself cannot show: it prints nothing while it works.
+          const elapsedMs = typeof roundOfSnapshot.elapsedMs === 'number' ? roundOfSnapshot.elapsedMs : 0
+          const elapsed = elapsedMs >= 60 * 1000 ? `${words.elapsed} ${durationOf(elapsedMs)}` : ''
           body.push(h('div', { key: 'rb', className: 'ov-roundbar' }, [
             h('span', { key: 'l', className: 'ov-round-label' }, roundLabel),
+            elapsed === '' ? null : h('span', { key: 'e', className: 'ov-round-label' }, elapsed),
             updated === '' ? null : h('span', { key: 'u', className: 'ov-round-label' }, `${words.updated} ${updated}`)
           ]))
           // A Goal objective describes the whole session, not this round: printing
           // it here made an unrelated goal read as the answer to this ask.
           // A round with nothing to report prints no heading: the fallback
           // word ("本次任务") is a label, not a title.
-          const roundTitle = typeof roundOfSnapshot.title === 'string' ? roundOfSnapshot.title.trim() : ''
           // The current round leads with what it has been doing, because the
           // conversation prints nothing while it works. The reply is not a
           // source here: it is the line the conversation ends with, and this
@@ -1905,7 +1852,8 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           // recorded work there is nothing for it to summarize, and the round
           // title is then a line the conversation already printed.
           const quiet = currentTimeline === null && items.length === 0
-          if (!quiet && roundTitle !== '' && roundTitle !== sessionTitle) body.push(h('h1', { key: 't', className: 'ov-headline' }, roundTitle))
+          // The round title is the model's own prose and the conversation has
+          // already printed it; it is not a summary of the rows below.
           if (currentTimeline !== null) {
             body.push(h('div', { key: 'pl', className: 'ov-section-label' }, words.process))
             body.push(currentTimeline)

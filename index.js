@@ -24,8 +24,8 @@
 import { existsSync, readFileSync } from "node:fs";
 
 import { LIMITS, OverviewError, ROUTES, ROUTE_PREFIX, clip } from "./lib/schema.js";
-import { PROJECTION_VERSION, apply as foldEvent, chooseStatus, evaluateVerification, initState, materialKeyOf, rankFacts, roundStateOf } from "./lib/rounds.js?v=29";
-import { HistoryStore } from "./lib/store.js?v=3";
+import { PROJECTION_VERSION, apply as foldEvent, chooseStatus, evaluateVerification, initState, materialKeyOf, rankFacts, roundStateOf } from "./lib/rounds.js?v=31";
+import { HistoryStore } from "./lib/store.js?v=5";
 import { createRoutes } from "./lib/api.js?v=35";
 import { answerQuestion } from "./lib/ask.js?v=22";
 import {
@@ -43,6 +43,9 @@ const PACKAGE = JSON.parse(readFileSync(new URL("./package.json", import.meta.ur
 
 /** Projection/cache key; also the id used by the client to detect the Harness half. */
 export const STATE_KEY = "vantage";
+
+/** Prefix of a switch key that does not carry the live cursor. */
+const STABLE_PREFIX = "s:";
 
 /** Defaults, mirroring the documented configuration. */
 export const DEFAULT_CONFIG = Object.freeze({
@@ -173,6 +176,10 @@ export class Runtime {
     });
     /** @type {Map<string, boolean>} session identity key -> overview enabled. */
     this.switches = new Map();
+    /** @type {Map<string, boolean>} cursor-free key -> overview enabled; see stableKeyOf. */
+    this.stableSwitches = new Map();
+    /** @type {Map<string, boolean>} cursor-bearing keys written by older builds. */
+    this.legacySwitches = new Map();
     /** @type {Map<string, number>} session identity key -> generation, bumped on every flip. */
     this.generations = new Map();
     /** @type {Map<string, {state: object, key: string, at: number}>} */
@@ -621,7 +628,27 @@ export class Runtime {
    * @returns {boolean} true when this session is being recorded.
    */
   isEnabled(session) {
-    return this.switches.get(identityOf(session)) === true;
+    const exact = this.switches.get(identityOf(session));
+    if (typeof exact === "boolean") return exact;
+    // The identity carries the live cursor, which moves when a session is
+    // re-attached. The switch belongs to the conversation, so the durable key
+    // drops the cursor: without that, every reload read back "off".
+    const stable = this.stableSwitches.get(stableKeyOf(session));
+    if (typeof stable === "boolean") return stable;
+    // Builds before the cursor-free key stored only cursor-bearing keys. One of
+    // those still names this conversation by creation time, directory and kind,
+    // so an older switch is not lost on the first read after an upgrade.
+    for (const [legacy, value] of this.legacySwitches) {
+      const parts = legacy.split("|");
+      const createdAt = String(session?.header?.createdAt ?? 0);
+      const cwd = String(session?.header?.cwd ?? "");
+      const kind = session?.header?.isSeeded === true ? "seed" : "live";
+      if (parts[2] === createdAt && parts[3] === cwd && parts[5] === kind) {
+        this.stableSwitches.set(stableKeyOf(session), value === true);
+        return value === true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -667,6 +694,7 @@ export class Runtime {
     const was = this.switches.get(key) === true;
     if (was === want) return { enabled: was, generation: this.generationOf(key) };
     this.switches.set(key, want);
+    this.stableSwitches.set(stableKeyOf(session), want);
     const generation = this.generationOf(key) + 1;
     this.generations.set(key, generation);
     if (!want) {
@@ -688,7 +716,18 @@ export class Runtime {
       }
     }
     // The switch is a runtime fact and must survive a restart in both directions.
-    this.store.saveSwitches(Object.fromEntries(this.switches)).catch(() => {});
+    // Cursor-free keys are saved alongside the exact ones so a re-attached
+    // session finds its switch again; prune the exact keys that drifted away.
+    if (this.switches.size > 400) {
+      for (const old of [...this.switches.keys()]) {
+        if (this.switches.size <= 300) break;
+        if (!old.startsWith(STABLE_PREFIX)) this.switches.delete(old);
+      }
+    }
+    this.store.saveSwitches(
+      Object.fromEntries(this.switches),
+      Object.fromEntries(this.stableSwitches)
+    ).catch(() => {});
     return { enabled: want, generation };
   }
 
@@ -1154,7 +1193,9 @@ async function openStore(runtime, warn) {
     if (switches !== undefined) {
       // Restored before the listener can classify a single event, so a restart
       // never records a session that was switched off when the app closed.
-      for (const [key, value] of Object.entries(switches)) runtime.switches.set(key, value === true);
+      for (const [key, value] of Object.entries(switches.exact)) runtime.switches.set(key, value === true);
+      for (const [key, value] of Object.entries(switches.stable)) runtime.stableSwitches.set(key, value === true);
+      for (const [key, value] of Object.entries(switches.legacy)) runtime.legacySwitches.set(key, value === true);
     }
   } catch (error) {
     warn(`history stays in memory: ${messageOf(error)}`);
@@ -1168,6 +1209,10 @@ async function openStore(runtime, warn) {
  * @param {object} session - runtime session.
  * @returns {string} identity key.
  */
+function stableKeyOf(session) {
+  return `${STABLE_PREFIX}${session?.id ?? ""}|${session?.header?.createdAt ?? 0}`;
+}
+
 function identityOf(session) {
   const header = session.header ?? {};
   return [

@@ -901,14 +901,10 @@ test("client: a hidden page stops polling and a narrow one keeps its controls", 
   assert.ok(source.includes("'aria-label': words.switchLabel"), "the switch has a name");
 });
 
-test("client: a heading can never carry payload markup", () => {
+test("client: the panel never prints the model's own title", () => {
   const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
-  const titleOf = source.slice(source.indexOf("function titleOf"), source.indexOf("function titleOf") + 1600);
-  assert.ok(titleOf.includes("replace(/<"), "the panel strips a tag-shaped title");
-  assert.ok(titleOf.includes("[<>]"), "and refuses one it cannot strip");
-  assert.ok(titleOf.includes("untitled"), "falling back to a plain heading instead");
-  assert.ok(titleOf.includes("本轮|这一轮|本会话"), "an old round-prefixed title loses the label");
-  assert.ok(titleOf.includes("Current runtime context"), "the injected runtime context is never a title");
+  assert.ok(!source.includes("roundOfSnapshot.title"), "the round title is never a heading");
+  assert.ok(!source.includes("function titleOf"), "no sanitizer is needed for a title that is never shown");
 });
 
 test("client: a history row states the outcome, never its storage state", () => {
@@ -1029,6 +1025,16 @@ await testAsync("switch: a session without a stored flag is off until it is turn
   assert.equal(off.enabled, false);
   assert.equal(off.generation, 2, "every flip bumps the generation");
   assert.equal(runtime.isEnabled(first), false);
+});
+
+await testAsync("switch: the flag follows the conversation when the live cursor moves", async () => {
+  const runtime = new Runtime({}, DEFAULT_CONFIG, () => {});
+  const before = fakeSession("s1", { firstLiveSeq: 10, inheritedEventCount: 0 });
+  await runtime.setEnabled(before, true);
+  const after = fakeSession("s1", { firstLiveSeq: 40, inheritedEventCount: 2 });
+  assert.equal(runtime.isEnabled(after), true, "a re-attached session keeps its switch");
+  const other = fakeSession("s2", { firstLiveSeq: 40, inheritedEventCount: 2 });
+  assert.equal(runtime.isEnabled(other), false, "the cursor-free key is still per session");
 });
 
 await testAsync("switch: a disabled session builds no state and asks the model for nothing", async () => {
