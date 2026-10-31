@@ -1203,7 +1203,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       const [blocked, setBlocked] = React.useState(false)
       const [failed, setFailed] = React.useState(false)
       const [loading, setLoading] = React.useState(true)
-      const [view, setView] = React.useState({ mode: 'current', roundId: '' })
+      const [view, setView] = React.useState({ mode: 'current', roundId: null })
       const [history, setHistory] = React.useState(null)
       const [historyFailed, setHistoryFailed] = React.useState(false)
       const [historyLoading, setHistoryLoading] = React.useState(false)
@@ -1313,7 +1313,10 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         evidenceOpenRef.current = {}
         expandedRef.current = new Set()
         itemRef.current = {}
-        setView({ mode: 'current', roundId: '' })
+        // Switching sessions invalidates every request in flight: a late answer
+        // for the old session must not land in the new one's list or card.
+        seqRef.current = {}
+        setView({ mode: 'current', roundId: null })
         setNotice('')
         setPending(false)
         retryRef.current = 0
@@ -1366,7 +1369,8 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         // history list is only a fold, never another request.
         const liveId = snapshot !== null && snapshot.round !== null && snapshot.round !== undefined ? snapshot.round.roundId : ''
         if (view.mode === 'history' && view.roundId === id) {
-          setView({ mode: 'history', roundId: '', from: '' })
+          // The same row closes alone; nothing else takes its place open.
+          setView({ mode: 'history', roundId: null, from: '' })
           setRound(null)
           setRoundFailed(false)
           return
@@ -1383,7 +1387,12 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         const query = new URLSearchParams({ session: sessionId, round: id })
         const answer = await callHost(`/round?${query.toString()}`)
         if (fresh() !== true) return
-        if (answer.failed === true || answer.body === null || answer.body.round === null || answer.body.round === undefined) {
+        const answered = answer.body === null || answer.body === undefined || answer.body.round === null || answer.body.round === undefined
+          ? ''
+          : String(answer.body.round.roundId ?? '')
+        // The card shows only the round that was asked for: an answer for some
+        // other round is a failure, never a stand-in.
+        if (answer.failed === true || answered !== id) {
           setRoundFailed(true)
           return
         }
@@ -1478,10 +1487,9 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       }
 
       const showHistory = () => {
-        // The round on screen stays first and open; older rounds page in below
-        // it, so switching tabs never loses where the reader was.
-        const liveId = snapshot !== null && snapshot.round !== null && snapshot.round !== undefined ? snapshot.round.roundId : ''
-        setView({ mode: 'history', roundId: liveId, from: '' })
+        // The history page lists earlier rounds only and starts folded: the
+        // round on screen is what the current tab is for.
+        setView({ mode: 'history', roundId: null, from: '' })
         setRound(null)
         setRoundFailed(false)
         setTick((value) => value + 1)
@@ -1489,7 +1497,10 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       }
 
       const showCurrent = () => {
-        setView({ mode: 'current', roundId: '', from: '' })
+        // Back to the round on screen: no row is open, and an answer about a
+        // history row still in flight must not land on the current page.
+        claim('round')
+        setView({ mode: 'current', roundId: null, from: '' })
         setRound(null)
         setRoundFailed(false)
       }
@@ -1516,7 +1527,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           return
         }
         if (answer.body !== null && answer.body !== undefined && answer.body.enabled === wanted) {
-          setView({ mode: 'current', roundId: '' })
+          setView({ mode: 'current', roundId: null })
           load(true)
           return
         }
@@ -1673,8 +1684,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           h('button', { key: 'r', type: 'button', className: 'ov-control-link ov-back', 'data-action': 'retry' }, words.retry)
         ]))
       } else if (mode === 'history') {
-        const live = snapshot !== null && snapshot.round !== null && snapshot.round !== undefined ? snapshot.round : null
-        const liveId = live === null ? '' : String(live.roundId)
         const source = history !== null && Array.isArray(history.items)
           ? history.items.filter(substantiveOf)
           : (snapshot !== null && snapshot.history !== null && snapshot.history !== undefined && Array.isArray(snapshot.history.items) ? snapshot.history.items : [])
@@ -1703,53 +1712,9 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           open === false ? null : h('div', { key: 'd', className: 'ov-round-body' }, bodyNode)
         ])
 
-        // The round being read leads the list and starts open: switching tabs
-        // must not make the reader hunt for the card they just left.
-        let leadLive = true
-        if (live !== null) {
-          const open = view.roundId === '' || view.roundId === liveId
-          const summaryText = snapshot !== null && typeof snapshot.summaryText === 'string' ? snapshot.summaryText.trim() : ''
-          const sealed = open === true ? briefRows(live, '') : null
-          const liveTitle = titleOf(live)
-          // A round that left no headline and no text is not a row of its own:
-          // the list below already carries it, under its own honest state.
-          const liveRow = source.find((row) => row !== null && row !== undefined && String(row.roundId) === liveId)
-          const liveHeading = liveTitle !== words.untitled
-            ? liveTitle
-            : liveRow === undefined
-              // The round the list already carries under the tab name has no
-              // record to name it: its own closing line does.
-              ? firstSentenceOf(digestReply(String(live.replyText || live.replyExcerpt || '')), words.currentTab)
-              : primaryOf(liveRow, sessionTitle, words)
-          // The folded live row shows the round's closing line; the body that opens
-          // under it does not print that sentence again.
-          const liveSub = firstSentenceOf(summaryText !== '' ? summaryText : digestReply(String(live.replyText || live.replyExcerpt || '')), liveHeading)
-          const liveNodes = []
-          if (open === true) {
-            if (summaryText !== '') {
-              const shown = withoutPreview(withoutRepeatedLead(summaryText, liveHeading) || summaryText, liveSub)
-              liveNodes.push(h('div', { key: 's', className: 'ov-rich ov-summary-text' }, richText(shown, 'lsum')))
-            }
-            if (sealed !== null) liveNodes.push(sealed)
-            const liveQuote = replyQuote(live.replyText || live.replyExcerpt, 'l', liveHeading, liveSub)
-            if (liveQuote !== null) liveNodes.push(liveQuote)
-          } else if (summaryText !== '') {
-            const shown = withoutPreview(withoutRepeatedLead(summaryText, liveHeading) || summaryText, liveSub)
-            liveNodes.push(h('div', { key: 's', className: 'ov-rich ov-summary-text' }, richText(shown, 'lsum')))
-          }
-          // A reading hint belongs in the body, not in the row's existence: an
-          // empty round must not become a card headed by a bare tab name.
-          const hasContent = liveNodes.length > 0 || summaryText !== ''
-          if (liveNodes.length === 0 && view.roundId === liveId) {
-            liveNodes.push(h('div', { key: 'q', className: 'ov-sub' }, roundFailed === true ? words.detailFailed : words.loading))
-          }
-          const bodyNode = liveNodes.length === 0 ? null : h('div', { key: 'c', className: 'ov-card' }, liveNodes)
-          leadLive = hasContent
-          if (leadLive) parts.push(card(liveId, liveHeading, liveSub, timeOf(live.updatedAt, now), open, true, bodyNode))
-        }
-
-        const rows = source.filter((row) => row !== null && row !== undefined && !(leadLive === true && String(row.roundId) === liveId))
-        if (rows.length === 0 && leadLive === false) {
+        // Every row here is a stored round; which one is open is a single id.
+        const rows = source
+        if (rows.length === 0) {
           parts.push(h('div', { key: 'e', className: 'ov-sub' }, historyLoading === true ? words.historyLoading : words.historyEmpty))
         }
         parts.push(h('div', { key: 'r', className: 'ov-history-list' }, rows.map((row, index) => {
@@ -1762,7 +1727,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           // the one place a reader has no other way in.
           // A row is a door only when there is a room behind it: no empty
           // expansion, and no arrow on a row that holds nothing.
-          const canOpen = detail !== ''
+          const projected = detail !== ''
             || row.hasDetail === true
             || (typeof row.replyExcerpt === 'string' && row.replyExcerpt !== '')
           const loaded = open === true ? round : null
@@ -1784,8 +1749,10 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
                   if (summaryText !== '') {
                     // The row above already prints the summary's first clause:
                     // the body continues from there instead of repeating it.
+                    // A summary that only repeats the row leaves no body at all,
+                    // and an empty paragraph under a chevron is a broken promise.
                     const shown = withoutPreview(withoutRepeatedLead(summaryText, primary) || summaryText, preview)
-                    nodes.push(h('div', { key: 's', className: 'ov-rich ov-summary-text' }, richText(shown, 'csum')))
+                    if (shown !== '') nodes.push(h('div', { key: 's', className: 'ov-rich ov-summary-text' }, richText(shown, 'csum')))
                   }
                   if (sealed !== null) nodes.push(sealed)
                   const quote = replyQuote(loaded.replyText || loaded.replyExcerpt, 'c', primary, preview)
@@ -1806,9 +1773,13 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
                   if (nodes.length === 0) return null
                   return h('div', { key: 'b', className: 'ov-card' }, nodes)
                 })()
+          // A chevron must not lie: a round that prints nothing behind it falls
+          // back to a static row instead of an empty box under a live arrow.
+          const shownOpen = open === true && bodyNode !== null
+          const canOpen = open === true ? shownOpen : projected
           const stopped = typeof row.stopState === 'string' ? row.stopState : ''
           const stamp = [timeOf(row.archivedAt, now), stopped].filter((part) => part !== '').join(' · ')
-          return card(key, primary, preview, stamp, open, canOpen, bodyNode)
+          return card(key, primary, preview, stamp, shownOpen, canOpen, bodyNode)
         })))
         if (historyLoading === true && source.length > 0) parts.push(h('div', { key: 'l', className: 'ov-sub' }, words.historyLoading))
         if (historyFailed === true) parts.push(h('div', { key: 'f', className: 'ov-sub' }, words.historyFailed))

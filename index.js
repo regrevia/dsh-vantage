@@ -24,9 +24,9 @@
 import { existsSync, readFileSync } from "node:fs";
 
 import { LIMITS, OverviewError, ROUTES, ROUTE_PREFIX, clip } from "./lib/schema.js";
-import { PROJECTION_VERSION, apply as foldEvent, chooseStatus, evaluateVerification, initState, materialKeyOf, rankFacts, roundStateOf } from "./lib/rounds.js?v=27";
+import { PROJECTION_VERSION, apply as foldEvent, chooseStatus, evaluateVerification, initState, materialKeyOf, rankFacts, roundStateOf } from "./lib/rounds.js?v=28";
 import { HistoryStore } from "./lib/store.js?v=3";
-import { createRoutes } from "./lib/api.js?v=31";
+import { createRoutes } from "./lib/api.js?v=33";
 import { answerQuestion } from "./lib/ask.js?v=22";
 import {
   SummaryScheduler,
@@ -224,13 +224,13 @@ export class Runtime {
     const session = sessions?.get?.(sessionId);
     if (session !== undefined && session !== null) {
       const readOnly = this.readOnlyOf(session);
-      if (readOnly !== undefined) return readOnly;
-      // Opening a saved conversation gives the registry a live shell whose
-      // own log is still empty: the transcript lives in the persisted prefix.
-      // Fold that prefix for reading instead of answering an empty overview.
-      if (this.storedOnly(session)) {
+      // Opening a saved conversation gives the registry a shell with no live
+      // Agent, and the transcript lives in the persisted prefix. Fold that
+      // prefix before answering, or the list is read off an empty log.
+      if (readOnly !== undefined || this.storedOnly(session)) {
         const stored = await this.archivedSession(sessionId);
         if (stored !== undefined) return stored;
+        if (readOnly !== undefined) return readOnly;
       }
       return session;
     }

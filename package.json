@@ -1,6 +1,6 @@
 {
   "name": "dsh-vantage",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "type": "module",
   "description": "A read-only overview tab next to the conversation: what this round asked, what has been observed, what still needs checking, and a bounded history of answered rounds.",
   "license": "MIT",

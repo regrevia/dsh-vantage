@@ -809,10 +809,21 @@ test("client: the ask box is labelled 答疑", () => {
   assert.ok(!source.includes("问这一轮里的事"), "no conversational prompt survives");
 });
 
+test("client: the history list opens exactly the row that was clicked", () => {
+  const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
+  assert.equal(source.match(/view\.roundId === ''/gu), null, "empty is no longer a stand-in for the round on screen");
+  assert.equal(source.match(/const open = view\.roundId === key/gu)?.length, 1, "one id decides which row is open");
+  assert.ok(source.includes("view.roundId === id"), "the clicked row compares against its own id");
+  assert.equal(source.match(/roundId: null/gu)?.length >= 2, true, "a fold sets no round");
+  assert.equal(source.match(/leadLive/gu), null, "the history list does not copy the round on screen");
+  assert.ok(source.includes("seqRef.current = {}"), "switching sessions drops the old session's answers");
+  assert.ok(source.includes("answered !== id"), "a detail for another round is not shown");
+});
+
 test("client: the quoted reply drops the lead the card already printed", () => {
   const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
   assert.ok(source.includes("function withoutRepeatedLead(text, head)"), "one helper owns the repeat cut");
-  assert.equal(source.match(/replyQuote\([^)]*'l', liveHeading, liveSub\)/u)?.length, 1, "the live card passes its heading and its line");
+  assert.equal(source.match(/replyQuote\([^)]*'l'/u), null, "the history list no longer copies the round on screen");
   assert.equal(source.match(/replyQuote\([^)]*'c', primary, preview\)/u)?.length, 1, "a stored round passes its row title and its line");
   assert.equal(source.match(/replyQuote\([^)]*'n', roundTitle, ''\)/u)?.length, 1, "the current round passes its heading");
   assert.ok(source.includes("withoutPreview(withoutPreview(withoutRepeatedLead(text, head), head), shown)"), "the quote skips the title and the sentence the row prints");
@@ -1739,6 +1750,26 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
     const cutRoute = createRoutes({ ...runtime, store: cutStore }).find((entry) => entry.path === ROUTES.history);
     const cutBody = await (await cutRoute.fetch(req(`http://x${ROUTES.history}?session=${SESSION}&exclude=${shownRound.roundId}`))).json();
     assert.equal(cutBody.items[0].title, "输入框已复刻正式对话里的 composer - 圆角容器", "an old cut label is closed instead of printed");
+  });
+
+  await testAsync("history: a stored summary is enough to open its row", async () => {
+    const record = {
+      roundId: `${SESSION}:0`,
+      title: "归档摘要已经恢复",
+      statusLine: "",
+      at: 0,
+      replyText: "",
+      summaryText: "跨轮读取仍待验证。"
+    };
+    const page = { items: [{ roundId: record.roundId, title: record.title, statusLine: "", at: 0 }], nextCursor: null };
+    const flagged = Object.assign(Object.create(Object.getPrototypeOf(runtime.store)), runtime.store, {
+      page: () => page,
+      get: () => record
+    });
+    const route = createRoutes({ ...runtime, store: flagged }).find((entry) => entry.path === ROUTES.history);
+    const body = await (await route.fetch(req(`http://x${ROUTES.history}?session=${SESSION}`))).json();
+    assert.equal(body.items[0].hasDetail, true, "saved text behind the row is still an opener");
+    assert.equal(body.items[0].title, "归档摘要已经恢复", "and the row keeps its name");
   });
 
   await testAsync("history: the round on screen can be asked out of a page", async () => {
