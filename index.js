@@ -24,9 +24,9 @@
 import { existsSync, readFileSync } from "node:fs";
 
 import { LIMITS, OverviewError, ROUTES, ROUTE_PREFIX, clip } from "./lib/schema.js";
-import { PROJECTION_VERSION, apply as foldEvent, chooseStatus, evaluateVerification, initState, materialKeyOf, rankFacts, roundStateOf } from "./lib/rounds.js?v=24";
+import { PROJECTION_VERSION, apply as foldEvent, chooseStatus, evaluateVerification, initState, materialKeyOf, rankFacts, roundStateOf } from "./lib/rounds.js?v=27";
 import { HistoryStore } from "./lib/store.js?v=3";
-import { createRoutes } from "./lib/api.js?v=28";
+import { createRoutes } from "./lib/api.js?v=31";
 import { answerQuestion } from "./lib/ask.js?v=22";
 import {
   SummaryScheduler,
@@ -203,6 +203,9 @@ export class Runtime {
     this.askInflight = new Set();
     /** @type {Set<AbortController>} model calls a shutdown has to cancel. */
     this.askCalls = new Set();
+    // Which session each in-flight question belongs to, so switching that
+    // session off cancels its own calls and nobody else's.
+    this.askOwners = new Map();
     this.connection = "online";
     this.now = () => Date.now();
     this.timer = null;
@@ -675,6 +678,14 @@ export class Runtime {
       for (const key of [...this.askThreads.keys()]) {
         if (key.startsWith(`${session.id}|`)) this.askThreads.delete(key);
       }
+      // A question still streaming into a page that was just switched off would
+      // spend the model budget on nobody; cancel it with the switch.
+      for (const call of [...this.askCalls]) {
+        if (this.askOwners.get(call) === session.id) {
+          this.askCalls.delete(call);
+          call.abort();
+        }
+      }
     }
     // The switch is a runtime fact and must survive a restart in both directions.
     this.store.saveSwitches(Object.fromEntries(this.switches)).catch(() => {});
@@ -919,6 +930,12 @@ export class Runtime {
     if (round === undefined) round = this.store.get(session.id, wanted);
     if (round === undefined || round === null) return { kind: "skipped", reason: "no-round", text: "这一轮的记录已不在本机", items: [] };
     const key = `${session.id}|${wanted}`;
+    // Reading a saved conversation and asking about a round both need the same
+    // material, but a live session that is switched off has none: asking would
+    // answer from a shell. The archived view is read-only and stays askable.
+    if (!this.isEnabled(session) && session?.archived !== true) {
+      return { kind: "skipped", reason: "disabled", text: "概览已关闭", items: [] };
+    }
     if (this.askInflight.has(key)) return { kind: "skipped", reason: "busy", text: "上一个问题还在回答", items: this.threadOf(session.id, wanted) };
     // Side questions draw on the same model budget as the conversation they sit
     // beside: past the cap the box waits instead of opening more streams, so the
@@ -933,7 +950,13 @@ export class Runtime {
     if (reply !== "") lines.push(`本轮回复：${clip(reply, LIMITS.replyExcerpt)}`);
     // The summary is what the card prints, so a question about the round has the
     // same material the reader is looking at instead of a bare headline.
-    const recapLine = String(round.summaryText ?? "").replace(/\s+/gu, " ").trim();
+    // The paragraph on the card may live in the summary cache before it is
+    // written onto the round; the answer must quote what the reader sees.
+    const onCard = this.summaries.get(session.id);
+    const recapSource = String(round.summaryText ?? "").trim() !== ""
+      ? round.summaryText
+      : onCard !== undefined && onCard.roundId === wanted ? onCard.summary : "";
+    const recapLine = String(recapSource ?? "").replace(/\s+/gu, " ").trim();
     if (recapLine !== "") lines.push(`本轮小结：${clip(recapLine, LIMITS.factStatement)}`);
     const facts = rankFacts(round).slice(0, 24).map((fact) => `- ${fact.statement ?? ""}`).filter((line) => line.length > 4);
     if (facts.length > 0) lines.push("已记录的事实：", ...facts);
@@ -949,6 +972,7 @@ export class Runtime {
     const call = new AbortController();
     this.askInflight.add(key);
     this.askCalls.add(call);
+    this.askOwners.set(call, session.id);
     try {
       const result = await answerQuestion(this.owner ?? this.ctx, {
         sessionId: session.id,
@@ -978,6 +1002,7 @@ export class Runtime {
     } finally {
       this.askInflight.delete(key);
       this.askCalls.delete(call);
+      this.askOwners.delete(call);
     }
   }
 
@@ -1030,6 +1055,7 @@ function install(ctx, runtime, warn) {
       if (runtime.timer !== null) clearInterval(runtime.timer);
       for (const call of runtime.askCalls) call.abort();
       runtime.askCalls.clear();
+      runtime.askOwners.clear();
       void runtime.store.close();
     };
   });

@@ -812,9 +812,11 @@ test("client: the ask box is labelled 答疑", () => {
 test("client: the quoted reply drops the lead the card already printed", () => {
   const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
   assert.ok(source.includes("function withoutRepeatedLead(text, head)"), "one helper owns the repeat cut");
-  assert.equal(source.match(/replyQuote\([^)]*'l', titleOf\(live\)\)/u)?.length, 1, "the live card passes its heading");
-  assert.equal(source.match(/replyQuote\([^)]*'c', primary\)/u)?.length, 1, "a stored round passes its row title");
-  assert.equal(source.match(/replyQuote\([^)]*'n', roundTitle\)/u)?.length, 1, "the current round passes its heading");
+  assert.equal(source.match(/replyQuote\([^)]*'l', liveHeading, liveSub\)/u)?.length, 1, "the live card passes its heading and its line");
+  assert.equal(source.match(/replyQuote\([^)]*'c', primary, preview\)/u)?.length, 1, "a stored round passes its row title and its line");
+  assert.equal(source.match(/replyQuote\([^)]*'n', roundTitle, ''\)/u)?.length, 1, "the current round passes its heading");
+  assert.ok(source.includes("withoutPreview(withoutPreview(withoutRepeatedLead(text, head), head), shown)"), "the quote skips the title and the sentence the row prints");
+  assert.ok(source.includes("flat.includes(want) || want.includes(flat)"), "a clipped or pronoun-less line still matches its sentence");
 });
 
 test("client: a hidden page stops polling and a narrow one keeps its controls", () => {

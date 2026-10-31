@@ -27,7 +27,6 @@ window.__ModuleLoader__.load({
         contextResumed: '本会话 · 已开启', // ui-copy-ignore
         contextHistory: '历史记录', // ui-copy-ignore
         history: '历史', // ui-copy-ignore
-        historyHeading: '历史', // ui-copy-ignore
         currentTab: '当前轮次', // ui-copy-ignore
         historyTab: '历史轮次', // ui-copy-ignore
         pendingLabel: '待办', // ui-copy-ignore
@@ -40,7 +39,6 @@ window.__ModuleLoader__.load({
         nothingYet: '这一轮没有留下可展示的结论', // ui-copy-ignore
         inProgress: '这一轮正在处理', // ui-copy-ignore
         roundCountLabel: '历史', // ui-copy-ignore
-        roundUnit: '轮', // ui-copy-ignore
         none: '无', // ui-copy-ignore
         historyEmpty: '还没有更早的轮次', // ui-copy-ignore
         historyLoading: '正在读取历史', // ui-copy-ignore
@@ -53,6 +51,7 @@ window.__ModuleLoader__.load({
         goalBlocked: '受阻', // ui-copy-ignore
         detailFailed: '这一轮的记录没能读取', // ui-copy-ignore
         askPlaceholder: '答疑', // ui-copy-ignore
+        askOpen: '答疑', // ui-copy-ignore
         pending: '这一轮还没有回复', // ui-copy-ignore
         askSend: '发送', // ui-copy-ignore
         askBusy: '正在回答', // ui-copy-ignore
@@ -106,7 +105,6 @@ window.__ModuleLoader__.load({
         contextResumed: 'This session · on', // ui-copy-ignore
         contextHistory: 'History', // ui-copy-ignore
         history: 'History', // ui-copy-ignore
-        historyHeading: 'History', // ui-copy-ignore
         currentTab: 'Current round', // ui-copy-ignore
         historyTab: 'Past rounds', // ui-copy-ignore
         pendingLabel: 'Todo', // ui-copy-ignore
@@ -119,7 +117,6 @@ window.__ModuleLoader__.load({
         nothingYet: 'This round left no conclusion to show', // ui-copy-ignore
         inProgress: 'This round is in progress', // ui-copy-ignore
         roundCountLabel: 'History', // ui-copy-ignore
-        roundUnit: 'rounds', // ui-copy-ignore
         none: 'None', // ui-copy-ignore
         historyEmpty: 'No earlier rounds yet', // ui-copy-ignore
         historyLoading: 'Reading history', // ui-copy-ignore
@@ -132,6 +129,7 @@ window.__ModuleLoader__.load({
         goalBlocked: 'Blocked', // ui-copy-ignore
         detailFailed: 'This round could not be read', // ui-copy-ignore
         askPlaceholder: 'Ask', // ui-copy-ignore
+        askOpen: 'Ask', // ui-copy-ignore
         pending: 'No reply to this round yet', // ui-copy-ignore
         askSend: 'Send', // ui-copy-ignore
         askBusy: 'Answering', // ui-copy-ignore
@@ -323,7 +321,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-panel .ov-notice {
   margin-top: 16px; color: var(--dsw-alias-state-warn-primary); font-size: 13px; line-height: 20px;
 }
-.dsv-panel .ov-sub { margin-top: 8px; color: var(--dsw-alias-label-secondary); font-size: 14px; line-height: 24px; }
+.dsv-panel .ov-sub { margin-top: 8px; color: var(--dsw-alias-label-secondary); font-size: 15px; line-height: 24px; }
 .dsv-panel .ov-brief { margin-top: 0; }
 .dsv-panel .ov-item { border-bottom: 1px solid var(--dsw-alias-border-l1); }
 .dsv-panel .ov-item:last-child { border-bottom: 0; }
@@ -338,7 +336,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
   font-weight: 400; line-height: 23px; transform-origin: 50% 50%;
 }
 .dsv-panel .ov-item[open] > summary .ov-chevron { transform: rotate(90deg); }
-.dsv-panel .ov-item-title { display: block; font-size: 15px; line-height: 23px; font-weight: 500; overflow-wrap: anywhere; }
+.dsv-panel .ov-item-title { display: block; font-size: 15px; line-height: 24px; font-weight: 500; overflow-wrap: anywhere; }
 .dsv-panel .ov-item-static > .ov-item-static-title { display: block; padding: 12px 0; }
 .dsv-panel .ov-item-flat { padding: 12px 0; }
 .dsv-panel .ov-fact {
@@ -350,7 +348,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-panel .ov-item-link {
   display: inline-flex; align-items: baseline; gap: 8px; max-width: 100%;
   padding: 0; border: 0; background: none; color: var(--dsw-alias-brand-primary);
-  font: inherit; font-size: 17px; line-height: 26px; font-weight: 500;
+  font: inherit; font-size: 15px; line-height: 24px; font-weight: 500;
   text-align: left; overflow-wrap: anywhere; cursor: pointer;
 }
 .dsv-panel .ov-item-link-text { text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; transition: text-decoration-color 120ms ease; }
@@ -361,14 +359,14 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-panel .ov-item-limit { color: var(--dsw-alias-label-secondary); }
 .dsv-panel .ov-item-limit[data-tone="error"] { color: var(--dsw-alias-state-error-primary); }
 .dsv-panel .ov-item-limit[data-tone="warn"] { color: var(--dsw-alias-state-warn-primary); }
-.dsv-panel .ov-item-body { padding: 0 0 12px 29px; font-size: 15px; line-height: 24px; }
+.dsv-panel .ov-item-body { padding: 0 0 12px; font-size: 15px; line-height: 24px; }
 .dsv-panel .ov-item-body p { margin: 0 0 10px; overflow-wrap: anywhere; }
 .dsv-panel .ov-item-body p:last-child { margin-bottom: 0; }
 .dsv-panel .ov-rich { margin: 10px 0 0; }
 .dsv-panel .ov-rich > *:first-child { margin-top: 0; }
-.dsv-panel .ov-rich-p { margin: 8px 0 0; font-size: 14px; line-height: 24px; color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; }
-.dsv-panel .ov-rich-head { margin: 12px 0 0; font-size: 14px; line-height: 24px; font-weight: 500; color: var(--dsw-alias-label-primary); }
-.dsv-panel .ov-rich-list { margin: 8px 0 0; padding-left: 20px; list-style: disc; font-size: 14px; line-height: 24px; overflow-wrap: anywhere; }
+.dsv-panel .ov-rich-p { margin: 8px 0 0; font-size: 15px; line-height: 24px; color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; }
+.dsv-panel .ov-rich-head { margin: 12px 0 0; font-size: 15px; line-height: 24px; font-weight: 500; color: var(--dsw-alias-label-primary); }
+.dsv-panel .ov-rich-list { margin: 8px 0 0; padding-left: 20px; list-style: disc; font-size: 15px; line-height: 24px; overflow-wrap: anywhere; }
 .dsv-panel .ov-rich-num { list-style: decimal; }
 .dsv-panel .ov-rich-list li { margin-top: 4px; }
 .dsv-panel .ov-rich code { font-family: var(--dsw-alias-font-mono, ui-monospace, monospace); font-size: 13px; }
@@ -376,7 +374,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-panel .ov-tr { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--dsw-alias-border-l1); font-size: 13px; line-height: 20px; }
 .dsv-panel .ov-tr-head { color: var(--dsw-alias-label-secondary); }
 .dsv-panel .ov-td { overflow-wrap: anywhere; }
-.dsv-panel .ov-quote { margin-top: 16px; }
+.dsv-panel .ov-quote { margin-top: 8px; }
 .dsv-panel .ov-quote .ov-rich { margin-top: 0; }
 .dsv-panel .ov-quote .ov-rich-p, .dsv-panel .ov-quote .ov-rich-list, .dsv-panel .ov-quote .ov-rich-list li { color: var(--dsw-alias-label-secondary); }
 .dsv-panel .ov-quote .ov-rich-head { margin-top: 18px; font-weight: 600; }
@@ -384,6 +382,12 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-panel .ov-quote .ov-rich-head[data-level="2"] { font-size: 14px; line-height: 23px; }
 .dsv-panel .ov-quote .ov-rich > *:first-child { margin-top: 0; }
 .dsv-panel .ov-stop { margin-top: 12px; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
+.dsv-panel .ov-ask-open {
+  display: inline-flex; align-items: center; margin: 12px 0 0; padding: 0;
+  color: var(--dsw-alias-brand-primary); font: inherit; font-size: 15px; line-height: 24px;
+  background: transparent; border: 0; cursor: pointer;
+}
+.dsv-panel .ov-ask-open:hover { text-decoration: underline; text-underline-offset: 3px; }
 .dsv-panel .ov-ask { margin: 14px 0 0; }
 .dsv-panel .ov-ask-item + .ov-ask-item { margin-top: 10px; }
 .dsv-panel .ov-ask-q { margin: 0; font-size: 14px; line-height: 24px; font-weight: 500; }
@@ -437,23 +441,24 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
   margin-bottom: 4px; color: var(--dsw-alias-label-secondary);
   font-size: 13px; line-height: 20px; font-weight: 500;
 }
+.dsv-panel .ov-history-text { display: block; min-width: 0; }
 .dsv-panel .ov-history-title {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden;
-  font-size: 15px; line-height: 23px; font-weight: 500; overflow-wrap: anywhere;
+  font-size: 15px; line-height: 24px; font-weight: 500; overflow-wrap: anywhere;
 }
-.dsv-panel .ov-history-more {
-  display: inline-flex; align-items: center; gap: 6px; margin-top: 24px; padding: 0;
-  color: var(--dsw-alias-brand-primary); font-size: 13px; line-height: 20px;
+.dsv-panel .ov-history-sub {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden;
+  margin-top: 2px; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px; overflow-wrap: anywhere;
 }
-.dsv-panel .ov-history-more:hover { text-decoration: underline; text-underline-offset: 3px; }
-.dsv-panel .ov-history-sub { display: block; margin-top: 4px; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px; }
 .dsv-panel .ov-history-time {
-  color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 25px; white-space: nowrap;
+  color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px; white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+.dsv-panel .ov-history-item[data-open] .ov-row-chevron { transform: rotate(90deg); }
 .dsv-panel .ov-row-chevron {
-  display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 25px;
-  color: var(--dsw-alias-label-secondary); font-size: 20px; line-height: 25px;
+  transition: transform 120ms ease;
+  display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 20px;
+  color: var(--dsw-alias-label-secondary); font-size: 20px; line-height: 20px;
 }
 .dsv-panel .ov-more { display: inline-flex; margin-top: 16px; }
 .dsv-panel .ov-quiet { padding-top: 24px; }
@@ -467,7 +472,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
   .dsv-panel .ov-control-link { min-height: 44px; }
   .dsv-panel h1 { font-size: 24px; line-height: 32px; }
   .dsv-panel .ov-item > summary { gap: 12px; }
-  .dsv-panel .ov-item-body { padding-left: 28px; }
   .dsv-panel .ov-history-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -671,30 +675,79 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       .replace(/[\s*_`>#]+/gu, '')
       .replace(/[，,。.：:；;！!？?、「」（）()"'“”—…-]+/gu, '')
 
-    // The card prints the heading and the summary above the reply. A reply that
-    // opens by restating that heading is the same sentence twice on one screen,
-    // so the repeated lead is cut and what follows it stays.
+    // Only whole sentences are ever compared or removed. A heading may repeat
+    // the reply's first sentence, never the first half of it: cutting at the
+    // heading's character count left bodies that began mid-clause.
+    const TERMINAL_RE = /[。！？；;.!?…]$/u
+    const CJK_RE = /[\u4e00-\u9fff]/u
+
+    function sentencesOf(text) {
+      const body = String(text ?? '').replace(/\r/gu, ' ')
+      const parts = []
+      let buffer = ''
+      for (const character of body) {
+        if (character === '\n') { buffer += ' '; continue }
+        buffer += character
+        if ('。！？；;'.includes(character)) {
+          const piece = buffer.replace(/\s+/gu, ' ').trim()
+          if (piece !== '') parts.push(piece)
+          buffer = ''
+        }
+      }
+      const tail = buffer.replace(/\s+/gu, ' ').trim()
+      if (tail !== '') parts.push(tail)
+      return parts
+    }
+
     function withoutRepeatedLead(text, head) {
-      const body = typeof text === 'string' ? text.trim() : ''
-      const want = flatForCompare(head)
-      if (body === '' || want.length < 6) return body
-      if (!flatForCompare(body).startsWith(want)) return body
-      // Walk the raw text until it has produced as many comparable characters as
-      // the heading, then skip the punctuation that closes that clause.
+      const raw = typeof text === 'string' ? text.trim() : ''
+      if (raw === '') return ''
+      let body = raw
+      let want = flatForCompare(head)
+      if (want.length < 6) return raw
+      // A heading may carry a marker the body does not repeat ("9.142 已经发到…"
+      // over "142 已经发到…"): the claim is the same one, and the marker is not
+      // allowed to hide the repeat. Both sides start at the same word.
+      if (!flatForCompare(body).startsWith(want)) {
+        const wantBare = want.replace(/^[\d.]+/u, '')
+        const flat = flatForCompare(body)
+        const bare = flat.replace(/^[\d.]+/u, '')
+        if (wantBare.length < 6 || bare.length >= flat.length || !bare.startsWith(wantBare)) return raw
+        let cut = 0
+        let seen = 0
+        while (cut < body.length && seen < flat.length - bare.length) {
+          if (flatForCompare(body[cut]) !== '') seen += 1
+          cut += 1
+        }
+        body = body.slice(cut).trim()
+        want = wantBare
+        if (body === '') return raw
+      }
+      // The heading ends where its own characters end. A separator printed
+      // there introduced the claim, so the body starts right after it.
       let seen = 0
-      for (let at = 0; at < body.length; at += 1) {
+      let at = 0
+      for (; at < body.length; at += 1) {
         if (flatForCompare(body[at]) === '') continue
         seen += 1
-        if (seen < want.length) continue
-        const rest = body.slice(at + 1).replace(/^[\s，,。.：:；;！!？?、「」（）()"'“”—…-]+/u, '').trim()
-        return rest.length >= 6 ? rest : ''
+        if (seen >= want.length) break
       }
-      return body
+      const rest = body.slice(at + 1).replace(/^[\s、，,。.：:；;！!？?—–-]+/u, '').trim()
+      if (rest !== '') return rest
+      // The heading repeated a whole sentence: only complete sentences go.
+      const sentences = sentencesOf(body)
+      let drop = 0
+      while (drop < sentences.length) {
+        const flat = flatForCompare(sentences[drop])
+        if (flat === '') { drop += 1; continue }
+        if (!(flat.startsWith(want) || want.startsWith(flat))) break
+        drop += 1
+      }
+      return sentences.slice(drop).join('').trim()
     }
 
     // A path, a URL, a file name or a code identifier is how the work was done,
-    // never what came of it: on the card it is scaffolding, so a line carrying
-    // one is not a result line.
+    // never what came of it: a line made only of scaffolding is not a result.
     const MACHINE_RE = /(?:https?:\/\/|\/[\w.-]+\/|\b[\w-]+\.(?:kt|java|ts|js|mjs|json|jpg|jpeg|png|log|md|yml|apk)\b|[`<>|]|→|\?[A-Za-z]+=)/u
 
     const cleanLine = (text) => String(text ?? '')
@@ -706,36 +759,78 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       .replace(/\s+/gu, ' ')
       .trim()
 
-    // What the card owes the reader is the result: at most two short result
-    // lines, in the model's own words, with the report itself left in the round.
-    // Saying how the work was wired up is the report, not the result.
-    const MECHANISM_RE = /(?:渲染时|存储|缓存|接口|字段|日志|编译|注入|过滤|命令行|配置项|构建)/u
+    // What the card owes the reader is the result, in the model's own words and
+    // always as a complete sentence. A sentence that mentions caching, an
+    // interface or a log line can be the very finding the reader needs, so no
+    // term list decides what is worth reading.
+    // The one line a row shows when it is folded: the first whole sentence that
+    // is not the heading over again.
+    // The preview line a folded row shows. It takes the round's last whole
+    // sentence: the body opens with the first one, so a preview of the same
+    // sentence would print the round twice.
+    // A sentence shown as the row's preview must not be printed again in the
+    // body that opens under it.
+    function withoutPreview(text, preview) {
+      const want = flatForCompare(preview)
+      if (want === '') return text
+      const kept = sentencesOf(text).filter((sentence) => {
+        const flat = flatForCompare(sentence)
+        // A line that was clipped, or that dropped its opening pronoun, still
+        // names the sentence it came from: one of the two holds the other.
+        const holds = want.length > 12 && (flat.includes(want) || want.includes(flat))
+        return flat !== want && !holds
+      })
+      return kept.length === 0 ? text : kept.join(' ')
+    }
 
-    function digestReply(text, strict = true) {
-      const lines = String(text ?? '').split(/\n+/u)
+    function firstSentenceOf(text, head) {
+      const pool = sentencesOf(withoutRepeatedLead(text, head) || text)
+        .map((sentence) => sentence.trim())
+        .filter((piece) => piece !== '' && TERMINAL_RE.test(piece) && flatForCompare(piece) !== flatForCompare(head))
+      // A round that is one sentence long has nothing to preview: the body is
+      // that sentence.
+      if (pool.length < 2) return ''
+      // The full sentence: the row clamps it to one line in CSS, so clipping it
+      // here would make it stop matching the same sentence in the body.
+      return pool[pool.length - 1]
+    }
+
+    function digestReply(text) {
       const picked = []
       let total = 0
-      for (const raw of lines) {
+      for (const raw of String(text ?? '').split(/\n+/u)) {
         const line = cleanLine(raw.replace(/^\s*(?:[-*+]|\d+[.．、)])\s*/u, '').replace(/^\d+\s*[.．]\s*/u, ''))
-        if (line.length < 8 || MACHINE_RE.test(line)) continue
-        if (strict && MECHANISM_RE.test(line)) continue
-        for (const sentence of line.split(/(?<=[。！？；;])/u)) {
+        if (line === '') continue
+        for (const sentence of sentencesOf(line)) {
           const piece = sentence.trim()
-          if (piece.length < 8 || total + piece.length > 140) continue
+          if (!TERMINAL_RE.test(piece)) continue
+          if (!CJK_RE.test(piece) && MACHINE_RE.test(piece)) continue
+          if (total + piece.length > 160) break
           picked.push(piece)
           total += piece.length
           if (picked.length === 2) return picked.join(' ')
         }
       }
-      if (picked.length > 0) return picked.join(' ')
-      // Still better than an empty card: the opening line, cut to one sentence.
-      const first = cleanLine(String(text ?? '').split(/\n+/u)[0] ?? '').replace(/^\d+\s*[.．、)]\s*/u, '')
-      const head = first.split(/(?<=[。！？；;])/u)[0] ?? ''
-      return head.length <= 80 ? head.trim() : ''
+      return picked.join(' ')
     }
 
-    function replyQuote(text, keyPrefix, head) {
-      const source = withoutRepeatedLead(text, head)
+    // A sentence that only points back at something said earlier cannot open a
+    // quote: the reader has no earlier text to read it against.
+    const BACK_REFERENCE_HEADS = ['说的是', '指的是', '也就是说', '上面说的', '刚才说的', '前面说的']
+    const opensBackReference = (sentence) => {
+      const flat = flatForCompare(sentence).replace(/^我们?/u, '')
+      return BACK_REFERENCE_HEADS.some((head) => flat.startsWith(head))
+    }
+    function withoutBackReference(text) {
+      const kept = sentencesOf(text)
+      const cut = kept.findIndex((sentence) => !opensBackReference(sentence))
+      if (cut <= 0) return text
+      return kept.slice(cut).join(' ')
+    }
+
+    function replyQuote(text, keyPrefix, head, shown) {
+      // The row above prints one sentence of this reply: the quote starts after it.
+      const source = withoutBackReference(withoutPreview(withoutPreview(withoutRepeatedLead(text, head), head), shown))
       const body = digestReply(source)
       if (body === '') return null
       return h('div', { key: `${keyPrefix}-q`, className: 'ov-quote' }, [
@@ -957,7 +1052,11 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       if (work !== '' && !weakRowLine(work)) return work
       const outcome = String(row?.outcome ?? '').trim()
       if (outcome !== '' && !weakRowLine(outcome)) return outcome
-      return words.noSummary
+      // Nothing in the row's own lines stands alone: the paragraph behind it
+      // still has a first sentence that names what the round got done.
+      const paragraph = firstSentenceOf(digestReply(String(row?.detail ?? '').trim()), '')
+      if (paragraph !== '' && !weakRowLine(paragraph)) return paragraph
+      return outcome !== '' ? outcome : words.noSummary
     }
 
     const primaryTitleOf = (row, sessionTitle) => {
@@ -1126,6 +1225,8 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       const itemRef = React.useRef({})
       const rootRef = React.useRef(null)
       const listScrollRef = React.useRef(0)
+      // 答疑 is opened from the round's body when it is needed, not parked under every page.
+      const [askShown, setAskShown] = React.useState(false)
       // 历史 means the rounds before the one on screen, so the shown round is
       // asked out of every page, including pages loaded later.
       const shownRoundRef = React.useRef('')
@@ -1434,6 +1535,11 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           toggleSwitch()
           return
         }
+        if (action === 'open-ask') {
+          event.preventDefault()
+          setAskShown(true)
+          return
+        }
         if (action === 'history') {
           event.preventDefault()
           showHistory()
@@ -1510,10 +1616,10 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           ])
         ]),
         (() => {
-          // Switching between "this round" and "history" is only a choice when
-          // there is more than one round to choose between.
+          // One control for the two views: with any stored round the history is
+          // a place the reader can go, and this is the only way in.
           const items = snapshot !== null && snapshot.history !== null && snapshot.history !== undefined && Array.isArray(snapshot.history.items) ? snapshot.history.items : []
-          return items.length > 1 ? h('div', { key: 'seg', className: 'ov-seg', role: 'tablist' }, [
+          return items.length > 0 ? h('div', { key: 'seg', className: 'ov-seg', role: 'tablist' }, [
           h('button', {
             key: 'c', type: 'button', role: 'tab', className: 'ov-seg-item',
             'aria-selected': mode === 'current' ? 'true' : 'false',
@@ -1573,19 +1679,25 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           ? history.items.filter(substantiveOf)
           : (snapshot !== null && snapshot.history !== null && snapshot.history !== undefined && Array.isArray(snapshot.history.items) ? snapshot.history.items : [])
         const parts = []
-        const card = (key, titleText, timeText, open, canOpen, bodyNode) => h('div', { key, className: 'ov-history-item', 'data-open': open === true ? '' : undefined }, [
+        // A row reads as a heading and one line under it: the heading says what
+        // the round got done, the line says how it ended.
+        const textNode = (titleText, subText) => h('span', { key: 't', className: 'ov-history-text' }, [
+          h('span', { key: 'h', className: 'ov-history-title' }, titleText),
+          subText === '' ? null : h('span', { key: 's', className: 'ov-history-sub' }, subText)
+        ])
+        const card = (key, titleText, subText, timeText, open, canOpen, bodyNode) => h('div', { key, className: 'ov-history-item', 'data-open': open === true ? '' : undefined }, [
           canOpen
             ? h('button', {
               key: 'row', type: 'button', className: 'ov-history-row',
               'data-action': 'open-round', 'data-round': key,
               'aria-expanded': open === true ? 'true' : 'false'
             }, [
-              h('span', { key: 't', className: 'ov-history-title' }, titleText),
+              textNode(titleText, subText),
               timeText === '' ? null : h('span', { key: 'a', className: 'ov-history-time' }, timeText),
               h('span', { key: 'c', className: 'ov-row-chevron', 'aria-hidden': 'true' }, '›')
             ])
             : h('div', { key: 'row', className: 'ov-history-row ov-history-row-static' }, [
-              h('span', { key: 't', className: 'ov-history-title' }, titleText),
+              textNode(titleText, subText),
               timeText === '' ? null : h('span', { key: 'a', className: 'ov-history-time' }, timeText)
             ]),
           open === false ? null : h('div', { key: 'd', className: 'ov-round-body' }, bodyNode)
@@ -1598,14 +1710,32 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           const open = view.roundId === '' || view.roundId === liveId
           const summaryText = snapshot !== null && typeof snapshot.summaryText === 'string' ? snapshot.summaryText.trim() : ''
           const sealed = open === true ? briefRows(live, '') : null
+          const liveTitle = titleOf(live)
+          // A round that left no headline and no text is not a row of its own:
+          // the list below already carries it, under its own honest state.
+          const liveRow = source.find((row) => row !== null && row !== undefined && String(row.roundId) === liveId)
+          const liveHeading = liveTitle !== words.untitled
+            ? liveTitle
+            : liveRow === undefined
+              // The round the list already carries under the tab name has no
+              // record to name it: its own closing line does.
+              ? firstSentenceOf(digestReply(String(live.replyText || live.replyExcerpt || '')), words.currentTab)
+              : primaryOf(liveRow, sessionTitle, words)
+          // The folded live row shows the round's closing line; the body that opens
+          // under it does not print that sentence again.
+          const liveSub = firstSentenceOf(summaryText !== '' ? summaryText : digestReply(String(live.replyText || live.replyExcerpt || '')), liveHeading)
           const liveNodes = []
           if (open === true) {
-            if (summaryText !== '') liveNodes.push(h('div', { key: 's', className: 'ov-rich ov-summary-text' }, richText(summaryText, 'lsum')))
+            if (summaryText !== '') {
+              const shown = withoutPreview(withoutRepeatedLead(summaryText, liveHeading) || summaryText, liveSub)
+              liveNodes.push(h('div', { key: 's', className: 'ov-rich ov-summary-text' }, richText(shown, 'lsum')))
+            }
             if (sealed !== null) liveNodes.push(sealed)
-            const liveQuote = replyQuote(live.replyText || live.replyExcerpt, 'l', titleOf(live))
+            const liveQuote = replyQuote(live.replyText || live.replyExcerpt, 'l', liveHeading, liveSub)
             if (liveQuote !== null) liveNodes.push(liveQuote)
           } else if (summaryText !== '') {
-            liveNodes.push(h('div', { key: 's', className: 'ov-rich ov-summary-text' }, richText(summaryText, 'lsum')))
+            const shown = withoutPreview(withoutRepeatedLead(summaryText, liveHeading) || summaryText, liveSub)
+            liveNodes.push(h('div', { key: 's', className: 'ov-rich ov-summary-text' }, richText(shown, 'lsum')))
           }
           // A reading hint belongs in the body, not in the row's existence: an
           // empty round must not become a card headed by a bare tab name.
@@ -1614,17 +1744,8 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
             liveNodes.push(h('div', { key: 'q', className: 'ov-sub' }, roundFailed === true ? words.detailFailed : words.loading))
           }
           const bodyNode = liveNodes.length === 0 ? null : h('div', { key: 'c', className: 'ov-card' }, liveNodes)
-          const liveTitle = titleOf(live)
-          // A round that left no headline and no text is not a row of its own:
-          // the list below already carries it, under its own honest state.
           leadLive = hasContent
-          // An acknowledgement ("继续") is no headline: the same round is also a
-          // list row, and that row already names what the round got done.
-          const liveRow = source.find((row) => row !== null && row !== undefined && String(row.roundId) === liveId)
-          const liveHeading = liveTitle !== words.untitled
-            ? liveTitle
-            : liveRow === undefined ? words.currentTab : primaryOf(liveRow, sessionTitle, words)
-          if (leadLive) parts.push(card(liveId, liveHeading, timeOf(live.updatedAt, now), open, true, bodyNode))
+          if (leadLive) parts.push(card(liveId, liveHeading, liveSub, timeOf(live.updatedAt, now), open, true, bodyNode))
         }
 
         const rows = source.filter((row) => row !== null && row !== undefined && !(leadLive === true && String(row.roundId) === liveId))
@@ -1639,8 +1760,16 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           // A stored round can always be asked for: its paragraph may be missing
           // while the facts behind it are on disk, and an unopenable newest row is
           // the one place a reader has no other way in.
-          const canOpen = key !== '' || detail !== '' || (typeof row.replyExcerpt === 'string' && row.replyExcerpt !== '')
+          // A row is a door only when there is a room behind it: no empty
+          // expansion, and no arrow on a row that holds nothing.
+          const canOpen = detail !== ''
+            || row.hasDetail === true
+            || (typeof row.replyExcerpt === 'string' && row.replyExcerpt !== '')
           const loaded = open === true ? round : null
+          // The line under the heading previews the round, so a collapsed row
+          // still says what happened without being opened. The body that opens
+          // under it does not print that sentence again.
+          const preview = firstSentenceOf(typeof row.outcome === 'string' && row.outcome.trim() !== '' ? row.outcome : digestReply(detail), primary)
           const bodyNode = open === false ? null
             : roundFailed === true
               ? h('div', { key: 'f', className: 'ov-sub' }, words.detailFailed)
@@ -1652,9 +1781,14 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
                   const nodes = []
                   // A summary is the round's own account. It stays readable even
                   // when the round contributed no separate finding rows.
-                  if (summaryText !== '') nodes.push(h('div', { key: 's', className: 'ov-rich ov-summary-text' }, richText(summaryText, 'csum')))
+                  if (summaryText !== '') {
+                    // The row above already prints the summary's first clause:
+                    // the body continues from there instead of repeating it.
+                    const shown = withoutPreview(withoutRepeatedLead(summaryText, primary) || summaryText, preview)
+                    nodes.push(h('div', { key: 's', className: 'ov-rich ov-summary-text' }, richText(shown, 'csum')))
+                  }
                   if (sealed !== null) nodes.push(sealed)
-                  const quote = replyQuote(loaded.replyText || loaded.replyExcerpt, 'c', primary)
+                  const quote = replyQuote(loaded.replyText || loaded.replyExcerpt, 'c', primary, preview)
                   if (quote !== null) nodes.push(quote)
                   // The stop reason is run state, not work content: one quiet
                   // line under the text, never the row's title.
@@ -1663,7 +1797,9 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
                   }
                   // Nothing summarised yet: the outcome line is still a result,
                   // so it reads as prose rather than as one squashed paragraph.
-                  const gist = nodes.length === 0 ? digestReply(detail) : ''
+                  const gist = nodes.length === 0
+                    ? withoutPreview(withoutRepeatedLead(digestReply(detail), primary) || digestReply(detail), preview)
+                    : ''
                   if (gist !== '') {
                     nodes.push(h('div', { key: 'd', className: 'ov-rich' }, richText(gist, 'cdet')))
                   }
@@ -1672,7 +1808,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
                 })()
           const stopped = typeof row.stopState === 'string' ? row.stopState : ''
           const stamp = [timeOf(row.archivedAt, now), stopped].filter((part) => part !== '').join(' · ')
-          return card(key, primary, stamp, open, canOpen, bodyNode)
+          return card(key, primary, preview, stamp, open, canOpen, bodyNode)
         })))
         if (historyLoading === true && source.length > 0) parts.push(h('div', { key: 'l', className: 'ov-sub' }, words.historyLoading))
         if (historyFailed === true) parts.push(h('div', { key: 'f', className: 'ov-sub' }, words.historyFailed))
@@ -1714,14 +1850,22 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           if (roundTitle !== '' && roundTitle !== sessionTitle) body.push(h('h1', { key: 't', className: 'ov-headline' }, roundTitle))
           const summaryText = typeof snapshot.summaryText === 'string' ? snapshot.summaryText.trim() : ''
           if (summaryText !== '') body.push(h('div', { key: 'sm', className: 'ov-rich ov-summary-text' }, richText(summaryText, 'nsum')))
-          const currentQuote = replyQuote(roundOfSnapshot.replyText || roundOfSnapshot.replyExcerpt, 'n', roundTitle)
+          const currentQuote = replyQuote(roundOfSnapshot.replyText || roundOfSnapshot.replyExcerpt, 'n', roundTitle, '')
           if (currentQuote !== null) body.push(currentQuote)
           // An unanswered round still needs one line under the current round,
           // so the panel never reads as an empty page.
           if (roundTitle === '' && summaryText === '' && currentQuote === null) {
             body.push(h('p', { key: 'pend', className: 'ov-quiet' }, words.pending))
           }
-          body.push(h(SideAsk, { key: 'ask', sessionId, roundId: roundOfSnapshot.roundId, words }))
+          // The box opens on demand: a page whose only control is an empty field
+          // asks nothing. The round being read is always the one it asks about.
+          if (askShown === true) {
+            body.push(h(SideAsk, { key: 'ask', sessionId, roundId: roundOfSnapshot.roundId, words }))
+          } else {
+            body.push(h('button', {
+              key: 'ask-open', type: 'button', className: 'ov-ask-open', 'data-action': 'open-ask'
+            }, words.askOpen))
+          }
           const notices = Array.isArray(snapshot.notices) ? snapshot.notices : []
           notices.forEach((entry, index) => {
             body.push(h(Notice, { key: `n${index}`, text: entry === null || entry === undefined ? '' : entry.text }))
@@ -1772,14 +1916,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
                 link === null ? null : h('span', { key: 'a', className: 'ov-output-arrow', 'aria-hidden': 'true' }, '›')
               ])
             })))
-          }
-          // Past rounds live behind their own tab; the current tab shows this
-          // round alone so the two controls never present the same list twice.
-          if (pastCount > 0) {
-            body.push(h('button', { key: 'h', type: 'button', className: 'ov-history-more', 'data-action': 'history' }, [
-              h('span', { key: 't' }, `${words.historyHeading} · ${pastCount} ${words.roundUnit}`),
-              h('span', { key: 'a', className: 'ov-output-arrow', 'aria-hidden': 'true' }, '›')
-            ]))
           }
         }
         main.push(h('div', { key: 'body' }, body))

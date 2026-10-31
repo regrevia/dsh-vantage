@@ -6,7 +6,6 @@
   "contextResumed": "本会话 · 已开启",
   "contextHistory": "历史记录",
   "history": "历史",
-  "historyHeading": "历史",
   "pendingLabel": "待办",
   "goalLabel": "目标",
   "milestones": "里程碑",
@@ -45,7 +44,6 @@
   "hourUnit": "小时",
   "shortMinuteUnit": "分",
   "roundCountLabel": "历史",
-  "roundUnit": "轮",
   "none": "无",
   "status": {
     "checking": "核对中",

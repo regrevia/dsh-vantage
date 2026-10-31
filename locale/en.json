@@ -6,7 +6,6 @@
   "contextResumed": "This session · on",
   "contextHistory": "History",
   "history": "History",
-  "historyHeading": "History",
   "pendingLabel": "Todo",
   "goalLabel": "Goal",
   "milestones": "Milestones",
@@ -45,7 +44,6 @@
   "hourUnit": "h",
   "shortMinuteUnit": "min",
   "roundCountLabel": "History",
-  "roundUnit": "rounds",
   "none": "None",
   "status": {
     "checking": "Checking",
