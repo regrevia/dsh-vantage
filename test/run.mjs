@@ -2152,6 +2152,17 @@ await testAsync("snapshot: a model-written round title never heads the overview"
     assert.equal(JSON.stringify(body).includes("Envoy"), false, "the model's own paragraph is not the card");
   });
 
+await testAsync("snapshot: a run-state sentence never heads the overview", async () => {
+    const routes = createRoutes({
+      ...runtime,
+      briefOf: () => ({ roundId: state.round.roundId, revision: 1, summary: "timeout 通过，正在收尾。" })
+    });
+    const route = routes.find((item) => item.path === ROUTES.snapshot);
+    const body = await (await route.fetch(req(`http://x${ROUTES.snapshot}?session=${SESSION}`))).json();
+    assert.equal(body.round.title, "", "a sentence about how the run ended is not a heading");
+    assert.equal(body.round.progressText, "", "and it is not the line under it either");
+  });
+
   test("snapshot: a matching revision answers unchanged and can be read again", async () => {
     const routes = createRoutes(runtime);
     const route = routes.find((item) => item.path === ROUTES.snapshot);
