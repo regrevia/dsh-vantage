@@ -25,8 +25,8 @@ import { existsSync, readFileSync } from "node:fs";
 
 import { LIMITS, OverviewError, ROUTES, ROUTE_PREFIX, clip } from "./lib/schema.js";
 import { PROJECTION_VERSION, apply as foldEvent, chooseStatus, evaluateVerification, initState, materialKeyOf, rankFacts, roundStateOf } from "./lib/rounds.js?v=31";
-import { HistoryStore } from "./lib/store.js?v=5";
-import { createRoutes } from "./lib/api.js?v=35";
+import { HistoryStore } from "./lib/store.js?v=7";
+import { createRoutes } from "./lib/api.js?v=46";
 import { answerQuestion } from "./lib/ask.js?v=22";
 import {
   SummaryScheduler,
@@ -36,7 +36,7 @@ import {
   safeService,
   summarise,
   SUMMARY_SYSTEM_PROMPT
-} from "./lib/summary.js?v=3";
+} from "./lib/summary.js?v=4";
 
 /** Read once so `/health`-style reporting and log lines agree with package.json. */
 const PACKAGE = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
@@ -789,9 +789,13 @@ export class Runtime {
     // The ask is the frame the summary has to answer; the closing report names
     // what the agent itself claims, and the facts carry the evidence. Leaving the
     // request out was why a card said "更新了实现" for any round.
+    // Mid-round there is no closing report yet; the agent's latest message is
+    // the only place its own reading of the work appears, so the summary can
+    // say what the round amounts to instead of listing the commands it ran.
+    const narration = round.reply?.text ?? state.reply?.text ?? state.lastAssistant?.text ?? "";
     const packet = buildPacket(round, {
       request: round.title, // ui-copy-ignore
-      report: round.reply?.text ?? "",
+      report: narration,
       previousSummary: previous?.roundId === round.roundId ? (previous.summary ?? "") : "",
       goal: this.goalOf(state), // ui-copy-ignore
       previousTopics,
@@ -1088,8 +1092,20 @@ export class Runtime {
  */
 function install(ctx, runtime, warn) {
   ctx.effect(() => {
-    void openStore(runtime, warn);
+    // The storage domain is a service this plugin has to inject: reading it off
+    // the root context at boot finds nothing and leaves the history in memory.
+    let dispose = null;
+    let cancelled = false;
+    if (typeof ctx.inject === "function") {
+      dispose = ctx.inject(["storageDomain"], (storeCtx) => {
+        if (cancelled) return;
+        void openStore(runtime, warn, storeCtx ?? ctx);
+      });
+    }
+    else void openStore(runtime, warn, ctx);
     return () => {
+      cancelled = true;
+      dispose?.();
       runtime.closed = true;
       if (runtime.timer !== null) clearInterval(runtime.timer);
       for (const call of runtime.askCalls) call.abort();
@@ -1169,10 +1185,21 @@ function install(ctx, runtime, warn) {
  * @returns {Promise<void>} resolved when opening finished.
  */
 const STORE_OPEN_TIMEOUT_MS = 5000;
+
+/** How long the store waits for the storage domain to be published. */
+const STORE_WAIT_TRIES = 40;
+const STORE_WAIT_MS = 250;
 const STORE_OPEN_TIMED_OUT = Symbol("store-open-timeout");
 
-async function openStore(runtime, warn) {
-  const storageDomain = safeService(runtime.ctx, "storageDomain");
+async function openStore(runtime, warn, storeCtx = runtime.ctx) {
+  // The storage domain is published after this plugin activates, so a single
+  // lookup at boot finds nothing and the history would live only in memory.
+  // Wait for it, then keep that history across restarts.
+  let storageDomain = safeService(storeCtx, "storageDomain");
+  for (let attempt = 0; storageDomain === undefined && attempt < STORE_WAIT_TRIES && runtime.closed !== true; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, STORE_WAIT_MS));
+    storageDomain = safeService(storeCtx, "storageDomain");
+  }
   if (storageDomain === undefined) return;
   try {
     // A domain that never answers must not hold the boot path open: the store

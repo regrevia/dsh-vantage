@@ -476,6 +476,12 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .dsv-panel .ov-more { display: inline-flex; margin-top: 16px; }
+.dsv-panel .ov-progress {
+  margin: 14px 0 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 14px;
+  line-height: 24px;
+}
 .dsv-panel .ov-quiet { padding-top: 24px; }
 .dsv-panel .ov-quiet .ov-quiet-title { font-size: 17px; line-height: 26px; font-weight: 600; }
 .dsv-panel .ov-quiet p { margin: 8px 0 0; color: var(--dsw-alias-label-secondary); font-size: 14px; line-height: 24px; }
@@ -1655,7 +1661,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       // ran into, the files it finished. Those stand in for a timeline, so the
       // body of a round is never the conversation's own closing words. A real
       // milestone is never replaced, because this only runs on an empty timeline.
-      const DIGEST_KINDS = Object.freeze({ change: true, check: true, deliverable: true, job: true, blocker: true, failure: true, interruption: true, note: true }) // ui-copy-ignore
+      const DIGEST_KINDS = Object.freeze({ change: true, check: true, deliverable: true, blocker: true, failure: true, interruption: true }) // ui-copy-ignore
       const digestStepsOf = (target, limit) => {
         const own = stepsOf(target)
         if (own.length > 0) return own
@@ -1670,7 +1676,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         // timeline where the conversation left nothing else behind.
         const jobs = Array.isArray(target?.outcomes?.items) ? target.outcomes.items : []
         const ran = jobs
-          .filter((item) => item !== null && item !== undefined && (item.kind === 'job' || item.kind === 'change' || item.kind === 'check') && typeof item.text === 'string' && item.text.trim() !== '')
+          .filter((item) => item !== null && item !== undefined && (item.kind === 'change' || item.kind === 'check' || item.kind === 'deliverable') && typeof item.text === 'string' && item.text.trim() !== '')
           .map((item) => ({ at: Number(item.time ?? item.at ?? 0), text: item.text.trim(), kind: String(item.kind) }))
           .sort((a, b) => (a.at === b.at ? 0 : a.at < b.at ? -1 : 1))
         return ran.slice(Math.max(0, ran.length - Math.max(1, limit)))
@@ -1765,7 +1771,10 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           // round, so a reader sees what was worked on before opening anything.
           const steps = rowSteps
           const progress = progressOfSteps(steps)
-          const rowTitle = stepTitleOf(steps)
+          // The server already ranked the round's evidence into one line; the
+          // client prints that line instead of rebuilding a second version of
+          // it, so a row reads the same collapsed and open.
+          const rowTitle = typeof row.title === 'string' ? row.title : ''
           // The line under the heading is how much work the round covered.
           // When nothing was recorded it stays empty instead of quoting the
           // conversation back at the reader.
@@ -1847,17 +1856,15 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           // conversation prints nothing while it works. The reply is not a
           // source here: it is the line the conversation ends with, and this
           // page exists for the stretch before it.
-          const currentTimeline = timelineNode(roundOfSnapshot.roundId, digestStepsOf(roundOfSnapshot, 12), 14)
-          // A headline is the summary of the work below it. Without any
-          // recorded work there is nothing for it to summarize, and the round
-          // title is then a line the conversation already printed.
-          const quiet = currentTimeline === null && items.length === 0
-          // The round title is the model's own prose and the conversation has
-          // already printed it; it is not a summary of the rows below.
-          if (currentTimeline !== null) {
-            body.push(h('div', { key: 'pl', className: 'ov-section-label' }, words.process))
-            body.push(currentTimeline)
-          }
+          // One sentence for the work as a whole, so the reader sees what is
+          // happening without reading every line below it.
+          const progressText = typeof roundOfSnapshot.progressText === 'string' ? roundOfSnapshot.progressText.trim() : ''
+          // Per-call rows are the trail, not the work. The sentence above says
+          // what the trail amounts to, and only real outcomes get a row of
+          // their own, so a stretch of edits and passing checks reads as one
+          // line instead of a log.
+          const quiet = items.length === 0 && progressText === ''
+          if (progressText !== '') body.push(h('p', { key: 'pg', className: 'ov-progress' }, progressText))
           // A round with nothing recorded says so, instead of quoting itself.
           if (quiet) body.push(h('p', { key: 'pend', className: 'ov-quiet' }, words.noProcess))
           // The box opens on demand: a page whose only control is an empty field
@@ -1873,7 +1880,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           notices.forEach((entry, index) => {
             body.push(h(Notice, { key: `n${index}`, text: entry === null || entry === undefined ? '' : entry.text }))
           })
-          if (items.length > 0 && currentTimeline === null) {
+          if (items.length > 0) {
             const conclusionOnly = items.every((item) => item !== null && item !== undefined && item.source === 'transcript')
             // A quoted reply labels itself; a section heading above it would read
             // as two headings for one line.

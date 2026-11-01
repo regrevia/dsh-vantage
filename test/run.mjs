@@ -130,6 +130,17 @@ const finalMessage = (seq, text) =>
   assert.equal(stepTitleOf([]), "");
   assert.ok(stepTitleOf(steps).length <= 49);
 
+  // A round that only ran commands is named by the command that did the work,
+  // never by the line that primed the shell.
+  const commands = [
+    { kind: "job", text: "set -e" },
+    { kind: "job", text: "bash --version | head -1" },
+    { kind: "job", text: "grep -n heapsize watchdog.mjs" },
+    { kind: "job", text: "tail -2 ~/.dsh/lifeguard/heap.jsonl" }
+  ];
+  assert.equal(stepTitleOf(commands), "grep -n heapsize watchdog.mjs，tail -2…", "the setup lines are not what names the round");
+  assert.equal(stepTitleOf([{ kind: "job", text: "set -e" }]), "set -e", "a round with nothing but setup still has a line");
+
   const line = progressLineOf({ facts: [
     { kind: "change", files: ["/repo/a.command", "/repo/b.mjs"], updatedAt: Date.parse("2026-10-28T10:01:30+08:00") },
     { kind: "check", statement: "lint", updatedAt: Date.parse("2026-10-28T10:26:00+08:00") }
@@ -770,9 +781,10 @@ await testAsync("store: the storage declaration is legal and evictions reach dis
   for (let index = 0; index < 4; index += 1) store.insert(roundRecord(index));
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(keys.length, 4);
-  assert.equal(new Set(keys).size, 4, "the session survives in the key");
+  assert.equal(new Set(keys).size, 4, "one key per round");
+  assert.ok(keys.every((key) => /^[a-zA-Z0-9_-]+$/u.test(key)), "the medium refuses separators");
   assert.equal(deletes.length, 2);
-  assert.ok(deletes.every((key) => typeof key === "string" && key.includes(SESSION)));
+  assert.ok(deletes.every((key) => typeof key === "string" && /^[a-zA-Z0-9_-]+$/u.test(key)), "keys stay path-safe");
   await store.close();
 });
 
@@ -794,6 +806,50 @@ await testAsync("store: a domain answering after the boot gave up is closed, not
   assert.equal(store.persistent, false);
   assert.equal(store.domain, null);
   assert.equal(closed, true);
+});
+
+await testAsync("store: closing during a pending open never claims the domain", async () => {
+  const table = { entries: () => [], put: async () => {}, delete: async () => {} };
+  let closed = false;
+  let answer = null;
+  const service = {
+    open: () =>
+      new Promise((resolve) => {
+        answer = () => resolve({ table: () => table, close: async () => (closed = true) });
+      })
+  };
+  const store = new HistoryStore({ maxRoundsPerSession: 3, maxRoundsTotal: 5, maxSerializedBytes: 64 * 1024, warn });
+  const opening = store.open(service, { version: 1 });
+  await store.close();
+  answer();
+  await opening;
+  assert.equal(store.persistent, false, "a closed store stays in memory");
+  assert.equal(closed, true, "the late domain is released, not leaked");
+  assert.equal(store.count(SESSION), 0);
+});
+
+await testAsync("store: a name left open by a dead instance is reclaimed", async () => {
+  const table = { entries: () => [], put: async () => {}, delete: async () => {} };
+  let held = true;
+  let releases = 0;
+  const service = {
+    open: async () => {
+      if (held) throw new Error("domain 'dsh_vantage' is already open");
+      return { table: () => table, close: async () => {} };
+    },
+    get: () => ({
+      close: async () => {
+        held = false;
+        releases += 1;
+      }
+    })
+  };
+  const notes = [];
+  const store = new HistoryStore({ maxRoundsPerSession: 3, maxRoundsTotal: 5, maxSerializedBytes: 64 * 1024, warn: (m) => notes.push(m) });
+  await store.open(service, { version: 1 });
+  assert.equal(releases, 1, "the leaked name was closed");
+  assert.equal(store.persistent, true, "the store reopens on its own data");
+  assert.equal(notes.length, 0);
 });
 
 await testAsync("store: a cold session reads its rounds back from the domain", async () => {
@@ -823,6 +879,25 @@ await testAsync("store: a cold session reads its rounds back from the domain", a
   assert.equal(summarizeRound(second.get(SESSION, roundIdOf(SESSION, 1))).outcome, "第 1 轮把页面收拾干净了");
   assert.equal(second.page(SESSION, { limit: 2 }).items.length, 2);
   await second.close();
+});
+
+await testAsync("store: a row saved under the old separated key still loads", async () => {
+  const legacyKey = `${encodeURIComponent(SESSION)}|${encodeURIComponent(roundIdOf(SESSION, 2))}`;
+  const disk = new Map([[legacyKey, roundRecord(2)]]);
+  const table = {
+    entries: () => [...disk.entries()],
+    put: async (key, row) => {
+      disk.set(key, row);
+    },
+    delete: async (key) => {
+      disk.delete(key);
+    }
+  };
+  const service = { open: async () => ({ table: () => table, close: async () => {} }) };
+  const store = new HistoryStore({ maxRoundsPerSession: 20, maxRoundsTotal: 200, maxSerializedBytes: 2 * 1024 * 1024, warn });
+  await store.open(service, { version: 1 });
+  assert.equal(store.count(SESSION), 1, "the old row is not dropped");
+  await store.close();
 });
 
 await testAsync("store: a broken storage domain degrades to memory", async () => {
@@ -887,7 +962,8 @@ test("client: a round body shows the work, never the reply", () => {
   assert.ok(source.includes("function withoutRepeatedLead(text, head)"), "one helper still owns the repeat cut");
   assert.ok(source.includes("const digestStepsOf = (target, limit) =>"), "a body reads the facts of the round");
   assert.ok(source.includes("digestStepsOf(loaded, 8)"), "a stored round renders its own facts");
-  assert.ok(source.includes("digestStepsOf(roundOfSnapshot, 12)"), "the current round renders its own facts");
+  assert.ok(source.includes("roundOfSnapshot.progressText"), "the current round is one sentence about the work");
+  assert.ok(!source.includes("digestStepsOf(roundOfSnapshot"), "per-call rows are not the work");
   assert.ok(source.includes("words.noProcess"), "a round with nothing recorded says so");
 });
 
@@ -1479,7 +1555,7 @@ async function testRoutes() {
     assert.ok(body.round.replyText.includes("第 4 项是失效链接不再提供"), "the tail of the reply survives");
   });
 
-  await testAsync("round: a counted ending is titled by what it delivered", async () => {
+  await testAsync("round: a closed round with no recorded work has no heading", async () => {
     const archivedState = folded([
       ...userTurn(0, "发布吧"),
       finalMessage(2, "四件事都收尾了，`0.9.139` 已发布。开关双向切换、正文完整、链接可用三项都在设备上验过。"),
@@ -1494,7 +1570,7 @@ async function testRoutes() {
     const answer = await routes.find((entry) => entry.path === ROUTES.round)
       .fetch(req(`http://x${ROUTES.round}?session=${SESSION}&round=${archivedState.settled.roundId}`));
     const body = await answer.json();
-    assert.equal(body.round.title.includes("0.9.139"), true, body.round.title);
+    assert.equal(body.round.title, "", "a reply is not a summary of work");
     assert.equal(body.round.title.includes("…"), false, "a heading is not a cut");
   });
 
@@ -1642,8 +1718,8 @@ async function testRoutes() {
     ev(3, "turn/end", { turn: 1, reason: { kind: "completed" } })
   ]);
   const body = buildSnapshot(runtime, session, state, "rev-chatter");
-  assert.equal(body.round?.title, "给以后的启动加了个 6G 的上限", "the heading names the work, not the mood");
-  assert.equal(body.round?.replyExcerpt, "原来是 4G 左右。", "the fold quotes the claim, not the opener or the heading");
+  assert.equal(body.round?.title, "", "the heading names recorded work, never the model's prose");
+  assert.ok(body.round?.replyExcerpt.includes("6G"), "the reply stays quotable evidence");
 });
 
   await testAsync("round route: the page names the round the way the list does", async () => {
@@ -1658,7 +1734,7 @@ async function testRoutes() {
     const roundRoute = routes.find((entry) => entry.path === ROUTES.round);
     const body = await (await roundRoute.fetch(req(`http://local${ROUTES.round}?session=${SESSION}&round=${snapshot.round.roundId}`))).json();
     assert.equal(body.round.title, snapshot.round.title, "one round, one name");
-    assert.ok(!body.round.replyExcerpt.includes(body.round.title), "the excerpt does not restate the title");
+    assert.equal(body.round.title, "把启动上限提到6G", "a summary's opening clause names a round still in progress");
   });
 
   test("snapshot: the heading is whole and the summary does not repeat it", () => {
@@ -1677,7 +1753,7 @@ async function testRoutes() {
     topics: []
   };
   const body = buildSnapshot({ ...runtime, briefOf: () => summary }, session, state, "rev-long");
-  assert.equal(body.round.title, "手机端 App 里宿主写进用户消息的文本", "the heading stops at the topic, never mid-clause");
+  assert.equal(body.round.title, "", "the summary is not the heading");
   assert.ok(!body.round.title.includes("…"), "a heading is printed whole");
 
 test("history: the reader's own message never names a row", () => {
@@ -1697,8 +1773,8 @@ test("history row title stops at a clause, never an ellipsis", () => {
   assert.ok(title.length <= 40, "the row stays one line");
   assert.ok(long.startsWith(title) && /[，、；：]/u.test(long.charAt(title.length)), "it stops where a clause ends");
 });
-  assert.ok(body.summaryText.startsWith("压缩摘要"), "the paragraph drops the line printed above it");
-  assert.ok(!body.summaryText.includes("手机端 App"), "the summary no longer restates its heading");
+  assert.ok(body.summaryText.startsWith("手机端 App"), "no heading is printed, so the summary drops nothing");
+  assert.equal(body.round.title, "", "the paragraph is not promoted to a heading");
 });
 
   test("snapshot: a goal never stands in for this round's heading", () => {
@@ -1716,7 +1792,7 @@ test("history row title stops at a clause, never an ellipsis", () => {
 
 test("api: the heading is stripped from the paragraph under it", () => {
   const source = readFileSync(new URL("../lib/api.js", import.meta.url), "utf8");
-  assert.ok(source.includes("const summaryLine = summaryUsable ? clip(dropHeadingLead("), "the snapshot body drops the heading it repeats");
+  assert.ok(source.includes("const summaryLine = summaryUsable"), "the snapshot body drops the heading it repeats");
   assert.ok(source.includes("clip(dropHeadingLead(archived.summaryText"), "the archived view drops it too");
   assert.ok(source.includes("quoteOf(round.reply?.text"), "the fold quotes the reply after the same normalization");
 });
@@ -2068,14 +2144,12 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
     assert.equal(body.outcomes.items[0].text, "提交 0123456");
   });
 
-test("snapshot: a long goal objective becomes a one-clause heading", () => {
+await testAsync("snapshot: a model-written round title never heads the overview", async () => {
     const routes = createRoutes({ ...runtime, stateOf: () => ({ ...state, round: { ...state.round, titleSource: "generated", title: "10 小时低资源开发：修复 Envoy 确定性缺陷（ASR 稳定身份、游标、预算），并补齐恢复路径" } }) });
     const route = routes.find((item) => item.path === ROUTES.snapshot);
-    return route.fetch(req(`http://x${ROUTES.snapshot}?session=${SESSION}`)).then(async (response) => {
-      const body = await response.json();
-      assert.equal(body.round.title, "10 小时低资源开发");
-      assert.ok(body.round.title.length <= 42);
-    });
+    const body = await (await route.fetch(req(`http://x${ROUTES.snapshot}?session=${SESSION}`))).json();
+    assert.equal(body.round.title, "", "a round with no recorded work stays untitled");
+    assert.equal(JSON.stringify(body).includes("Envoy"), false, "the model's own paragraph is not the card");
   });
 
   test("snapshot: a matching revision answers unchanged and can be read again", async () => {
