@@ -114,7 +114,10 @@ const finalMessage = (seq, text) =>
   assert.ok(segments.every((row) => !commandShaped(row.topic)), "no segment is named after a command");
   assert.equal(segments[0].topic, "概览改成分段叙述");
   assert.equal(segments[0].state, "in_progress");
-  assert.deepEqual(buildSegments({ roundId: "sg-2", facts: facts.slice(0, 4) }, []), [], "commands alone are no work");
+  const onlyCommands = buildSegments({ roundId: "sg-2", facts: facts.slice(0, 4) }, []);
+  assert.equal(onlyCommands.length, 1, "a stretch of commands folds into the kind of work it was");
+  assert.equal(onlyCommands[0].topic, "改写文件", "the page says what the shell was for");
+  assert.deepEqual(buildSegments({ roundId: "sg-2b", facts: facts.slice(2, 4) }, []), [], "reading and waiting are no progress at all");
   assert.equal(commandShaped("grep -n ov- client.js"), true);
   assert.equal(commandShaped("概览改成分段叙述"), false);
   assert.equal(commandShaped("已生成：/repo/dist/out.txt"), false, "a sentence with a path is still a sentence");
