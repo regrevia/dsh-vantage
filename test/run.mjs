@@ -29,6 +29,7 @@ import { HistoryStore } from "../lib/store.js";
 import { DEFAULT_CONFIG, Runtime } from "../index.js";
 import { SUMMARY_SYSTEM_PROMPT, SummaryScheduler, buildPacket, estimateTokens, publishVerdict, verifyAnswer, verifyTopics } from "../lib/summary.js";
 import { buildSnapshot, createRoutes, excerptOf, progressLineOf, publicFact, stepTitleOf, timelineSteps } from "../lib/api.js";
+import { buildSegments, commandShaped } from "../lib/segments.js";
 import { answerQuestion } from "../lib/ask.js";
 
 // The panel declares the project it is rendering; a test request does the same.
@@ -95,6 +96,41 @@ const finalMessage = (seq, text) =>
     step: 1,
     message: { role: "assistant", content: [{ type: "text", text }] }
   });
+
+// --- work segments ----------------------------------------------------------
+// One stretch of work, not one tool call: a round that ran dozens of commands
+// and touched nothing visible still reads as "no work recorded", never as a log.
+{
+  const facts = [
+    { id: "j1", kind: "job", statement: "grep -c ov- client.js", updatedAt: 1000 },
+    { id: "j2", kind: "job", statement: "python3 - <<'PY'", updatedAt: 2000 },
+    { id: "j3", kind: "job", statement: "git status --short", updatedAt: 3000 },
+    { id: "j4", kind: "job", statement: "sleep 20", updatedAt: 4000 },
+    { id: "f1", kind: "change", statement: "概览改成分段叙述", updatedAt: 5000 },
+    { id: "f2", kind: "check", statement: "用例检查没有报错", updatedAt: 6000 }
+  ];
+  const segments = buildSegments({ roundId: "sg-1", facts }, []);
+  assert.equal(segments.length, 2, "two kinds of work make two segments, not six commands");
+  assert.ok(segments.every((row) => !commandShaped(row.topic)), "no segment is named after a command");
+  assert.equal(segments[0].topic, "概览改成分段叙述");
+  assert.equal(segments[0].state, "in_progress");
+  assert.deepEqual(buildSegments({ roundId: "sg-2", facts: facts.slice(0, 4) }, []), [], "commands alone are no work");
+  assert.equal(commandShaped("grep -n ov- client.js"), true);
+  assert.equal(commandShaped("概览改成分段叙述"), false);
+  assert.equal(commandShaped("已生成：/repo/dist/out.txt"), false, "a sentence with a path is still a sentence");
+}
+
+{
+  const topics = [
+    { id: "t1", headline: "把过程列表换成分段叙述", details: ["面板不再逐条打印命令"], factIds: ["f1"] },
+    { id: "t2", headline: "收尾", details: [], factIds: [] }
+  ];
+  const facts = [{ id: "f1", kind: "change", statement: "概览改成分段叙述", updatedAt: 5000 }];
+  const segments = buildSegments({ roundId: "sg-3", facts }, topics);
+  assert.equal(segments.length, 1, "a verified topic wins and is not doubled by a fact");
+  assert.equal(segments[0].topic, "把过程列表换成分段叙述");
+  assert.deepEqual(segments[0].details, ["面板不再逐条打印命令"]);
+}
 
 // --- timeline ---------------------------------------------------------------
 // A round's timeline is the work itself: the lines a reader can follow while
@@ -960,10 +996,11 @@ test("client: a round body shows the work, never the reply", () => {
   assert.equal(source.match(/replyQuote\(/gu), null, "no body prints the round's reply");
   assert.equal(source.match(/ov-summary-text/gu), null, "the closing summary is not a body");
   assert.ok(source.includes("function withoutRepeatedLead(text, head)"), "one helper still owns the repeat cut");
-  assert.ok(source.includes("const digestStepsOf = (target, limit) =>"), "a body reads the facts of the round");
-  assert.ok(source.includes("digestStepsOf(loaded, 8)"), "a stored round renders its own facts");
+  assert.ok(source.includes("const segmentsNode = (target) =>"), "a body reads the work segments of the round");
+  assert.ok(source.includes("segmentsNode(loaded)"), "a stored round renders its own work");
   assert.ok(source.includes("roundOfSnapshot.progressText"), "the current round is one sentence about the work");
-  assert.ok(!source.includes("digestStepsOf(roundOfSnapshot"), "per-call rows are not the work");
+  assert.equal(source.match(/digestStepsOf/gu), null, "commands are never a body");
+  assert.equal(source.match(/timelineNode/gu), null, "the per-command timeline is gone");
   assert.ok(source.includes("words.noProcess"), "a round with nothing recorded says so");
 });
 

@@ -1637,49 +1637,34 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         return parts.join(' · ')
       }
 
-      const timelineNode = (prefix, steps, limit) => {
-        const shown = steps.slice(Math.max(0, steps.length - limit))
-        if (shown.length === 0) return null
-        // A row that produced something is punctuated as done; a command that
-        // only moved the work along keeps a plain dot. The mark is decoration,
-        // so it carries nothing the text does not: a reader who cannot see it
-        // loses no fact.
-        const marks = new Set(['change', 'check', 'deliverable'])
-        return h('div', { key: 'tl', className: 'ov-timeline' }, shown.map((step, index) => h('div', {
-          key: `${prefix}:tl:${index}`,
-          className: 'ov-tl-row',
-          'data-kind': step.kind === '' ? undefined : step.kind
-        }, [
-          h('span', { key: 'm', className: 'ov-tl-mark', 'aria-hidden': 'true' }, marks.has(step.kind) ? '✓' : '•'),
-          h('span', { key: 't', className: 'ov-tl-time' }, clockOf(step.at)),
-          h('span', { key: 'x', className: 'ov-tl-text' }, step.text)
-        ])))
+      // What a round shows instead of its tool calls: the work segments the
+      // server folded, each one a statement with the state of that work.
+      const segmentsOf = (target) => {
+        const raw = target !== null && target !== undefined && Array.isArray(target.segments) ? target.segments : []
+        const rows = []
+        for (const row of raw) {
+          if (row === null || row === undefined) continue
+          const topic = typeof row.topic === 'string' ? row.topic.trim() : ''
+          if (topic === '') continue
+          const details = Array.isArray(row.details)
+            ? row.details.filter((line) => typeof line === 'string' && line.trim() !== '').slice(0, 2)
+            : []
+          rows.push({ topic, details, state: typeof row.state === 'string' ? row.state : 'in_progress' })
+        }
+        return rows
       }
 
-      // Not every round recorded a change or a check. What it did record may
-      // still be the only trace of a long stretch of work: the tool errors it
-      // ran into, the files it finished. Those stand in for a timeline, so the
-      // body of a round is never the conversation's own closing words. A real
-      // milestone is never replaced, because this only runs on an empty timeline.
-      const DIGEST_KINDS = Object.freeze({ change: true, check: true, deliverable: true, blocker: true, failure: true, interruption: true }) // ui-copy-ignore
-      const digestStepsOf = (target, limit) => {
-        const own = stepsOf(target)
-        if (own.length > 0) return own
-        const facts = Array.isArray(target?.facts) ? target.facts : []
-        const rows = facts
-          .filter((fact) => fact !== null && fact !== undefined && DIGEST_KINDS[fact.kind] === true && typeof fact.statement === 'string' && fact.statement.trim() !== '')
-          .map((fact) => ({ at: Number(fact.createdAt ?? fact.updatedAt ?? 0), text: fact.statement.trim(), kind: String(fact.kind) }))
-          .sort((a, b) => (a.at === b.at ? 0 : a.at < b.at ? -1 : 1))
-        if (rows.length > 0) return rows.slice(Math.max(0, rows.length - Math.max(1, limit)))
-        // A round stored before facts existed still recorded the commands it
-        // ran. Those outcomes are the work itself, so they stand in for a
-        // timeline where the conversation left nothing else behind.
-        const jobs = Array.isArray(target?.outcomes?.items) ? target.outcomes.items : []
-        const ran = jobs
-          .filter((item) => item !== null && item !== undefined && (item.kind === 'change' || item.kind === 'check' || item.kind === 'deliverable') && typeof item.text === 'string' && item.text.trim() !== '')
-          .map((item) => ({ at: Number(item.time ?? item.at ?? 0), text: item.text.trim(), kind: String(item.kind) }))
-          .sort((a, b) => (a.at === b.at ? 0 : a.at < b.at ? -1 : 1))
-        return ran.slice(Math.max(0, ran.length - Math.max(1, limit)))
+      const segmentsNode = (target) => {
+        const rows = segmentsOf(target)
+        if (rows.length === 0) return null
+        return h('div', { key: 'sg', className: 'ov-timeline ov-segments' }, rows.map((row, index) => h('div', {
+          key: `sg:${index}`,
+          className: 'ov-tl-row',
+          'data-kind': row.state
+        }, [
+          h('span', { key: 'm', className: 'ov-tl-mark', 'aria-hidden': 'true' }, row.state === 'blocked' ? '!' : row.state === 'done' ? '✓' : '●'),
+          h('span', { key: 'x', className: 'ov-tl-text' }, row.details.length === 0 ? row.topic : `${row.topic}；${row.details.join('；')}`)
+        ])))
       }
 
       const briefRows = (target, skip) => {
@@ -1761,6 +1746,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           // conversation, and an expansion that only quotes it is the thing
           // this page was built to replace.
           const projected = rowSteps.length > 0
+            || segmentsOf(row).length > 0
             || (typeof row.progress === 'string' && row.progress !== '')
             || row.hasDetail === true
           const loaded = open === true ? round : null
@@ -1785,13 +1771,12 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
               : loaded === null
                 ? h('div', { key: 'l', className: 'ov-sub' }, words.loading)
                 : (() => {
-                  const timeline = timelineNode(loaded.roundId, digestStepsOf(loaded, 8), 10)
-                  // With a timeline there is nothing to quote, and without one
-                  // the round still has its own record of what it ran into.
-                  // The reply is what the conversation already printed; the
-                  // page exists for what it did not.
-                  const sealed = timeline === null ? briefRows(loaded, primary) : null
-                  const nodes = timeline === null ? [] : [timeline]
+                  // A round opens onto the work it covered: a few statements,
+                  // then the things it produced. Commands were never content.
+                  const segments = segmentsNode(loaded)
+                  const sealed = briefRows(loaded, primary)
+                  const nodes = []
+                  if (segments !== null) nodes.push(segments)
                   if (sealed !== null) nodes.push(sealed)
                   // The stop reason is run state, not work content: one quiet
                   // line under the text, never the row's title.
@@ -1865,6 +1850,10 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           // line instead of a log.
           const quiet = items.length === 0 && progressText === ''
           if (progressText !== '') body.push(h('p', { key: 'pg', className: 'ov-progress' }, progressText))
+          // The work this round covered, folded into a few statements. The
+          // commands behind them stay on the wire as evidence and never here.
+          const workSegments = segmentsNode(roundOfSnapshot)
+          if (workSegments !== null) body.push(workSegments)
           // A round with nothing recorded says so, instead of quoting itself.
           if (quiet) body.push(h('p', { key: 'pend', className: 'ov-quiet' }, words.noProcess))
           // The box opens on demand: a page whose only control is an empty field
