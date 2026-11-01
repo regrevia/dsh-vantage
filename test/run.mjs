@@ -29,7 +29,7 @@ import { HistoryStore } from "../lib/store.js";
 import { DEFAULT_CONFIG, Runtime } from "../index.js";
 import { SUMMARY_SYSTEM_PROMPT, SummaryScheduler, buildPacket, estimateTokens, publishVerdict, verifyAnswer, verifyTopics } from "../lib/summary.js";
 import { buildSnapshot, createRoutes, excerptOf, progressLineOf, publicFact, stepTitleOf, timelineSteps } from "../lib/api.js";
-import { buildSegments, commandShaped } from "../lib/segments.js";
+import { buildSegments, commandShaped, usableStatement } from "../lib/segments.js";
 import { answerQuestion } from "../lib/ask.js";
 
 // The panel declares the project it is rendering; a test request does the same.
@@ -121,6 +121,8 @@ const finalMessage = (seq, text) =>
   assert.equal(commandShaped("grep -n ov- client.js"), true);
   assert.equal(commandShaped("概览改成分段叙述"), false);
   assert.equal(commandShaped("已生成：/repo/dist/out.txt"), false, "a sentence with a path is still a sentence");
+  assert.equal(usableStatement("用例检查通过"), false, "a check passing is a result, not the work it held");
+  assert.equal(usableStatement("用例检查没有报错"), true, "a check that found something is still a statement");
 }
 
 {
