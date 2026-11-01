@@ -135,6 +135,9 @@ const finalMessage = (seq, text) =>
   assert.equal(segments.length, 1, "a verified topic wins and is not doubled by a fact");
   assert.equal(segments[0].topic, "把过程列表换成分段叙述");
   assert.deepEqual(segments[0].details, ["面板不再逐条打印命令"]);
+  const retired = [{ id: "t9", headline: "概览改按工作片段展示", details: [], factIds: [] }];
+  assert.equal(buildSegments({ roundId: "sg-4", facts: [] }, retired, { quietState: "done" })[0].state, "done", "a settled topic is finished work even after its facts are gone");
+  assert.equal(buildSegments({ roundId: "sg-5", facts: [] }, retired)[0].state, "in_progress", "a live round does not claim a topic is finished");
 }
 
 // --- timeline ---------------------------------------------------------------
