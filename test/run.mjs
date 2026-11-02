@@ -138,6 +138,16 @@ const finalMessage = (seq, text) =>
   const retired = [{ id: "t9", headline: "概览改按工作片段展示", details: [], factIds: [] }];
   assert.equal(buildSegments({ roundId: "sg-4", facts: [] }, retired, { quietState: "done" })[0].state, "done", "a settled topic is finished work even after its facts are gone");
   assert.equal(buildSegments({ roundId: "sg-5", facts: [] }, retired)[0].state, "in_progress", "a live round does not claim a topic is finished");
+  // A settled round whose topic is held open only by a passing check is still
+  // finished work: history must not grow a progress dot for a job that ended.
+  const checked = [
+    { id: "t11", headline: "修正历史标题的取名依据", details: ["标题改由工作主题生成"], factIds: ["c1"] }
+  ];
+  const checkFacts = [{ id: "c1", kind: "check", statement: "用例检查没有报错", updatedAt: 7000 }];
+  const settled = buildSegments({ roundId: "sg-6", facts: checkFacts }, checked, { quietState: "done" });
+  assert.equal(settled[0].state, "done", "a check behind a finished round closes the segment");
+  const live = buildSegments({ roundId: "sg-7", facts: checkFacts }, checked);
+  assert.equal(live[0].state, "in_progress", "the same check in a live round is work still running");
 }
 
 // --- timeline ---------------------------------------------------------------
@@ -991,7 +1001,7 @@ test("client: the ask box is labelled 答疑", () => {
 test("client: the history list opens exactly the row that was clicked", () => {
   const source = readFileSync(new URL("../client.js", import.meta.url), "utf8");
   assert.equal(source.match(/view\.roundId === ''/gu), null, "empty is no longer a stand-in for the round on screen");
-  assert.equal(source.match(/const open = view\.roundId === key/gu)?.length, 1, "one id decides which row is open");
+  assert.ok(source.includes('expandedRef.current.has(`h:${key}`)'), "each history row owns its own open state");
   assert.ok(source.includes("view.roundId === id"), "the clicked row compares against its own id");
   assert.equal(source.match(/roundId: null/gu)?.length >= 2, true, "a fold sets no round");
   assert.equal(source.match(/leadLive/gu), null, "the history list does not copy the round on screen");

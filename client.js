@@ -1152,6 +1152,12 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       const deadLinkRef = React.useRef(new Set())
       const loadHolder = React.useRef(null)
       const expandedRef = React.useRef(new Set())
+      // History rows each keep their own body: opening a third row must not pull
+      // the first one shut, and a round that was already fetched is not asked
+      // for again. Keys are 'h:<roundId>' so they never collide with brief items.
+      const roundsRef = React.useRef({})
+      const roundErrorRef = React.useRef(new Set())
+      const roundBusyRef = React.useRef(new Set())
       const evidenceOpenRef = React.useRef({})
       const itemRef = React.useRef({})
       const rootRef = React.useRef(null)
@@ -1243,6 +1249,9 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         setRoundFailed(false)
         evidenceOpenRef.current = {}
         expandedRef.current = new Set()
+        roundsRef.current = {}
+        roundErrorRef.current = new Set()
+        roundBusyRef.current = new Set()
         itemRef.current = {}
         // Switching sessions invalidates every request in flight: a late answer
         // for the old session must not land in the new one's list or card.
@@ -1296,27 +1305,39 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 
       const openRound = async (roundId) => {
         const id = String(roundId === null || roundId === undefined ? '' : roundId)
+        const rowKey = `h:${id}`
         // The current round is already in the snapshot; opening it in the
         // history list is only a fold, never another request.
         const liveId = snapshot !== null && snapshot.round !== null && snapshot.round !== undefined ? snapshot.round.roundId : ''
-        if (view.mode === 'history' && view.roundId === id) {
+        if (view.mode === 'history' && view.roundId === id && expandedRef.current.has(rowKey)) {
           // The same row closes alone; nothing else takes its place open.
           setView({ mode: 'history', roundId: null, from: '' })
+          expandedRef.current.delete(rowKey)
           setRound(null)
           setRoundFailed(false)
+          setTick((value) => value + 1)
           return
         }
-        setView({ mode: 'history', roundId: id, from: '' })
-        setRound(null)
-        setRoundFailed(false)
-        const fresh = claim('round')
-        if (fresh === null) return
         if (id === '') {
+          expandedRef.current.delete(rowKey)
           setRoundFailed(true)
+          setTick((value) => value + 1)
           return
         }
+        expandedRef.current.add(rowKey)
+        setView({ mode: 'history', roundId: id, from: '' })
+        setTick((value) => value + 1)
+        // A round that was opened once is kept: reopening a row is a fold, not
+        // a request. Only the row being pointed at waits.
+        if (roundsRef.current[id] !== undefined || roundBusyRef.current.has(id)) return
+        const fresh = claim(`round:${id}`)
+        if (fresh === null) return
+        roundErrorRef.current.delete(id)
+        roundBusyRef.current.add(id)
+        setTick((value) => value + 1)
         const query = new URLSearchParams({ session: sessionId, round: id })
         const answer = await callHost(`/round?${query.toString()}`)
+        roundBusyRef.current.delete(id)
         if (fresh() !== true) return
         const answered = answer.body === null || answer.body === undefined || answer.body.round === null || answer.body.round === undefined
           ? ''
@@ -1324,10 +1345,15 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         // The card shows only the round that was asked for: an answer for some
         // other round is a failure, never a stand-in.
         if (answer.failed === true || answered !== id) {
+          roundErrorRef.current.add(id)
           setRoundFailed(true)
+          setTick((value) => value + 1)
           return
         }
+        roundsRef.current[id] = answer.body.round
         setRound(answer.body.round)
+        setRoundFailed(false)
+        setTick((value) => value + 1)
       }
 
       const fetchHistory = async (cursor, append) => {
@@ -1494,7 +1520,14 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         }
         if (action === 'open-round') {
           event.preventDefault()
-          openRound(control.getAttribute('data-round'))
+          const rowId = String(control.getAttribute('data-round') ?? '')
+          // A row folds on its own: the other rows that are open stay open.
+          if (expandedRef.current.has(`h:${rowId}`)) {
+            expandedRef.current.delete(`h:${rowId}`)
+            setTick((value) => value + 1)
+            return
+          }
+          openRound(rowId)
           return
         }
         if (action === 'open-recent') {
@@ -1667,13 +1700,16 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         ])))
       }
 
-      const briefRows = (target, skip) => {
+      const briefRows = (target, skip, skipTopics) => {
         const sealed = target?.brief !== null && target?.brief !== undefined && Array.isArray(target.brief.items) ? target.brief.items : []
         // A raw reply is a transcript, not a brief: the row already carries
         // the one-line outcome, and printing the whole answer here is exactly
         // the wall of prose this page exists to avoid.
         const same = (text) => String(text).replace(/[\s。！？；：，、.!?;:,]/gu, '') === String(skip).replace(/[\s。！？；：，、.!?;:,]/gu, '')
-        const rows = sealed.filter((item) => item !== null && item !== undefined && item.id !== 'no-facts' && item.source !== 'transcript' && !(skip !== undefined && same(item.text ?? item.value ?? '')))
+        // One piece of work appears once: a topic already stated by the work
+        // segments above is not repeated as a brief row below them.
+        const repeated = (text) => skipTopics !== undefined && skipTopics !== null && skipTopics.has(String(text ?? '').trim())
+        const rows = sealed.filter((item) => item !== null && item !== undefined && item.id !== 'no-facts' && item.source !== 'transcript' && !(skip !== undefined && same(item.text ?? item.value ?? '')) && !repeated(item.text ?? item.value ?? ''))
         publishItems(target.roundId, rows)
         if (rows.length === 0) return null
         return h('div', { key: 'b', className: 'ov-brief' }, rows.map((item, index) => {
@@ -1727,7 +1763,8 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           open === false ? null : h('div', { key: 'd', className: 'ov-round-body' }, bodyNode)
         ])
 
-        // Every row here is a stored round; which one is open is a single id.
+        // Every row here is a stored round. Rows open on their own: each body
+        // is keyed to its own round, so several rows can be read at once.
         const rows = source
         if (rows.length === 0) {
           parts.push(h('div', { key: 'e', className: 'ov-sub' }, historyLoading === true ? words.historyLoading : words.historyEmpty))
@@ -1735,7 +1772,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         parts.push(h('div', { key: 'r', className: 'ov-history-list' }, rows.map((row, index) => {
           const primary = primaryOf(row, sessionTitle, words)
           const key = row.roundId === undefined || row.roundId === null ? `r${index}` : String(row.roundId)
-          const open = view.roundId === key
+          const open = expandedRef.current.has(`h:${key}`)
           // A stored round can always be asked for: its paragraph may be missing
           // while the facts behind it are on disk, and an unopenable newest row is
           // the one place a reader has no other way in.
@@ -1749,32 +1786,27 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
             || segmentsOf(row).length > 0
             || (typeof row.progress === 'string' && row.progress !== '')
             || row.hasDetail === true
-          const loaded = open === true ? round : null
-          // The line under the heading previews the round, so a collapsed row
-          // still says what happened without being opened. The body that opens
-          // under it does not print that sentence again.
-          // The row's heading and its one line both come from the facts of the
-          // round, so a reader sees what was worked on before opening anything.
-          const steps = rowSteps
-          const progress = progressOfSteps(steps)
-          // The server already ranked the round's evidence into one line; the
-          // client prints that line instead of rebuilding a second version of
-          // it, so a row reads the same collapsed and open.
+          const loaded = open === true ? (roundsRef.current[key] === undefined ? null : roundsRef.current[key]) : null
+          // The line under the heading is one sentence about what changed, as
+          // the server wrote it. A count of edits is statistics, not a summary.
           const rowTitle = typeof row.title === 'string' ? row.title : ''
-          // The line under the heading is how much work the round covered.
-          // When nothing was recorded it stays empty instead of quoting the
-          // conversation back at the reader.
-          const preview = progress
+          const preview = typeof row.line === 'string' ? row.line.trim() : ''
           const bodyNode = open === false ? null
-            : roundFailed === true
+            : roundErrorRef.current.has(key) === true
               ? h('div', { key: 'f', className: 'ov-sub' }, words.detailFailed)
               : loaded === null
                 ? h('div', { key: 'l', className: 'ov-sub' }, words.loading)
                 : (() => {
                   // A round opens onto the work it covered: a few statements,
                   // then the things it produced. Commands were never content.
+                  // A topic the segments already state is not repeated below.
+                  const segTopics = new Set()
+                  for (const seg of segmentsOf(loaded)) {
+                    const topic = typeof seg.topic === 'string' ? seg.topic.trim() : ''
+                    if (topic !== '') segTopics.add(topic)
+                  }
                   const segments = segmentsNode(loaded)
-                  const sealed = briefRows(loaded, primary)
+                  const sealed = briefRows(loaded, primary, segTopics)
                   const nodes = []
                   if (segments !== null) nodes.push(segments)
                   if (sealed !== null) nodes.push(sealed)
