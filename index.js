@@ -953,6 +953,54 @@ export class Runtime {
   }
 
   /**
+   * What a side question may read, named so the answerer can ask for one more
+   * piece instead of guessing. Nothing is sent until the model names it: a
+   * question the index already answers costs the usual single call, and only a
+   * question about a file, a check or an older round pays for another read.
+   *
+   * @param {object} session - runtime session.
+   * @param {object} round - the round being asked about.
+   * @param {string} wanted - round id, already known.
+   * @returns {{index: string, read: (names: string[]) => string}} signpost and reader.
+   */
+  askMaterialsOf(session, round, wanted) {
+    const reply = String(round.reply?.text ?? round.replyText ?? "").trim();
+    const summary = String(round.summaryText ?? "").trim();
+    const facts = rankFacts(round).filter((fact) => typeof fact.statement === "string" && fact.statement.trim() !== "");
+    const earlier = this.sessionRecapOf(session, wanted);
+    const deliverables = [];
+    for (const fact of facts) {
+      if (fact.kind !== "deliverable") continue;
+      for (const file of Array.isArray(fact.files) ? fact.files : []) {
+        if (typeof file !== "string" || file === "") continue;
+        const name = file.split(/[\\/]+/u).filter((part) => part !== "").pop() ?? file;
+        deliverables.push(`- ${name}（${file}）`);
+      }
+    }
+    const checks = facts
+      .filter((fact) => fact.kind === "check" || fact.kind === "failure" || fact.kind === "blocker")
+      .map((fact) => `- ${clip(String(fact.statement).trim(), LIMITS.factStatement)}`);
+    const read = (names) => {
+      const out = [];
+      for (const name of names) {
+        if (name === "reply" && reply !== "") out.push(`本轮回复：\n${clip(reply, 6000)}`);
+        else if (name === "summary" && summary !== "") out.push(`完整小结：\n${clip(summary, 3000)}`);
+        else if (name === "facts" && facts.length > 0) {
+          out.push("全部事实：", ...facts.slice(0, 60).map((fact) => `- [${fact.kind}] ${clip(String(fact.statement).trim(), LIMITS.factStatement)}`));
+        } else if (name === "earlier" && earlier.length > 0) out.push("更早的轮次：", ...earlier);
+        else if (name === "artifacts" && deliverables.length > 0) out.push("产物：", ...[...new Set(deliverables)].slice(0, 20));
+        else if (name === "checks" && checks.length > 0) out.push("检查结果：", ...checks.slice(0, 20));
+      }
+      return out.join("\n");
+    };
+    const index = [
+      "可读条目（先写一行 @@READ 加条目名，再回答）：",
+      `reply 本轮完整回复（${reply.length} 字）；summary 完整小结（${summary.length} 字）；facts 全部事实（${facts.length} 条）；earlier 更早的轮次（${earlier.length} 条）；artifacts 产物（${new Set(deliverables).size} 个）；checks 检查结果（${checks.length} 条）。`
+    ].join("\n");
+    return { index, read };
+  }
+
+  /**
    * Ask one question about a round without touching the conversation itself.
    *
    * Nothing here writes a round, opens a round, or enqueues a message: the
@@ -1007,6 +1055,8 @@ export class Runtime {
     // asked: nothing is read, embedded or kept warm while the page is idle.
     const recap = this.sessionRecapOf(session, wanted);
     if (recap.length > 0) lines.push("会话里更早的轮次：", ...recap);
+    const materials = this.askMaterialsOf(session, round, wanted);
+    lines.push(materials.index);
     if (previous.length > 0) {
       lines.push("此前的追问：");
       for (const item of previous.slice(-4)) lines.push(`问：${item.question}`, `答：${item.answer}`);
@@ -1024,6 +1074,7 @@ export class Runtime {
         maxOutputTokens: this.config.summary.maxOutputTokens,
         deadlineMs: this.config.summary.requestDeadlineMs,
         signal: call.signal, // ui-copy-ignore
+        read: materials.read, // ui-copy-ignore
         packet: lines.join("\n") // ui-copy-ignore
       });
       if (result === null) return { kind: "skipped", reason: "no-model", text: "模型没有给出答案", items: previous };

@@ -30,7 +30,7 @@ import { DEFAULT_CONFIG, Runtime } from "../index.js";
 import { SUMMARY_SYSTEM_PROMPT, SummaryScheduler, buildPacket, estimateTokens, publishVerdict, verifyAnswer, verifyTopics } from "../lib/summary.js";
 import { buildSnapshot, createRoutes, excerptOf, progressLineOf, publicFact, stepTitleOf, timelineSteps } from "../lib/api.js";
 import { buildSegments, commandShaped, usableStatement } from "../lib/segments.js";
-import { answerQuestion } from "../lib/ask.js";
+import { answerQuestion, readRequestOf } from "../lib/ask.js";
 
 // The panel declares the project it is rendering; a test request does the same.
 const PROJECT_HEADER = "x-dsh-vantage-project";
@@ -115,8 +115,7 @@ const finalMessage = (seq, text) =>
   assert.equal(segments[0].topic, "概览改成分段叙述");
   assert.equal(segments[0].state, "in_progress");
   const onlyCommands = buildSegments({ roundId: "sg-2", facts: facts.slice(0, 4) }, []);
-  assert.equal(onlyCommands.length, 1, "a stretch of commands folds into the kind of work it was");
-  assert.equal(onlyCommands[0].topic, "改写文件", "the page says what the shell was for");
+  assert.deepEqual(onlyCommands, [], "commands alone never become a segment");
   assert.deepEqual(buildSegments({ roundId: "sg-2b", facts: facts.slice(2, 4) }, []), [], "reading and waiting are no progress at all");
   assert.equal(commandShaped("grep -n ov- client.js"), true);
   assert.equal(commandShaped("概览改成分段叙述"), false);
@@ -127,25 +126,43 @@ const finalMessage = (seq, text) =>
 
 {
   const topics = [
-    { id: "t1", headline: "把过程列表换成分段叙述", details: ["面板不再逐条打印命令"], factIds: ["f1"] },
-    { id: "t2", headline: "收尾", details: [], factIds: [] }
+    {
+      id: "t1",
+      headline: "把过程列表换成分段叙述",
+      conclusion: "概览从按命令列出改成一件事一段",
+      results: ["面板不再逐条打印命令"],
+      artifacts: [{ title: "概览页", factId: "f2" }],
+      conditions: ["仅在会话可读时"],
+      details: ["面板不再逐条打印命令"],
+      factIds: ["f1", "f2"]
+    },
+    { id: "t2", headline: "收尾", conclusion: "", results: [], artifacts: [], conditions: [], details: [], factIds: [] }
   ];
-  const facts = [{ id: "f1", kind: "change", statement: "概览改成分段叙述", updatedAt: 5000 }];
+  const facts = [
+    { id: "f1", kind: "change", statement: "概览改成分段叙述", updatedAt: 5000 },
+    { id: "f2", kind: "deliverable", statement: "已生成：/repo/dist/overview.html", files: ["/repo/dist/overview.html"], updatedAt: 6000 }
+  ];
   const segments = buildSegments({ roundId: "sg-3", facts }, topics);
   assert.equal(segments.length, 1, "a verified topic wins and is not doubled by a fact");
   assert.equal(segments[0].topic, "把过程列表换成分段叙述");
+  assert.equal(segments[0].conclusion, "概览从按命令列出改成一件事一段");
+  assert.deepEqual(segments[0].results, ["面板不再逐条打印命令"]);
+  assert.deepEqual(segments[0].artifacts.map((row) => row.factId), ["f2"], "an artifact keeps the fact it came from");
+  assert.equal(segments[0].artifacts[0].path, "/repo/dist/overview.html");
+  assert.deepEqual(segments[0].conditions, ["仅在会话可读时"]);
   assert.deepEqual(segments[0].details, ["面板不再逐条打印命令"]);
-  const retired = [{ id: "t9", headline: "概览改按工作片段展示", details: [], factIds: [] }];
-  assert.equal(buildSegments({ roundId: "sg-4", facts: [] }, retired, { quietState: "done" })[0].state, "done", "a settled topic is finished work even after its facts are gone");
-  assert.equal(buildSegments({ roundId: "sg-5", facts: [] }, retired)[0].state, "in_progress", "a live round does not claim a topic is finished");
-  // A settled round whose topic is held open only by a passing check is still
-  // finished work: history must not grow a progress dot for a job that ended.
+  // Layers never collapse into one list: the reader needs conclusion, results
+  // and evidence as different things, which is the whole point of the card.
+  assert.equal(segments[0].evidence.length, 0, "evidence is resolved by the API against the round");
+  const retired = [{ id: "t9", headline: "概览改按工作片段展示", conclusion: "", results: [], artifacts: [], conditions: [], details: [], factIds: [] }];
+  assert.equal(buildSegments({ roundId: "sg-4", facts: [] }, retired)[0].state, "recorded", "without a fact the state is recorded, never done");
+  // A passing check says the work held; it never says the work is finished.
   const checked = [
-    { id: "t11", headline: "修正历史标题的取名依据", details: ["标题改由工作主题生成"], factIds: ["c1"] }
+    { id: "t11", headline: "修正历史标题的取名依据", conclusion: "标题改由工作主题生成", results: [], artifacts: [], conditions: [], details: [], factIds: ["c1"] }
   ];
   const checkFacts = [{ id: "c1", kind: "check", statement: "用例检查没有报错", updatedAt: 7000 }];
-  const settled = buildSegments({ roundId: "sg-6", facts: checkFacts }, checked, { quietState: "done" });
-  assert.equal(settled[0].state, "done", "a check behind a finished round closes the segment");
+  const settled = buildSegments({ roundId: "sg-6", facts: checkFacts }, checked);
+  assert.equal(settled[0].state, "in_progress", "a check behind a closed round does not close the work");
   const live = buildSegments({ roundId: "sg-7", facts: checkFacts }, checked);
   assert.equal(live[0].state, "in_progress", "the same check in a live round is work still running");
 }
@@ -1288,6 +1305,29 @@ async function testRoutes() {
     assert.equal(body.round.roundId, roundId, "and the round arrives whole");
   });
 
+  await testAsync("routes: an opened round carries the same segments as the snapshot", async () => {
+    const delivered = folded([
+      ...userTurn(0, "导出视频"),
+      ev(2, "deliverables/presented", { files: [{ path: "/Users/me/CreatorStudio/deliver/out.mp4", name: "out.mp4" }] })
+    ]);
+    const owned = { ...session, header: { createdAt: 1, cwd: "/w/own" } };
+    const route = createRoutes({ ...runtime, session: async () => owned, stateOf: () => delivered }).find((entry) => entry.path === ROUTES.round);
+    const response = await route.fetch(req(`http://x${ROUTES.round}?session=${SESSION}&round=${delivered.round.roundId}`, {
+      headers: { [PROJECT_HEADER]: "/w/own" }
+    }));
+    assert.equal(response.status, 200, "the round is served to the panel that owns it");
+    const { round } = await response.json();
+    assert.ok(Array.isArray(round.segments) && round.segments.length >= 1, "an opened round reads as work segments");
+    const segment = round.segments.find((row) => row.artifacts.length > 0);
+    assert.ok(segment !== undefined, "the delivered file is an artifact of its segment");
+    assert.equal(segment.artifacts[0].path, "/Users/me/CreatorStudio/deliver/out.mp4", "the artifact keeps the path a reader can open");
+    assert.equal(segment.state, "done", "a delivered file is work that finished");
+    assert.ok(segment.evidence.every((row) => row.text.trim() !== "" && row.label.trim() !== ""), "evidence is a labelled sentence");
+    assert.ok(!JSON.stringify(segment.evidence).includes("deliverables/presented"), "evidence never repeats the event name");
+    assert.ok(!round.segments.some((row) => /pnpm|node |deliverables\//u.test(row.topic)), "no segment is a command or an event name");
+    assert.ok(!round.brief.items.some((item) => round.segments.some((row) => row.topic === item.value)), "no piece of work is listed twice");
+  });
+
   await testAsync("routes: the snapshot teaches the panel its project", async () => {
     const owned = { ...session, header: { createdAt: 1, cwd: "/w/own" } };
     const route = createRoutes({ ...runtime, session: async () => owned }).find((entry) => entry.path === ROUTES.snapshot);
@@ -1847,8 +1887,8 @@ test("history row title stops at a clause, never an ellipsis", () => {
 
 test("api: the heading is stripped from the paragraph under it", () => {
   const source = readFileSync(new URL("../lib/api.js", import.meta.url), "utf8");
-  assert.ok(source.includes("const summaryLine = summaryUsable"), "the snapshot body drops the heading it repeats");
-  assert.ok(source.includes("clip(dropHeadingLead(archived.summaryText"), "the archived view drops it too");
+  assert.ok(source.includes("const summaryLine = rawSummary"), "the snapshot body keeps the whole paragraph");
+  assert.ok(source.includes("clip(archived.summaryText"), "the archived view keeps it too");
   assert.ok(source.includes("quoteOf(round.reply?.text"), "the fold quotes the reply after the same normalization");
 });
 
@@ -2065,10 +2105,11 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
       ev(2, "deliverables/presented", { files: [{ path: "/Users/me/CreatorStudio/deliver/envoy-f52motion.mp4", name: "envoy-f52motion.mp4" }] })
     ]);
     const body = buildSnapshot(runtime, session, delivered, "rev-link");
-    const row = body.brief.items.find((item) => item.link !== undefined && item.link !== null);
-    assert.ok(row !== undefined, "a delivered file is a line of its own");
-    assert.equal(row.text, "已生成：envoy-f52motion.mp4");
-    assert.equal(row.link.path, "/Users/me/CreatorStudio/deliver/envoy-f52motion.mp4", "the row carries its real path");
+    const artifacts = body.round.segments.flatMap((segment) => segment.artifacts);
+    assert.equal(artifacts.length, 1, "the delivered file is read as an artifact");
+    assert.equal(artifacts[0].title, "已生成：envoy-f52motion.mp4");
+    assert.equal(artifacts[0].path, "/Users/me/CreatorStudio/deliver/envoy-f52motion.mp4", "the artifact carries its real path");
+    assert.equal(body.brief.items.some((item) => item.link), false, "and it is not repeated as a result line");
   });
 
   test("snapshot: a passing check never takes a line, even after a new edit", () => {
@@ -2313,7 +2354,7 @@ test("snapshot: rule rows carry no raw command or tool material", () => {
     ev(4, "deliverables/presented", { files: [{ path: "/w/report.html", name: "report.html" }] })
   ]);
   const body = buildSnapshot(runtime, session, state, "rev4");
-  assert.ok(body.brief.items.length >= 1, "there is something to show");
+  assert.ok(body.round.segments.length >= 1, "there is something to show");
   for (const item of body.brief.items) {
     assert.ok(Array.isArray(item.evidence), `evidence is an array on ${item.id}`);
     for (const row of item.evidence) {
@@ -2547,6 +2588,51 @@ await testAsync("ask: an answer never outlives its deadline", async () => {
   });
   const result = await answerQuestion(ctx, { provider: "p", model: "m", maxOutputTokens: 64, deadlineMs: 30, packet: "问", sessionId: "s" });
   assert.equal(result, null, "a stuck call is dropped instead of hanging the panel");
+});
+
+test("ask: a read request is a line of its own, not a sentence", () => {
+  assert.deepEqual(readRequestOf("@@READ facts earlier"), ["facts", "earlier"], "names are read in order");
+  assert.deepEqual(readRequestOf("还需要看看。\n@@READ facts，checks"), ["facts", "checks"], "a full-width comma separates names too");
+  assert.deepEqual(readRequestOf("@@READ facts facts"), ["facts"], "the same name is read once");
+  assert.deepEqual(readRequestOf("这个结论来自 @@READ facts"), [], "a marker inside a sentence is not a request");
+  assert.deepEqual(readRequestOf("@@READ "), [], "a marker with no name reads nothing");
+  assert.deepEqual(readRequestOf("本轮只改了一处配置。"), [], "an answer asks for nothing");
+});
+
+await testAsync("ask: a question may ask for one more piece of the record", async () => {
+  const seen = [];
+  let call = 0;
+  const ctx = fakeLlm(async function* (opts) {
+    call += 1;
+    seen.push(opts.messages.map((message) => message.content.map((block) => block.text).join("")).join(" || "));
+    if (call === 1) {
+      yield { type: "text-delta", text: "@@READ reply" };
+      return;
+    }
+    yield { type: "text-delta", text: "完整回复里说通过了三项检查。" };
+  });
+  const result = await answerQuestion(ctx, {
+    provider: "p", model: "m", maxOutputTokens: 64, deadlineMs: 2000, packet: "问：检查过了吗", sessionId: "s",
+    read: (names) => (names.includes("reply") ? "本轮回复：三项检查都通过。" : "")
+  });
+  assert.equal(result?.answer, "完整回复里说通过了三项检查。", "the second call answers");
+  assert.equal(call, 2, "the read costs exactly one more call");
+  assert.ok(seen[1].includes("已经读取"), "the material is handed back as a user message");
+  assert.ok(seen[1].includes("三项检查都通过"), "the material itself is sent");
+});
+
+await testAsync("ask: a read that returns nothing is answered with what the model had", async () => {
+  let call = 0;
+  const ctx = fakeLlm(async function* () {
+    call += 1;
+    yield { type: "text-delta", text: "@@READ missing" };
+  });
+  const result = await answerQuestion(ctx, {
+    provider: "p", model: "m", maxOutputTokens: 64, deadlineMs: 2000, packet: "问", sessionId: "s",
+    read: () => ""
+  });
+  assert.equal(call, 1, "an empty read does not start another call");
+  assert.equal(result?.answer, "@@READ missing", "the text is returned instead of hanging");
 });
 
 test("ask: a reading surface cannot hold more model calls than the host allows", () => {

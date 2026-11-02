@@ -47,6 +47,7 @@ window.__ModuleLoader__.load({
         historyMore: '查看全部', // ui-copy-ignore
         unanswered: '未作答复', // ui-copy-ignore
         noSummary: '这一轮没有留下结论', // ui-copy-ignore
+        noConclusion: '尚未形成可确认的结论', // ui-copy-ignore
         noProcess: '这一轮没有记录到过程', // ui-copy-ignore
         goalDone: '已达成', // ui-copy-ignore
         goalPaused: '已暂停', // ui-copy-ignore
@@ -126,6 +127,7 @@ window.__ModuleLoader__.load({
         historyMore: 'Show all', // ui-copy-ignore
         unanswered: 'No reply', // ui-copy-ignore
         noSummary: 'No conclusion saved for this round', // ui-copy-ignore
+        noConclusion: 'No confirmed conclusion yet', // ui-copy-ignore
         noProcess: 'No process recorded for this round', // ui-copy-ignore
         goalDone: 'Achieved', // ui-copy-ignore
         goalPaused: 'Paused', // ui-copy-ignore
@@ -471,10 +473,25 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 }
 /* One line per milestone: a command is evidence, not a paragraph. The full
    line stays in the round record behind the row. */
-.dsv-panel .ov-tl-text {
-  min-width: 0; font-size: 15px; line-height: 22px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+/* A milestone reads top-down: what it concluded, what it produced under it,
+   and the basis kept folded at the bottom. */
+.dsv-panel .ov-sg-body { flex: 1; min-width: 0; }
+.dsv-panel .ov-sg-title { font-size: 20px; line-height: 28px; font-weight: 600; overflow-wrap: anywhere; }
+.dsv-panel .ov-sg-conclusion { margin: 6px 0 0; font-size: 15px; line-height: 24px; overflow-wrap: anywhere; }
+.dsv-panel .ov-sg-results { margin: 8px 0 0; padding-left: 20px; list-style: disc; font-size: 15px; line-height: 24px; overflow-wrap: anywhere; }
+.dsv-panel .ov-sg-results li { margin-top: 2px; }
+.dsv-panel .ov-sg-artifacts { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0 0; font-size: 15px; line-height: 24px; }
+.dsv-panel .ov-sg-artifact { overflow-wrap: anywhere; }
+.dsv-panel .ov-sg-artifact-open {
+  padding: 0; border: 0; background: none; color: var(--dsw-alias-brand-primary);
+  font-size: 15px; line-height: 24px; text-align: left; cursor: pointer; overflow-wrap: anywhere;
+  text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px;
+  transition: text-decoration-color 120ms ease;
 }
+.dsv-panel .ov-sg-artifact-open:hover { text-decoration-color: currentColor; }
+.dsv-panel .ov-sg-conditions { margin: 10px 0 0; color: var(--dsw-alias-label-secondary); font-size: 14px; line-height: 22px; }
+.dsv-panel .ov-sg-conditions p { margin: 0; overflow-wrap: anywhere; }
+.dsv-panel .ov-sg-conditions p + p { margin-top: 2px; }
 .dsv-panel .ov-more { display: inline-flex; margin-top: 16px; }
 .dsv-panel .ov-progress {
   margin: 14px 0 0;
@@ -1674,30 +1691,98 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       // server folded, each one a statement with the state of that work.
       const segmentsOf = (target) => {
         const raw = target !== null && target !== undefined && Array.isArray(target.segments) ? target.segments : []
+        const lines = (value, limit) => Array.isArray(value)
+          ? value.map((line) => (typeof line === 'string' ? line.trim() : '')).filter((line) => line !== '').slice(0, limit)
+          : []
         const rows = []
-        for (const row of raw) {
+        for (let index = 0; index < raw.length; index += 1) {
+          const row = raw[index]
           if (row === null || row === undefined) continue
           const topic = typeof row.topic === 'string' ? row.topic.trim() : ''
           if (topic === '') continue
-          const details = Array.isArray(row.details)
-            ? row.details.filter((line) => typeof line === 'string' && line.trim() !== '').slice(0, 2)
+          const id = typeof row.id === 'string' && row.id.trim() !== '' ? row.id.trim() : `seg:${index}`
+          const artifacts = Array.isArray(row.artifacts)
+            ? row.artifacts.map((art) => {
+              if (art === null || art === undefined) return null
+              const title = typeof art.title === 'string' ? art.title.trim() : ''
+              const path = typeof art.path === 'string' ? art.path.trim() : ''
+              if (title === '' && path === '') return null
+              return { title: title === '' ? path : title, path }
+            }).filter((art) => art !== null)
             : []
-          rows.push({ topic, details, state: typeof row.state === 'string' ? row.state : 'in_progress' })
+          const evidence = Array.isArray(row.evidence)
+            ? row.evidence.map((item) => {
+              if (item === null || item === undefined) return null
+              const label = item.label === undefined || item.label === null ? '' : String(item.label).trim()
+              const text = item.text === undefined || item.text === null ? '' : String(item.text).trim()
+              if (label === '' && text === '') return null
+              return { label, text }
+            }).filter((item) => item !== null)
+            : []
+          rows.push({
+            id,
+            topic,
+            conclusion: typeof row.conclusion === 'string' ? row.conclusion.trim() : '',
+            results: lines(row.results, 3),
+            artifacts,
+            conditions: lines(row.conditions, 2),
+            evidence,
+            state: typeof row.state === 'string' ? row.state : 'in_progress'
+          })
         }
         return rows
       }
 
+      // A milestone reads top-down: the conclusion first, what it produced,
+      // and the basis folded at the very bottom. The same node serves a live
+      // round and an archived one, so both read identically.
       const segmentsNode = (target) => {
         const rows = segmentsOf(target)
         if (rows.length === 0) return null
-        return h('div', { key: 'sg', className: 'ov-timeline ov-segments' }, rows.map((row, index) => h('div', {
-          key: `sg:${index}`,
-          className: 'ov-tl-row',
-          'data-kind': row.state
-        }, [
-          h('span', { key: 'm', className: 'ov-tl-mark', 'aria-hidden': 'true' }, row.state === 'blocked' ? '!' : row.state === 'done' ? '✓' : '●'),
-          h('span', { key: 'x', className: 'ov-tl-text' }, row.details.length === 0 ? row.topic : `${row.topic}；${row.details.join('；')}`)
-        ])))
+        const roundId = target !== null && target !== undefined && target.roundId !== undefined && target.roundId !== null ? String(target.roundId) : ''
+        return h('div', { key: 'sg', className: 'ov-timeline ov-segments' }, rows.map((row) => {
+          const evidenceKey = `s:${roundId}:${row.id}`
+          const children = [
+            h('div', { key: 't', className: 'ov-sg-title' }, row.topic),
+            h('p', { key: 'c', className: 'ov-sg-conclusion' }, row.conclusion === '' ? words.noConclusion : row.conclusion)
+          ]
+          if (row.results.length > 0) {
+            children.push(h('ul', { key: 'r', className: 'ov-sg-results' }, row.results.map((line, lineIndex) => h('li', { key: `r${lineIndex}` }, line))))
+          }
+          if (row.artifacts.length > 0) {
+            children.push(h('div', { key: 'a', className: 'ov-sg-artifacts' }, row.artifacts.map((art, artIndex) => {
+              const link = art.path === '' || deadLink({ path: art.path }) ? null : { path: art.path, title: art.title }
+              return link === null
+                ? h('span', { key: `a${artIndex}`, className: 'ov-sg-artifact' }, art.title)
+                : h('button', {
+                  key: `a${artIndex}`, type: 'button', className: 'ov-sg-artifact ov-sg-artifact-open',
+                  onClick: () => openLink(link)
+                }, art.title)
+            })))
+          }
+          if (row.conditions.length > 0) {
+            children.push(h('div', { key: 'q', className: 'ov-sg-conditions' }, row.conditions.map((line, lineIndex) => h('p', { key: `q${lineIndex}` }, line))))
+          }
+          if (row.evidence.length > 0) {
+            children.push(h('details', {
+              key: 'e',
+              className: 'ov-evidence',
+              open: evidenceOpenRef.current[evidenceKey] === true,
+              onToggle: (event) => applyEvidenceOpen(evidenceKey, event.currentTarget.open)
+            }, [
+              h('summary', { key: 's' }, words.evidence),
+              h('div', { key: 'b', className: 'ov-source' }, row.evidence.map((item, itemIndex) => h('div', { key: `v${itemIndex}` }, [
+                item.label === '' ? null : h('p', { key: 'l' }, item.label),
+                item.text === '' ? null : h('p', { key: 'x' }, item.text)
+              ])))
+            ]))
+          }
+          const mark = row.state === 'blocked' ? '!' : row.state === 'done' ? '✓' : row.state === 'in_progress' ? '●' : ''
+          return h('div', { key: row.id, className: 'ov-tl-row ov-sg', 'data-kind': row.state }, [
+            h('span', { key: 'm', className: 'ov-tl-mark', 'aria-hidden': 'true' }, mark),
+            h('div', { key: 'b', className: 'ov-sg-body' }, children)
+          ])
+        }))
       }
 
       const briefRows = (target, skip, skipTopics) => {
@@ -1850,7 +1935,18 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         } else {
           const brief = snapshot.brief !== null && snapshot.brief !== undefined ? snapshot.brief : null
           const rawItems = brief !== null && Array.isArray(brief.items) ? brief.items : []
-          const items = rawItems.filter((item) => item !== null && item !== undefined && item.id !== 'no-facts')
+          // A topic the segments already state below is not printed twice: the
+          // statement above is the work, a row below would only echo it.
+          const segTopics = new Set()
+          for (const seg of segmentsOf(roundOfSnapshot)) {
+            if (typeof seg.topic === 'string' && seg.topic.trim() !== '') segTopics.add(seg.topic.trim())
+          }
+          const items = rawItems.filter((item) => {
+            if (item === null || item === undefined || item.id === 'no-facts') return false
+            const raw = item.text === undefined || item.text === null ? '' : String(item.text)
+            const text = raw.trim()
+            return text === '' || !segTopics.has(text)
+          })
           publishItems(roundOfSnapshot.roundId, items)
           const updated = timeOf(roundOfSnapshot.contentAt, now)
           const roundLabel = words.currentRound
@@ -1880,7 +1976,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           // what the trail amounts to, and only real outcomes get a row of
           // their own, so a stretch of edits and passing checks reads as one
           // line instead of a log.
-          const quiet = items.length === 0 && progressText === ''
+          const quiet = items.length === 0 && progressText === '' && segmentsOf(roundOfSnapshot).length === 0
           if (progressText !== '') body.push(h('p', { key: 'pg', className: 'ov-progress' }, progressText))
           // The work this round covered, folded into a few statements. The
           // commands behind them stay on the wire as evidence and never here.
