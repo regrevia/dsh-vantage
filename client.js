@@ -47,7 +47,6 @@ window.__ModuleLoader__.load({
         historyMore: '查看全部', // ui-copy-ignore
         unanswered: '未作答复', // ui-copy-ignore
         noSummary: '这一轮没有留下结论', // ui-copy-ignore
-        noConclusion: '尚未形成可确认的结论', // ui-copy-ignore
         noProcess: '这一轮没有记录到过程', // ui-copy-ignore
         goalDone: '已达成', // ui-copy-ignore
         goalPaused: '已暂停', // ui-copy-ignore
@@ -127,7 +126,6 @@ window.__ModuleLoader__.load({
         historyMore: 'Show all', // ui-copy-ignore
         unanswered: 'No reply', // ui-copy-ignore
         noSummary: 'No conclusion saved for this round', // ui-copy-ignore
-        noConclusion: 'No confirmed conclusion yet', // ui-copy-ignore
         noProcess: 'No process recorded for this round', // ui-copy-ignore
         goalDone: 'Achieved', // ui-copy-ignore
         goalPaused: 'Paused', // ui-copy-ignore
@@ -478,6 +476,8 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-panel .ov-sg-body { flex: 1; min-width: 0; }
 .dsv-panel .ov-sg-title { font-size: 20px; line-height: 28px; font-weight: 600; overflow-wrap: anywhere; }
 .dsv-panel .ov-sg-conclusion { margin: 6px 0 0; font-size: 15px; line-height: 24px; overflow-wrap: anywhere; }
+.dsv-panel .ov-sg-details { margin: 6px 0 0; font-size: 15px; line-height: 24px; color: var(--dsw-alias-text-secondary); overflow-wrap: anywhere; }
+.dsv-panel .ov-sg-details p { margin: 0; }
 .dsv-panel .ov-sg-results { margin: 8px 0 0; padding-left: 20px; list-style: disc; font-size: 15px; line-height: 24px; overflow-wrap: anywhere; }
 .dsv-panel .ov-sg-results li { margin-top: 2px; }
 .dsv-panel .ov-sg-artifacts { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0 0; font-size: 15px; line-height: 24px; }
@@ -1726,6 +1726,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
             results: lines(row.results, 3),
             artifacts,
             conditions: lines(row.conditions, 2),
+            details: lines(row.details, 2),
             evidence,
             state: typeof row.state === 'string' ? row.state : 'in_progress'
           })
@@ -1742,10 +1743,14 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         const roundId = target !== null && target !== undefined && target.roundId !== undefined && target.roundId !== null ? String(target.roundId) : ''
         return h('div', { key: 'sg', className: 'ov-timeline ov-segments' }, rows.map((row) => {
           const evidenceKey = `s:${roundId}:${row.id}`
-          const children = [
-            h('div', { key: 't', className: 'ov-sg-title' }, row.topic),
-            h('p', { key: 'c', className: 'ov-sg-conclusion' }, row.conclusion === '' ? words.noConclusion : row.conclusion)
-          ]
+          const children = [h('div', { key: 't', className: 'ov-sg-title' }, row.topic)]
+          // A conclusion is printed only when the work actually has one. A
+          // sentence saying there is no conclusion is a placeholder, and a
+          // milestone that carries nothing else is dropped by the server.
+          if (row.conclusion !== '') children.push(h('p', { key: 'c', className: 'ov-sg-conclusion' }, row.conclusion))
+          if (row.details.length > 0) {
+            children.push(h('div', { key: 'd', className: 'ov-sg-details' }, row.details.map((line, lineIndex) => h('p', { key: `d${lineIndex}` }, line))))
+          }
           if (row.results.length > 0) {
             children.push(h('ul', { key: 'r', className: 'ov-sg-results' }, row.results.map((line, lineIndex) => h('li', { key: `r${lineIndex}` }, line))))
           }

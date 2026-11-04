@@ -109,11 +109,17 @@ const finalMessage = (seq, text) =>
     { id: "f1", kind: "change", statement: "概览改成分段叙述", updatedAt: 5000 },
     { id: "f2", kind: "check", statement: "用例检查没有报错", updatedAt: 6000 }
   ];
-  const segments = buildSegments({ roundId: "sg-1", facts }, []);
-  assert.equal(segments.length, 2, "two kinds of work make two segments, not six commands");
-  assert.ok(segments.every((row) => !commandShaped(row.topic)), "no segment is named after a command");
-  assert.equal(segments[0].topic, "概览改成分段叙述");
-  assert.equal(segments[0].state, "in_progress");
+  // A changed file and a passing check describe the state of the work, not a
+  // milestone a reader can open: with no verified topic there is no card.
+  assert.deepEqual(buildSegments({ roundId: "sg-1", facts }, []), [], "a change and a check do not invent two milestones");
+  const delivered = buildSegments({ roundId: "sg-8", facts: [...facts, { id: "d1", kind: "deliverable", statement: "已生成：/repo/dist/overview.html", files: ["/repo/dist/overview.html"], updatedAt: 7000 }] }, []);
+  assert.equal(delivered.length, 1, "a delivered file is concrete enough to stand alone");
+  assert.equal(delivered[0].state, "done");
+  assert.equal(delivered[0].conclusion, "", "the fallback never invents a conclusion");
+  assert.equal(delivered[0].artifacts[0].path, "/repo/dist/overview.html");
+  const blocked = buildSegments({ roundId: "sg-9", facts: [{ id: "b1", kind: "blocker", statement: "远端拒绝推送，需要重新授权", updatedAt: 8000 }] }, []);
+  assert.equal(blocked.length, 1, "a recorded stop is work a reader must see");
+  assert.equal(blocked[0].state, "blocked");
   const onlyCommands = buildSegments({ roundId: "sg-2", facts: facts.slice(0, 4) }, []);
   assert.deepEqual(onlyCommands, [], "commands alone never become a segment");
   assert.deepEqual(buildSegments({ roundId: "sg-2b", facts: facts.slice(2, 4) }, []), [], "reading and waiting are no progress at all");
@@ -216,7 +222,10 @@ const finalMessage = (seq, text) =>
     { kind: "change", files: ["/repo/a.command", "/repo/b.mjs"], updatedAt: Date.parse("2026-10-28T10:01:30+08:00") },
     { kind: "check", statement: "lint", updatedAt: Date.parse("2026-10-28T10:26:00+08:00") }
   ] });
-  assert.equal(line, "改 2 个文件 · 检查 1 项 · 10:01–10:26");
+  assert.equal(progressLineOf({ facts: [
+    { kind: "change", files: ["/repo/a.command", "/repo/b.mjs"], updatedAt: Date.parse("2026-10-28T10:01:30+08:00") },
+    { kind: "check", statement: "lint", updatedAt: Date.parse("2026-10-28T10:26:00+08:00") }
+  ] }, "Asia/Shanghai"), "改 2 个文件 · 检查 1 项 · 10:01–10:26");
   const sameMinute = progressLineOf({ facts: [
     { kind: "check", statement: "a", updatedAt: Date.parse("2026-10-28T10:01:05+08:00") },
     { kind: "check", statement: "b", updatedAt: Date.parse("2026-10-28T10:01:50+08:00") }
@@ -645,6 +654,23 @@ test("summary: a few topics is fine, none is fine, and ids follow the facts", ()
     ["登录页的提交按钮"],
     "a named piece of work survives"
   );
+});
+
+test("summary: a number is only accepted from the fact the topic cites", () => {
+  const facts = new Map([
+    ["f1", { id: "f1", statement: "首屏耗时 3200 毫秒", kind: "check" }],
+    ["f2", { id: "f2", statement: "内存回读 6 GB", kind: "check" }],
+    ["f3", { id: "f3", statement: "改了启动脚本", kind: "change", detail: "冷启动从 3200 毫秒降到 1800 毫秒" }]
+  ]);
+  const topic = (headline, factIds, extra = {}) => JSON.stringify({ topics: [{ headline, factIds, ...extra }] });
+  assert.deepEqual(verifyTopics(topic("首屏耗时 3200 毫秒", ["f2"]), facts, 3), [], "a figure from another piece of work proves nothing here");
+  assert.deepEqual(verifyTopics(topic("首屏耗时 3200 毫秒", ["f1"]), facts, 3).map((row) => row.headline), ["首屏耗时 3200 毫秒"]);
+  // Numbers stated in the fact's own detail or before/after change are real
+  // measurements, not inventions.
+  const measured = verifyTopics(topic("冷启动已降到 1800 毫秒", ["f3"], { results: ["从 3200 毫秒降到 1800 毫秒"] }), facts, 3);
+  assert.equal(measured.length, 1);
+  assert.deepEqual(measured[0].results, ["从 3200 毫秒降到 1800 毫秒"], "a measured value keeps its provenance");
+  assert.deepEqual(verifyTopics(topic("冷启动已降到 1800 毫秒", ["f3"], { results: ["降到 1200 毫秒"] }), facts, 3)[0].results, [], "an unstated figure is dropped, not printed");
 });
 
 test("summary: the packet carries the goal and the previous topics as delta", () => {
@@ -2062,8 +2088,48 @@ test("rounds: machine markup in a goal never becomes the heading", () => {
       topics: [{ id: `t:${fact.id}`, headline: "讲解视频已导出", qualifier: "", details: [], factIds: [fact.id] }]
     };
     const body = buildSnapshot({ ...runtime, briefOf: () => summary }, session, delivered, "rev-link");
-    assert.equal(body.brief.mode, "summary");
-    assert.equal(body.brief.items[0].link.path, "/Users/me/CreatorStudio/deliver/out.mp4", "the row still opens the file");
+    // The file the round delivered stays openable even though the model did
+    // not list it: the segment links the deliverable fact behind it.
+    assert.equal(body.round.segments.length, 1);
+    assert.equal(body.round.segments[0].artifacts[0].path, "/Users/me/CreatorStudio/deliver/out.mp4", "the milestone still opens the file");
+    assert.equal(body.brief.items.some((row) => row.link?.path === "/Users/me/CreatorStudio/deliver/out.mp4"), false, "the same file is not repeated as a separate row");
+  });
+
+  test("snapshot: a milestone shows its supporting sentences and never a placeholder", () => {
+    const delivered = folded([
+      ...userTurn(0, "导出讲解视频"),
+      ev(2, "deliverables/presented", { files: [{ path: "/Users/me/CreatorStudio/deliver/out.mp4", name: "out.mp4" }] })
+    ]);
+    const fact = [...delivered.round.facts.values()].find((item) => item.kind === "deliverable");
+    const typed = (topics) => ({
+      roundId: delivered.round.roundId,
+      throughSeq: delivered.lastSeq,
+      revision: "summary-details",
+      generatedAt: now(),
+      topics
+    });
+    const full = buildSnapshot({ ...runtime, briefOf: () => typed([{
+      id: `t:${fact.id}`,
+      headline: "讲解视频已导出",
+      conclusion: "成片已生成",
+      results: ["文件为 1080p"],
+      artifacts: [{ title: "out.mp4", factId: fact.id }],
+      conditions: ["在 6 GB 的平板录制"],
+      details: ["旁白与画面同步"],
+      factIds: [fact.id]
+    }]) }, session, delivered, "rev-details");
+    assert.deepEqual(full.round.segments[0].details, ["旁白与画面同步"], "supporting sentences reach the opened milestone");
+    assert.deepEqual(full.round.segments[0].conditions, ["在 6 GB 的平板录制"]);
+    // A headline with no conclusion, result or file is a placeholder card: the
+    // reader would open it and find nothing, so it is dropped, not rendered.
+    const edited = folded([...userTurn(0, "重构首页"), ...changeCall(2, "w1", "site/a.md")]);
+    const editFact = [...edited.round.facts.values()].find((item) => item.kind === "change");
+    const bare = buildSnapshot({ ...runtime, briefOf: () => ({
+      roundId: edited.round.roundId, throughSeq: edited.lastSeq, revision: "summary-bare", generatedAt: now(),
+      topics: [{ id: `t:${editFact.id}`, headline: "首页结构已调整", conclusion: "", results: [], artifacts: [], conditions: [], details: [], factIds: [editFact.id] }]
+    }) }, session, edited, "rev-bare");
+    assert.equal(bare.round.segments.some((row) => row.topic === "首页结构已调整"), false, "no card is built on a headline alone");
+    assert.equal(JSON.stringify(bare).includes("尚未形成"), false, "the panel is never handed placeholder copy");
   });
 
   test("snapshot: an edit alone never prints a category line", () => {
