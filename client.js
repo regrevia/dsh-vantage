@@ -51,7 +51,6 @@ window.__ModuleLoader__.load({
         goalDone: '已达成', // ui-copy-ignore
         goalPaused: '已暂停', // ui-copy-ignore
         goalBlocked: '受阻', // ui-copy-ignore
-        detailFailed: '这一轮的记录没能读取', // ui-copy-ignore
         askPlaceholder: '答疑', // ui-copy-ignore
         askOpen: '答疑', // ui-copy-ignore
         askSend: '发送', // ui-copy-ignore
@@ -130,7 +129,6 @@ window.__ModuleLoader__.load({
         goalDone: 'Achieved', // ui-copy-ignore
         goalPaused: 'Paused', // ui-copy-ignore
         goalBlocked: 'Blocked', // ui-copy-ignore
-        detailFailed: 'This round could not be read', // ui-copy-ignore
         askPlaceholder: 'Ask', // ui-copy-ignore
         askOpen: 'Ask', // ui-copy-ignore
         askSend: 'Send', // ui-copy-ignore
@@ -1884,12 +1882,13 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           // the server wrote it. A count of edits is statistics, not a summary.
           const rowTitle = typeof row.title === 'string' ? row.title : ''
           const preview = typeof row.line === 'string' ? row.line.trim() : ''
-          const bodyNode = open === false ? null
-            : roundErrorRef.current.has(key) === true
-              ? h('div', { key: 'f', className: 'ov-sub' }, words.detailFailed)
-              : loaded === null
-                ? h('div', { key: 'l', className: 'ov-sub' }, words.loading)
-                : (() => {
+          // A read that failed leaves nothing to show: the row stays as it read
+          // in the list instead of opening onto a note about the read itself.
+          const failedRead = roundErrorRef.current.has(key) === true
+          const bodyNode = open === false || failedRead ? null
+            : loaded === null
+              ? h('div', { key: 'l', className: 'ov-sub' }, words.loading)
+              : (() => {
                   // A round opens onto the work it covered: a few statements,
                   // then the things it produced. Commands were never content.
                   // A topic the segments already state is not repeated below.
@@ -1912,7 +1911,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
                 })()
           // A chevron must not lie: a round that prints nothing behind it falls
           // back to a static row instead of an empty box under a live arrow.
-          const failedRead = roundErrorRef.current.has(key) === true
           const shownOpen = open === true && bodyNode !== null
           const canOpen = open === true ? shownOpen : projected && !failedRead
           const stopped = typeof row.stopState === 'string' ? row.stopState : ''

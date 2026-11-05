@@ -138,6 +138,8 @@ const finalMessage = (seq, text) =>
   assert.equal(usableStatement("失败: Error: [LIFEGUARD_BLOCKED] 本次操作未执行。插件: dsh-vantage"), false, "a failure banner is not a sentence about the work");
   assert.equal(usableStatement("locale/ 通过"), false, "a folder plus its verdict is a check's state, not work");
   assert.equal(commandShaped("locale/ 通过"), true, "a folder path with a verdict is not a statement");
+assert.equal(usableStatement("The tool call was interrupted after it was recorded, but no result was durably recorded."), false, "the harness's own note about a tool is not work");
+assert.equal(commandShaped("Background subagent 2d718cc5-e99b-4280-b"), true, "a background job's id is not a round's title");
 }
 
 {
