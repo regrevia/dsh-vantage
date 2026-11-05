@@ -375,15 +375,13 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-panel .ov-tr-head { color: var(--dsw-alias-label-secondary); }
 .dsv-panel .ov-td { overflow-wrap: anywhere; }
 .dsv-panel .ov-stop { margin-top: 12px; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
-.dsv-panel .ov-ask-open {
-  display: inline-flex; align-items: center; margin: 12px 0 0; padding: 0;
-  color: var(--dsw-alias-brand-primary); font: inherit; font-size: 15px; line-height: 24px;
-  background: transparent; border: 0; cursor: pointer;
+.dsv-panel .ov-ask {
+  margin: 32px 0 0; padding-top: 20px;
+  border-top: 1px solid var(--dsw-alias-border-l1);
 }
-.dsv-panel .ov-ask-open:hover { text-decoration: underline; text-underline-offset: 3px; }
-.dsv-panel .ov-ask { margin: 14px 0 0; }
-.dsv-panel .ov-ask-item + .ov-ask-item { margin-top: 10px; }
-.dsv-panel .ov-ask-q { margin: 0; font-size: 14px; line-height: 24px; font-weight: 500; }
+.dsv-panel .ov-ask .ov-ask-label { margin: 0 0 12px; }
+.dsv-panel .ov-ask-item + .ov-ask-item { margin-top: 14px; }
+.dsv-panel .ov-ask-q { margin: 0; font-size: 14px; line-height: 22px; font-weight: 500; }
 .dsv-panel .ov-ask-a { margin: 2px 0 0; }
 .dsv-panel .ov-ask-a .ov-rich-p { color: var(--dsw-alias-label-secondary); }
 .dsv-panel .ov-ask-notice { margin: 8px 0 0; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
@@ -431,9 +429,9 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-panel .ov-round-body { margin-left: 2px; padding: 2px 0 18px 14px; border-left: 2px solid var(--dsw-alias-border-l1); }
 /* An opened round is subordinate to the row that opened it: its work items
    step down one size from the row title, so the list keeps a single top level. */
-.dsv-panel .ov-round-body .ov-sg-title { font-size: 14px; line-height: 22px; }
+.dsv-panel .ov-round-body .ov-sg-title { font-size: 15px; line-height: 24px; }
 .dsv-panel .ov-round-body .ov-sg-conclusion,
-.dsv-panel .ov-round-body .ov-sg-results { font-size: 14px; line-height: 22px; }
+.dsv-panel .ov-round-body .ov-sg-results { font-size: 14px; line-height: 24px; }
 .dsv-panel .ov-round-body .ov-sg-details { font-size: 13px; line-height: 20px; }
 .dsv-panel .ov-round-body .ov-meta { margin: 0 0 8px; }
 .dsv-panel .ov-list-heading {
@@ -478,8 +476,8 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 /* A milestone reads top-down: what it concluded, what it produced under it,
    and the basis kept folded at the bottom. */
 .dsv-panel .ov-sg-body { flex: 1; min-width: 0; }
-.dsv-panel .ov-sg-title { font-size: 16px; line-height: 24px; font-weight: 600; overflow-wrap: anywhere; }
-.dsv-panel .ov-sg-conclusion { margin: 6px 0 0; font-size: 15px; line-height: 24px; overflow-wrap: anywhere; }
+.dsv-panel .ov-sg-title { font-size: 17px; line-height: 26px; font-weight: 600; overflow-wrap: anywhere; }
+.dsv-panel .ov-sg-conclusion { margin: 8px 0 0; font-size: 15px; line-height: 26px; overflow-wrap: anywhere; }
 .dsv-panel .ov-sg-details { margin: 6px 0 0; font-size: 14px; line-height: 22px; color: var(--dsw-alias-text-secondary); overflow-wrap: anywhere; }
 .dsv-panel .ov-sg-details p { margin: 0; }
 .dsv-panel .ov-sg-results { margin: 8px 0 0; padding-left: 20px; list-style: disc; font-size: 15px; line-height: 24px; overflow-wrap: anywhere; }
@@ -872,11 +870,14 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         }).finally(() => setBusy(false))
       }
       const answers = Array.isArray(thread) ? thread : []
+      // The field sits at the bottom of the page and the exchange grows up from
+      // it, the way a conversation reads: ask underneath, answers above.
       return h('div', { className: 'ov-ask' }, [
-        ...answers.map((item, index) => h('div', { key: `t${index}`, className: 'ov-ask-item' }, [
+        h('div', { key: 'l', className: 'ov-section-label ov-ask-label' }, words.askOpen),
+        answers.length === 0 ? null : h('div', { key: 'th', className: 'ov-ask-thread' }, answers.map((item, index) => h('div', { key: `t${index}`, className: 'ov-ask-item' }, [
           h('p', { key: 'q', className: 'ov-ask-q' }, item.question),
           h('div', { key: 'a', className: 'ov-rich ov-ask-a' }, richText(item.answer, `ask${index}`))
-        ])),
+        ]))),
         notice === '' ? null : h('p', { key: 'n', className: 'ov-ask-notice' }, notice),
         h('div', { key: 'i', className: 'ov-compose' }, [
           h('textarea', {
@@ -1183,8 +1184,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       const itemRef = React.useRef({})
       const rootRef = React.useRef(null)
       const listScrollRef = React.useRef(0)
-      // 答疑 is opened from the round's body when it is needed, not parked under every page.
-      const [askShown, setAskShown] = React.useState(false)
       // 历史 means the rounds before the one on screen, so the shown round is
       // asked out of every page, including pages loaded later.
       const shownRoundRef = React.useRef('')
@@ -1522,11 +1521,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
         if (action === 'toggle-switch') {
           event.preventDefault()
           toggleSwitch()
-          return
-        }
-        if (action === 'open-ask') {
-          event.preventDefault()
-          setAskShown(true)
           return
         }
         if (action === 'history') {
@@ -1999,15 +1993,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           if (workSegments !== null) body.push(workSegments)
           // A round with nothing recorded says so, instead of quoting itself.
           if (quiet) body.push(h('p', { key: 'pend', className: 'ov-quiet' }, words.noProcess))
-          // The box opens on demand: a page whose only control is an empty field
-          // asks nothing. The round being read is always the one it asks about.
-          if (askShown === true) {
-            body.push(h(SideAsk, { key: 'ask', sessionId, roundId: roundOfSnapshot.roundId, words }))
-          } else {
-            body.push(h('button', {
-              key: 'ask-open', type: 'button', className: 'ov-ask-open', 'data-action': 'open-ask'
-            }, words.askOpen))
-          }
           const notices = Array.isArray(snapshot.notices) ? snapshot.notices : []
           notices.forEach((entry, index) => {
             body.push(h(Notice, { key: `n${index}`, text: entry === null || entry === undefined ? '' : entry.text }))
@@ -2059,6 +2044,9 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
               ])
             })))
           }
+          // 答疑 waits at the bottom of the page: the round is read first, then a
+          // question is asked about it, and the exchange grows upward from the field.
+          body.push(h(SideAsk, { key: 'ask', sessionId, roundId: roundOfSnapshot.roundId, words }))
         }
         main.push(h('div', { key: 'body' }, body))
       }
