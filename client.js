@@ -440,11 +440,11 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 }
 .dsv-panel .ov-history-text { display: block; min-width: 0; }
 .dsv-panel .ov-history-title {
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
   font-size: 16px; line-height: 24px; font-weight: 600; overflow-wrap: anywhere;
 }
 .dsv-panel .ov-history-sub {
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
   margin-top: 2px; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px; overflow-wrap: anywhere;
 }
 .dsv-panel .ov-history-time {
@@ -1879,7 +1879,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           const projected = rowSteps.length > 0
             || segmentsOf(row).length > 0
             || (typeof row.progress === 'string' && row.progress !== '')
-            || row.hasDetail === true
           const loaded = open === true ? (roundsRef.current[key] === undefined ? null : roundsRef.current[key]) : null
           // The line under the heading is one sentence about what changed, as
           // the server wrote it. A count of edits is statistics, not a summary.
@@ -1909,15 +1908,13 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
                   if (typeof loaded.stopReason === 'string' && loaded.stopReason !== '') {
                     nodes.push(h('div', { key: 'x', className: 'ov-stop' }, loaded.stopReason))
                   }
-                  if (nodes.length === 0) {
-                    return h('div', { key: 'b', className: 'ov-card' }, [h('div', { key: 'n', className: 'ov-sub' }, words.noProcess)])
-                  }
-                  return h('div', { key: 'b', className: 'ov-card' }, nodes)
+                  return nodes.length === 0 ? null : h('div', { key: 'b', className: 'ov-card' }, nodes)
                 })()
           // A chevron must not lie: a round that prints nothing behind it falls
           // back to a static row instead of an empty box under a live arrow.
+          const failedRead = roundErrorRef.current.has(key) === true
           const shownOpen = open === true && bodyNode !== null
-          const canOpen = open === true ? shownOpen : projected
+          const canOpen = open === true ? shownOpen : projected && !failedRead
           const stopped = typeof row.stopState === 'string' ? row.stopState : ''
           const stamp = [timeOf(row.archivedAt, now), stopped].filter((part) => part !== '').join(' · ')
           return card(key, rowTitle === '' ? primary : rowTitle, preview, stamp, shownOpen, canOpen, bodyNode)

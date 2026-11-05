@@ -134,6 +134,10 @@ const finalMessage = (seq, text) =>
   assert.equal(commandShaped("wc -l lib/ask.js && sed -n 1,200p lib/ask.js"), true, "a chained command is a command");
   assert.equal(commandShaped("wc -l lib/ask.js"), true, "a tool the list forgot is still a command");
   assert.equal(commandShaped('Error: cannot modify "/repo/lib/summary.js"'), true, "a thrown error is tool output, not a statement");
+  assert.equal(commandShaped("失败: Error: [LIFEGUARD_BLOCKED] 本次操作未执行。插件: dsh-vantage 位"), true, "a blocked write reaches the panel as tool output, so it never names a row");
+  assert.equal(usableStatement("失败: Error: [LIFEGUARD_BLOCKED] 本次操作未执行。插件: dsh-vantage"), false, "a failure banner is not a sentence about the work");
+  assert.equal(usableStatement("locale/ 通过"), false, "a folder plus its verdict is a check's state, not work");
+  assert.equal(commandShaped("locale/ 通过"), true, "a folder path with a verdict is not a statement");
 }
 
 {
