@@ -428,7 +428,13 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-panel .ov-history-row-static:hover { background: transparent; }
 .dsv-panel .ov-history-row > span:first-child { min-width: 0; }
 .dsv-panel .ov-history-item[data-open] .ov-row-chevron { transform: rotate(90deg); }
-.dsv-panel .ov-round-body { padding-bottom: 16px; }
+.dsv-panel .ov-round-body { margin-left: 2px; padding: 2px 0 18px 14px; border-left: 2px solid var(--dsw-alias-border-l1); }
+/* An opened round is subordinate to the row that opened it: its work items
+   step down one size from the row title, so the list keeps a single top level. */
+.dsv-panel .ov-round-body .ov-sg-title { font-size: 14px; line-height: 22px; }
+.dsv-panel .ov-round-body .ov-sg-conclusion,
+.dsv-panel .ov-round-body .ov-sg-results { font-size: 14px; line-height: 22px; }
+.dsv-panel .ov-round-body .ov-sg-details { font-size: 13px; line-height: 20px; }
 .dsv-panel .ov-round-body .ov-meta { margin: 0 0 8px; }
 .dsv-panel .ov-list-heading {
   margin-bottom: 4px; color: var(--dsw-alias-label-secondary);
@@ -437,7 +443,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 .dsv-panel .ov-history-text { display: block; min-width: 0; }
 .dsv-panel .ov-history-title {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden;
-  font-size: 15px; line-height: 24px; font-weight: 500; overflow-wrap: anywhere;
+  font-size: 16px; line-height: 24px; font-weight: 600; overflow-wrap: anywhere;
 }
 .dsv-panel .ov-history-sub {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden;
@@ -1735,8 +1741,11 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
       // A milestone reads top-down: the conclusion first, what it produced,
       // and the basis folded at the very bottom. The same node serves a live
       // round and an archived one, so both read identically.
-      const segmentsNode = (target) => {
-        const rows = segmentsOf(target)
+      // `named` is the label the row above already prints. Repeating it as the
+      // first work item made one stretch of work look like two headings.
+      const segmentsNode = (target, named) => {
+        const skip = typeof named === 'string' ? named.trim() : ''
+        const rows = segmentsOf(target).filter((row) => !(skip !== '' && row.topic.trim() === skip))
         if (rows.length === 0) return null
         const roundId = target !== null && target !== undefined && target.roundId !== undefined && target.roundId !== null ? String(target.roundId) : ''
         return h('div', { key: 'sg', className: 'ov-timeline ov-segments' }, rows.map((row) => {
@@ -1896,7 +1905,7 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
                     const topic = typeof seg.topic === 'string' ? seg.topic.trim() : ''
                     if (topic !== '') segTopics.add(topic)
                   }
-                  const segments = segmentsNode(loaded)
+                  const segments = segmentsNode(loaded, rowTitle)
                   const sealed = briefRows(loaded, primary, segTopics)
                   const nodes = []
                   if (segments !== null) nodes.push(segments)

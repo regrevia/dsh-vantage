@@ -131,6 +131,9 @@ const finalMessage = (seq, text) =>
   assert.equal(usableStatement("lib 通过"), false, "a test runner's name plus its verdict is still only a state");
   assert.equal(usableStatement("全部通过"), false, "a pass line with no subject names nothing to act on");
   assert.equal(usableStatement("时区参数补齐后 CI 通过"), true, "a pass line that names the work is a statement");
+  assert.equal(commandShaped("wc -l lib/ask.js && sed -n 1,200p lib/ask.js"), true, "a chained command is a command");
+  assert.equal(commandShaped("wc -l lib/ask.js"), true, "a tool the list forgot is still a command");
+  assert.equal(commandShaped('Error: cannot modify "/repo/lib/summary.js"'), true, "a thrown error is tool output, not a statement");
 }
 
 {
@@ -1069,8 +1072,9 @@ test("client: a round body shows the work, never the reply", () => {
   assert.equal(source.match(/replyQuote\(/gu), null, "no body prints the round's reply");
   assert.equal(source.match(/ov-summary-text/gu), null, "the closing summary is not a body");
   assert.ok(source.includes("function withoutRepeatedLead(text, head)"), "one helper still owns the repeat cut");
-  assert.ok(source.includes("const segmentsNode = (target) =>"), "a body reads the work segments of the round");
-  assert.ok(source.includes("segmentsNode(loaded)"), "a stored round renders its own work");
+  assert.ok(source.includes("const segmentsNode = (target, named) =>"), "a body reads the work segments of the round");
+  assert.ok(source.includes("segmentsNode(loaded, rowTitle)"), "a work item repeating the row label is not printed twice");
+  assert.ok(source.includes("segmentsNode(roundOfSnapshot)"), "a stored round renders its own work");
   assert.ok(source.includes("roundOfSnapshot.progressText"), "the current round is one sentence about the work");
   assert.equal(source.match(/digestStepsOf/gu), null, "commands are never a body");
   assert.equal(source.match(/timelineNode/gu), null, "the per-command timeline is gone");
