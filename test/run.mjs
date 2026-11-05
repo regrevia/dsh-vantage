@@ -128,6 +128,9 @@ const finalMessage = (seq, text) =>
   assert.equal(commandShaped("已生成：/repo/dist/out.txt"), false, "a sentence with a path is still a sentence");
   assert.equal(usableStatement("用例检查通过"), false, "a check passing is a result, not the work it held");
   assert.equal(usableStatement("用例检查没有报错"), true, "a check that found something is still a statement");
+  assert.equal(usableStatement("lib 通过"), false, "a test runner's name plus its verdict is still only a state");
+  assert.equal(usableStatement("全部通过"), false, "a pass line with no subject names nothing to act on");
+  assert.equal(usableStatement("时区参数补齐后 CI 通过"), true, "a pass line that names the work is a statement");
 }
 
 {
@@ -654,6 +657,15 @@ test("summary: a few topics is fine, none is fine, and ids follow the facts", ()
     ["登录页的提交按钮"],
     "a named piece of work survives"
   );
+});
+
+test("summary: a passing check never becomes a milestone", () => {
+  const facts = new Map([["c1", { id: "c1", statement: "lib 检查通过", kind: "check" }]]);
+  const topic = (headline) => JSON.stringify({ topics: [{ headline, factIds: ["c1"] }] });
+  assert.deepEqual(verifyTopics(topic("lib 通过"), facts, 3), [], "a verdict is not a piece of work");
+  assert.deepEqual(verifyTopics(topic("全部通过"), facts, 3), []);
+  const round = { roundId: "sg-10", facts: [{ id: "c1", kind: "check", statement: "lib 检查通过", updatedAt: 1000 }] };
+  assert.deepEqual(buildSegments(round, [{ headline: "lib 通过", factIds: ["c1"] }]), [], "the panel never prints a check verdict as work");
 });
 
 test("summary: a number is only accepted from the fact the topic cites", () => {

@@ -463,8 +463,6 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
   flex: none; width: 12px; color: var(--dsw-alias-label-secondary);
   font-size: 13px; line-height: 22px;
 }
-.dsv-panel .ov-tl-row[data-kind='deliverable'] .ov-tl-mark,
-.dsv-panel .ov-tl-row[data-kind='change'] .ov-tl-mark { color: var(--dsw-alias-brand-primary, var(--dsw-alias-label-primary)); }
 .dsv-panel .ov-tl-time {
   flex: none; width: 44px; color: var(--dsw-alias-label-secondary);
   font-size: 13px; line-height: 22px; font-variant-numeric: tabular-nums;
@@ -474,9 +472,9 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
 /* A milestone reads top-down: what it concluded, what it produced under it,
    and the basis kept folded at the bottom. */
 .dsv-panel .ov-sg-body { flex: 1; min-width: 0; }
-.dsv-panel .ov-sg-title { font-size: 20px; line-height: 28px; font-weight: 600; overflow-wrap: anywhere; }
+.dsv-panel .ov-sg-title { font-size: 16px; line-height: 24px; font-weight: 600; overflow-wrap: anywhere; }
 .dsv-panel .ov-sg-conclusion { margin: 6px 0 0; font-size: 15px; line-height: 24px; overflow-wrap: anywhere; }
-.dsv-panel .ov-sg-details { margin: 6px 0 0; font-size: 15px; line-height: 24px; color: var(--dsw-alias-text-secondary); overflow-wrap: anywhere; }
+.dsv-panel .ov-sg-details { margin: 6px 0 0; font-size: 14px; line-height: 22px; color: var(--dsw-alias-text-secondary); overflow-wrap: anywhere; }
 .dsv-panel .ov-sg-details p { margin: 0; }
 .dsv-panel .ov-sg-results { margin: 8px 0 0; padding-left: 20px; list-style: disc; font-size: 15px; line-height: 24px; overflow-wrap: anywhere; }
 .dsv-panel .ov-sg-results li { margin-top: 2px; }
@@ -1782,11 +1780,14 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
               ])))
             ]))
           }
-          const mark = row.state === 'blocked' ? '!' : row.state === 'done' ? '✓' : row.state === 'in_progress' ? '●' : ''
-          return h('div', { key: row.id, className: 'ov-tl-row ov-sg', 'data-kind': row.state }, [
-            h('span', { key: 'm', className: 'ov-tl-mark', 'aria-hidden': 'true' }, mark),
-            h('div', { key: 'b', className: 'ov-sg-body' }, children)
-          ])
+          // Only a blocked milestone keeps a mark: a dot or a tick on ordinary
+          // work made a label read like a verdict. A block is the one state a
+          // reader has to notice, so it keeps its signal.
+          const children0 = [h('div', { key: 'b', className: 'ov-sg-body' }, children)]
+          if (row.state === 'blocked') {
+            children0.unshift(h('span', { key: 'm', className: 'ov-tl-mark', 'aria-hidden': 'true' }, '!'))
+          }
+          return h('div', { key: row.id, className: 'ov-tl-row ov-sg', 'data-kind': row.state }, children0)
         }))
       }
 
