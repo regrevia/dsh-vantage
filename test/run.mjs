@@ -1579,9 +1579,9 @@ async function testRoutes() {
       ]);
       return summarizeRound(state.settled.round).outcome;
     };
-    assert.equal(named("node /Users/apple/.dsh/skills/ui-restraint/scripts/ui-copy-lint.mjs ."), "界面文案检查通过");
-    assert.equal(named("node /Users/apple/.agents/skills/zh-ui-type-lint/scripts/zh-lint.mjs ."), "中文排印检查通过");
-    assert.equal(named("node /Users/apple/.dsh/tools/style-lint.mjs ."), "视觉样式检查通过");
+    assert.equal(named("node /Users/me/.dsh/skills/ui-restraint/scripts/ui-copy-lint.mjs ."), "界面文案检查通过");
+    assert.equal(named("node /Users/me/.agents/skills/zh-ui-type-lint/scripts/zh-lint.mjs ."), "中文排印检查通过");
+    assert.equal(named("node /Users/me/.dsh/tools/style-lint.mjs ."), "视觉样式检查通过");
     // A path is its own object: the file it names stays in the line.
     assert.equal(named("node --test src/login.test.ts"), "src/login.test.ts 通过");
   });
@@ -1631,7 +1631,7 @@ async function testRoutes() {
   await testAsync("history: a shortened stored request stops naming the row", async () => {
     const rows = [{
       roundId: "old:1",
-      title: "你是 C 线开发，仓库 /Users/apple/Desktop/work/St…",
+      title: "你是 C 线开发，仓库 /Users/me/work/St…",
       archivedAt: 1,
       updatedAt: 1
     }];
