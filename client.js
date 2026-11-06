@@ -1874,7 +1874,11 @@ html[data-dsv-overview] [data-composer-seat] { display: none; }
           // A row opens onto work, not onto a reply: the reply is in the
           // conversation, and an expansion that only quotes it is the thing
           // this page was built to replace.
-          const projected = rowSteps.length > 0
+          // The record decides what can be opened; the row's own fields are
+          // only what the list happens to know. Asking the row to prove there
+          // is a body left whole rounds as doors nobody can find.
+          const projected = row.openable !== false
+            || rowSteps.length > 0
             || segmentsOf(row).length > 0
             || (typeof row.progress === 'string' && row.progress !== '')
           const loaded = open === true ? (roundsRef.current[key] === undefined ? null : roundsRef.current[key]) : null
