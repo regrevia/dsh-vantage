@@ -1353,6 +1353,24 @@ async function testRoutes() {
     assert.equal(body.round.roundId, roundId, "and the round arrives whole");
   });
 
+  await testAsync("routes: a stored round without a summary still opens", async () => {
+    const owned = { ...session, header: { createdAt: 1, cwd: "/w/own" } };
+    const archived = { ...folded([...userTurn(0, "改一下标题"), changeCall(2, "w1", "site/a.md")]).round, brief: null, replyText: "" };
+    const store = {
+      get: (_sessionId, roundId) => (roundId === archived.roundId ? archived : undefined),
+      count: () => 1,
+      recent: () => [archived]
+    };
+    const route = createRoutes({ ...runtime, session: async () => owned, store }).find((entry) => entry.path === ROUTES.round);
+    const response = await route.fetch(req(`http://x${ROUTES.round}?session=${SESSION}&round=${archived.roundId}`, {
+      headers: { [PROJECT_HEADER]: "/w/own" }
+    }));
+    const raw = await response.text();
+    assert.equal(response.status, 200, `a record whose summary is missing opens: ${raw.slice(0, 200)}`);
+    const body = JSON.parse(raw);
+    assert.ok(body.round.roundId === archived.roundId, "the row the reader clicked is the one that opens");
+  });
+
   await testAsync("routes: an opened round carries the same segments as the snapshot", async () => {
     const delivered = folded([
       ...userTurn(0, "导出视频"),
